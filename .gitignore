@@ -1,0 +1,41 @@
+# dependencies
+node_modules/
+
+# generated
+src/generated/
+
+# environment
+.env
+.env.local
+.env.production
+
+# prisma
+prisma/*.db
+prisma/*.db-journal
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# build
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# coverage
+coverage/
+
+/src/generated/prisma
+
+.md
+.docx
