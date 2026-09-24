@@ -186,10 +186,190 @@ export const revokeRefreshToken = async (rawRefreshToken) => {
   }
 };
 
+/**
+ * Generate an email verification token (expires in 24 hours)
+ * @param {string} userId
+ * @returns {Promise<string>} Raw verification token
+ */
+export const generateEmailVerificationToken = async (userId) => {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+  await prisma.$transaction(async (tx) => {
+    // Invalidate any previous unconsumed verification tokens for this user
+    await tx.authToken.updateMany({
+      where: {
+        userId,
+        type: 'email_verify',
+        consumedAt: null,
+      },
+      data: {
+        consumedAt: new Date(),
+      },
+    });
+
+    // Save new verification token
+    await tx.authToken.create({
+      data: {
+        userId,
+        type: 'email_verify',
+        tokenHash,
+        expiresAt,
+      },
+    });
+  });
+
+  return rawToken;
+};
+
+/**
+ * Verify and consume an email verification token
+ * @param {string} rawToken
+ * @returns {Promise<Object>} Verified user
+ */
+export const verifyEmailToken = async (rawToken) => {
+  const tokenHash = hashToken(rawToken);
+
+  const tokenRecord = await prisma.authToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  if (!tokenRecord || tokenRecord.type !== 'email_verify' || tokenRecord.consumedAt !== null) {
+    throw ApiError.badRequest('Invalid or already used verification token');
+  }
+
+  if (tokenRecord.expiresAt < new Date()) {
+    throw ApiError.badRequest('Email verification token has expired. Please request a new one.');
+  }
+
+  // Atomically mark token consumed and verify user email
+  const updatedUser = await prisma.$transaction(async (tx) => {
+    await tx.authToken.update({
+      where: { id: tokenRecord.id },
+      data: { consumedAt: new Date() },
+    });
+
+    return await tx.user.update({
+      where: { id: tokenRecord.userId },
+      data: { emailVerifiedAt: new Date() },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        emailVerifiedAt: true,
+      },
+    });
+  });
+
+  return updatedUser;
+};
+
+/**
+ * Generate a scoped Kid Session Token for reading in Kid Mode
+ * @param {Object} parentUser
+ * @param {string} childId
+ * @returns {Promise<Object>} { kidSessionToken, expiresIn }
+ */
+export const generateKidSessionToken = async (parentUser, childId) => {
+  const kidSessionToken = jwt.sign(
+    {
+      sub: parentUser.id,
+      childId,
+      role: 'child',
+      type: 'kid_session',
+    },
+    env.jwt.secret,
+    {
+      expiresIn: '24h',
+    },
+  );
+
+  const tokenHash = hashToken(kidSessionToken);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await prisma.$transaction(async (tx) => {
+    // Invalidate any active kid sessions for this specific child
+    await tx.authToken.updateMany({
+      where: {
+        childId,
+        type: 'kid_session',
+        consumedAt: null,
+      },
+      data: {
+        consumedAt: new Date(),
+      },
+    });
+
+    // Create new kid_session record
+    await tx.authToken.create({
+      data: {
+        userId: parentUser.id,
+        childId,
+        type: 'kid_session',
+        tokenHash,
+        expiresAt,
+      },
+    });
+  });
+
+  return {
+    kidSessionToken,
+    expiresIn: '24h',
+  };
+};
+
+/**
+ * Verify and consume a Kid Session Token upon exit
+/**
+ * Verify a Kid Session Token without consuming it
+ * @param {string} kidSessionToken
+ * @returns {Promise<Object>} { user, childId, tokenId }
+ */
+export const verifyKidSessionToken = async (kidSessionToken) => {
+  const tokenHash = hashToken(kidSessionToken);
+
+  const tokenRecord = await prisma.authToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  if (!tokenRecord || tokenRecord.type !== 'kid_session' || tokenRecord.consumedAt !== null) {
+    throw ApiError.unauthorized('Invalid or already closed kid session');
+  }
+
+  if (tokenRecord.expiresAt < new Date()) {
+    throw ApiError.unauthorized('Kid session has expired');
+  }
+
+  return {
+    user: tokenRecord.user,
+    childId: tokenRecord.childId,
+    tokenId: tokenRecord.id,
+  };
+};
+
+/**
+ * Mark a Kid Session token as consumed
+ * @param {string} tokenId
+ */
+export const consumeKidSessionToken = async (tokenId) => {
+  await prisma.authToken.update({
+    where: { id: tokenId },
+    data: { consumedAt: new Date() },
+  });
+};
+
 export default {
   hashToken,
   parseDuration,
   generateAuthTokens,
   verifyAndRotateRefreshToken,
   revokeRefreshToken,
+  generateEmailVerificationToken,
+  verifyEmailToken,
+  generateKidSessionToken,
+  verifyKidSessionToken,
+  consumeKidSessionToken,
 };

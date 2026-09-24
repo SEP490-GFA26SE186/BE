@@ -61,9 +61,77 @@ const logout = z.object({
   }),
 });
 
+// ---- Kid PIN & Kid Mode ----
+
+const setKidPin = z.object({
+  body: z.object({
+    pin: z
+      .string({ required_error: 'PIN is required' })
+      .regex(/^\d{4,6}$/, 'PIN must be between 4 and 6 numeric digits'),
+  }),
+});
+
+const changeKidPin = z.object({
+  body: z
+    .object({
+      currentPin: z.string().regex(/^\d{4,6}$/, 'Current PIN must be 4 to 6 digits').optional(),
+      password: z.string().min(1, 'Password is required').optional(),
+      newPin: z
+        .string({ required_error: 'New PIN is required' })
+        .regex(/^\d{4,6}$/, 'New PIN must be between 4 and 6 numeric digits'),
+    })
+    .refine((data) => data.currentPin || data.password, {
+      message: 'Either current PIN or account password is required to change PIN',
+      path: ['currentPin'],
+    }),
+});
+
+const enterKidMode = z.object({
+  body: z.object({
+    childId: z
+      .string({ required_error: 'childId is required' })
+      .uuid('Invalid child ID format'),
+  }),
+});
+
+const exitKidMode = z.object({
+  body: z.object({
+    pin: z
+      .string({ required_error: 'PIN is required' })
+      .regex(/^\d{4,6}$/, 'PIN must be 4 to 6 numeric digits'),
+    kidSessionToken: z.string().optional(),
+  }),
+});
+
+// ---- Email Verification ----
+
+const sendVerificationEmail = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address').optional(),
+  }),
+});
+
+const verifyEmail = z.object({
+  query: z.object({
+    token: z.string().optional(),
+  }),
+  body: z.object({
+    token: z.string().optional(),
+  }),
+}).refine((data) => data.query?.token || data.body?.token, {
+  message: 'Verification token is required in query (?token=...) or request body',
+  path: ['token'],
+});
+
 export default {
   register,
   login,
   refreshTokens,
   logout,
+  setKidPin,
+  changeKidPin,
+  enterKidMode,
+  exitKidMode,
+  sendVerificationEmail,
+  verifyEmail,
 };

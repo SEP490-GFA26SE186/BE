@@ -13,6 +13,23 @@ const env = {
   cors: {
     origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
   },
+  appUrl: process.env.APP_URL || 'http://localhost:3000',
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY,
+    senderEmail: process.env.BREVO_SENDER_EMAIL || 'no-reply@storyweaver.ai',
+    senderName: process.env.BREVO_SENDER_NAME || 'StoryWeaver AI',
+  },
+  email: {
+    smtp: {
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT, 10) || 587,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    },
+    from: process.env.EMAIL_FROM || 'StoryWeaver AI <no-reply@storyweaver.ai>',
+  },
 };
 
 // Validate required env vars
