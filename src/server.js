@@ -9,7 +9,8 @@ const startServer = async () => {
 
     app.listen(env.port, () => {
       console.log(`Server is running on port ${env.port} [${env.nodeEnv}]`);
-      console.log(`Health check: http://localhost:${env.port}/api/v1/health`);
+      console.log(`Health check:  http://localhost:${env.port}/api/v1/health`);
+      console.log(`Swagger Docs:  http://localhost:${env.port}/api-docs`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

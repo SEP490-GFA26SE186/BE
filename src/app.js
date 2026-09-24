@@ -4,6 +4,9 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { StatusCodes } from 'http-status-codes';
 
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpec from './docs/swagger.js';
+
 import { env } from './config/index.js';
 import { errorConverter, errorHandler } from './middlewares/index.js';
 import ApiError from './utils/ApiError.js';
@@ -15,8 +18,12 @@ const app = express();
 // Global middlewares
 // ---------------------------------------------------------------------------
 
-// Security headers
-app.use(helmet());
+// Security headers (disable CSP so Swagger UI loads static CSS/JS scripts)
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+  }),
+);
 
 // CORS
 app.use(
@@ -34,6 +41,19 @@ if (env.nodeEnv !== 'test') {
 // Body parsers
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// ---------------------------------------------------------------------------
+// Swagger Documentation
+// ---------------------------------------------------------------------------
+app.use(
+  '/api-docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customSiteTitle: 'StoryWeaver AI - API Docs',
+    customCss: '.swagger-ui .topbar { display: none }',
+  }),
+);
+app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ---------------------------------------------------------------------------
 // API Routes
