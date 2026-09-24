@@ -22,6 +22,7 @@ const auth = async (req, _res, next) => {
       select: {
         id: true,
         role: true,
+        username: true,
         email: true,
         fullName: true,
         isActive: true,
