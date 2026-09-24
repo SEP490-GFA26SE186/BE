@@ -87,7 +87,7 @@ const createChild = async (parentId, data) => {
 
   if (currentCount >= maxAllowed) {
     throw ApiError.forbidden(
-      `Bạn đã đạt giới hạn tối đa ${maxAllowed} hồ sơ bé theo gói dịch vụ hiện tại. Vui lòng nâng cấp gói để thêm bé.`,
+      `You have reached the maximum limit of ${maxAllowed} child profiles for your current plan. Please upgrade to add more children.`,
     );
   }
 
@@ -141,7 +141,7 @@ const getChildById = async (parentId, childId) => {
   });
 
   if (!child) {
-    throw ApiError.notFound('Không tìm thấy hồ sơ bé hoặc bạn không có quyền truy cập');
+    throw ApiError.notFound('Child profile not found or access denied');
   }
 
   return formatChildResponse(child);
@@ -164,7 +164,7 @@ const updateChild = async (parentId, childId, data) => {
   });
 
   if (!existingChild) {
-    throw ApiError.notFound('Không tìm thấy hồ sơ bé');
+    throw ApiError.notFound('Child profile not found');
   }
 
   const updatePayload = {};
@@ -198,7 +198,7 @@ const deleteChild = async (parentId, childId) => {
   });
 
   if (!existingChild) {
-    throw ApiError.notFound('Không tìm thấy hồ sơ bé');
+    throw ApiError.notFound('Child profile not found');
   }
 
   await prisma.$transaction(async (tx) => {
@@ -241,7 +241,7 @@ const getChildUsage = async (parentId, childId, dateStr) => {
   });
 
   if (!child) {
-    throw ApiError.notFound('Không tìm thấy hồ sơ bé');
+    throw ApiError.notFound('Child profile not found');
   }
 
   // Today in YYYY-MM-DD
@@ -299,7 +299,7 @@ const logUsageSession = async (parentId, childId, { startedAt, endedAt, duration
   });
 
   if (!child) {
-    throw ApiError.notFound('Không tìm thấy hồ sơ bé');
+    throw ApiError.notFound('Child profile not found');
   }
 
   const start = startedAt ? new Date(startedAt) : new Date(Date.now() - durationSeconds * 1000);

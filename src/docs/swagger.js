@@ -8,6 +8,14 @@ const swaggerSpec = {
     description: `
 **StoryWeaver AI** - Nền tảng sáng tác truyện tương tác cá nhân hóa và giáo dục trí tuệ cảm xúc (EQ) cho trẻ em.
 API Backend cung cấp đầy đủ các chức năng quản lý tài khoản phụ huynh, bảo mật chế độ trẻ em (Kid Mode PIN & Session), xác thực email, và tích hợp cơ sở dữ liệu Supabase.
+
+### 🔐 Bảng Phân Quyền Truy Cập (Role-Based Access Control - RBAC)
+Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện truy cập:
+- 🌐 **[Public]**: Không yêu cầu đăng nhập. Bất kỳ ai cũng có thể truy cập (Health check, Login, Register, Xem danh mục EQ, Duyệt kịch bản mẫu...).
+- 🔒 **[Parent]**: Yêu cầu xác thực tài khoản Phụ huynh (\`parent\`, \`moderator\`, \`admin\`) qua Bearer Access Token.
+- 👶 **[Kid Session | Parent]**: Dành cho phiên đọc Chế độ Trẻ em (\`kid_session\` token) hoặc tài khoản Phụ huynh.
+- 🛡️ **[Moderator | Admin]**: Dành cho Kiểm duyệt viên và Quản trị viên (\`moderator\`, \`admin\`) quản lý nội dung sư phạm, duyệt chợ truyện.
+- 👑 **[Admin]**: Dành riêng cho Quản trị viên cấp cao (\`admin\`) quản trị cấu hình hệ thống và xóa dữ liệu nhạy cảm.
     `,
     contact: {
       name: 'StoryWeaver AI Team (GFA26SE186)',
@@ -253,7 +261,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/health': {
       get: {
         tags: ['Health'],
-        summary: 'Kiểm tra trạng thái server',
+        summary: '🌐 [Public] Kiểm tra trạng thái server',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nKiểm tra trạng thái hoạt động của server và database connectivity.',
+        security: [],
         responses: {
           200: {
             description: 'Server hoạt động bình thường',
@@ -277,8 +287,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/register': {
       post: {
         tags: ['Auth'],
-        summary: 'Đăng ký tài khoản phụ huynh mới',
-        description: 'Tạo tài khoản mới, khởi tạo ví tiền và tự động gửi email xác thực.',
+        summary: '🌐 [Public] Đăng ký tài khoản phụ huynh mới',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTạo tài khoản mới, khởi tạo ví tiền và tự động gửi email xác thực qua Brevo.',
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -330,8 +341,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/login': {
       post: {
         tags: ['Auth'],
-        summary: 'Đăng nhập vào hệ thống',
-        description: 'Cho phép đăng nhập bằng email hoặc username kèm theo mật khẩu.',
+        summary: '🌐 [Public] Đăng nhập vào hệ thống',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nCho phép đăng nhập bằng email hoặc username kèm theo mật khẩu.',
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -381,8 +393,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/refresh-tokens': {
       post: {
         tags: ['Auth'],
-        summary: 'Làm mới token (Token Rotation)',
-        description: 'Gửi refresh token cũ để nhận về cặp access token và refresh token mới.',
+        summary: '🌐 [Public] Làm mới token (Token Rotation)',
+        description: '**Quyền truy cập:** `Public` (Cần refreshToken trong body).\nGửi refresh token cũ để nhận về cặp access token và refresh token mới.',
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -428,8 +441,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/logout': {
       post: {
         tags: ['Auth'],
-        summary: 'Đăng xuất khỏi hệ thống',
-        description: 'Thu hồi refresh token.',
+        summary: '🌐 [Public] Đăng xuất khỏi hệ thống',
+        description: '**Quyền truy cập:** `Public` (Cần refreshToken trong body).\nVô hiệu hóa và thu hồi refresh token hiện tại.',
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -453,7 +467,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/me': {
       get: {
         tags: ['Auth'],
-        summary: 'Lấy thông tin tài khoản hiện tại',
+        summary: '🔒 [Parent | Moderator | Admin] Lấy thông tin tài khoản hiện tại',
+        description: '**Quyền truy cập:** Đã đăng nhập (`parent`, `moderator`, `admin`).\nLấy thông tin tài khoản đang đăng nhập kèm số dư ví credit/earning.',
         security: [{ BearerAuth: [] }],
         responses: {
           200: {
@@ -502,7 +517,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/kid-pin/set': {
       post: {
         tags: ['Kid Mode'],
-        summary: 'Thiết lập mã PIN thoát Kid Mode lần đầu',
+        summary: '🔒 [Parent] Thiết lập mã PIN thoát Kid Mode lần đầu',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nThiết lập mã PIN (4-6 chữ số) lần đầu dùng để khóa và thoát khỏi Chế độ Trẻ em.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -529,7 +545,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/kid-pin/change': {
       put: {
         tags: ['Kid Mode'],
-        summary: 'Thay đổi mã PIN thoát Kid Mode',
+        summary: '🔒 [Parent] Thay đổi mã PIN thoát Kid Mode',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nThay đổi mã PIN thoát Kid Mode (yêu cầu mã PIN hiện tại hoặc mật khẩu phụ huynh).',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -557,7 +574,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/kid-mode/enter': {
       post: {
         tags: ['Kid Mode'],
-        summary: 'Chuyển sang Chế độ Trẻ em (Kid Mode)',
+        summary: '🔒 [Parent] Chuyển sang Chế độ Trẻ em (Kid Mode)',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nKích hoạt Chế độ Trẻ em cho một bé cụ thể, sinh ra token phiên làm việc `kid_session` giới hạn quyền.',
         security: [{ BearerAuth: [] }],
         description: 'Bắt buộc phụ huynh phải có mã PIN. Cấp token phiên `kid_session` có phạm vi đọc truyện của riêng bé.',
         requestBody: {
@@ -613,7 +631,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/kid-mode/exit': {
       post: {
         tags: ['Kid Mode'],
-        summary: 'Thoát Chế độ Trẻ em về Chế độ Phụ huynh',
+        summary: '👶 [Kid Session | Parent] Thoát Chế độ Trẻ em về Chế độ Phụ huynh',
+        description: '**Quyền truy cập:** Phiên đọc bé (`kid_session`) hoặc Phụ huynh.\nThoát khỏi Chế độ Trẻ em về Chế độ Phụ huynh bằng cách xác thực mã PIN thoát (4-6 chữ số).',
+        security: [],
         description: 'Nhập đúng mã PIN để đóng phiên đọc của bé và khôi phục quyền phụ huynh.',
         requestBody: {
           required: true,
@@ -662,7 +682,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/send-verification-email': {
       post: {
         tags: ['Email Verification'],
-        summary: 'Yêu cầu gửi lại email xác thực',
+        summary: '🌐 [Public] Yêu cầu gửi lại email xác thực',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nYêu cầu gửi lại liên kết kích hoạt tài khoản qua dịch vụ Brevo transactional email.',
+        security: [],
         description: 'Gửi link xác minh email qua Brevo. Có thể truyền email hoặc dùng Bearer token.',
         requestBody: {
           required: false,
@@ -687,7 +709,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/auth/verify-email': {
       get: {
         tags: ['Email Verification'],
-        summary: 'Xác thực Email qua link (dành cho trình duyệt)',
+        summary: '🌐 [Public] Xác thực Email qua link (dành cho trình duyệt)',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nNhấp link trong email để kích hoạt tài khoản, hiển thị giao diện HTML thân thiện.',
+        security: [],
         parameters: [
           {
             name: 'token',
@@ -705,7 +729,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       post: {
         tags: ['Email Verification'],
-        summary: 'Xác thực Email qua API (dành cho Mobile App / Frontend)',
+        summary: '🌐 [Public] Xác thực Email qua API (dành cho Mobile App / Frontend)',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nGửi token xác thực email qua JSON body để nhận kết quả dạng REST API chuẩn.',
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -731,7 +757,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/children': {
       get: {
         tags: ['Children'],
-        summary: 'Lấy danh sách hồ sơ các bé của phụ huynh',
+        summary: '🔒 [Parent] Lấy danh sách hồ sơ các bé của phụ huynh',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách toàn bộ hồ sơ các bé thuộc tài khoản phụ huynh hiện tại.',
         security: [{ BearerAuth: [] }],
         responses: {
           200: {
@@ -764,7 +791,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       post: {
         tags: ['Children'],
-        summary: 'Tạo hồ sơ bé mới',
+        summary: '🔒 [Parent] Tạo hồ sơ bé mới',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nTạo hồ sơ bé mới (tự động kiểm tra hạn ngạch gói cước, miễn phí tối đa 2 bé).',
         security: [{ BearerAuth: [] }],
         description: 'Tạo hồ sơ cho bé. Kiểm tra giới hạn số lượng bé theo gói cước (mặc định miễn phí 2 bé).',
         requestBody: {
@@ -818,7 +846,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/children/{id}': {
       get: {
         tags: ['Children'],
-        summary: 'Lấy chi tiết hồ sơ một bé',
+        summary: '🔒 [Parent] Lấy chi tiết hồ sơ một bé',
+        description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nXem chi tiết hồ sơ bé kèm cấu hình giờ đi ngủ và hạn mức màn hình.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -858,7 +887,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       put: {
         tags: ['Children'],
-        summary: 'Cập nhật hồ sơ bé',
+        summary: '🔒 [Parent] Cập nhật hồ sơ bé',
+        description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nCập nhật thông tin bé, giờ đi ngủ, giọng đọc ưa thích hoặc giới hạn màn hình.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -916,7 +946,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       delete: {
         tags: ['Children'],
-        summary: 'Xóa hồ sơ bé (Soft delete)',
+        summary: '🔒 [Parent] Xóa hồ sơ bé (Soft delete)',
+        description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nXóa mềm hồ sơ bé và tự động thu hồi mọi phiên đọc truyện đang hoạt động.',
         security: [{ BearerAuth: [] }],
         description: 'Xóa mềm hồ sơ bé và đồng thời thu hồi mọi token phiên Kid Session đang hoạt động của bé.',
         parameters: [
@@ -939,7 +970,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/children/{id}/usage': {
       get: {
         tags: ['Children'],
-        summary: 'Xem thống kê thời lượng sử dụng màn hình của bé',
+        summary: '👶 [Kid Session | Parent] Xem thống kê thời lượng sử dụng màn hình của bé',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thống kê thời lượng sử dụng màn hình trong ngày của bé, số phút còn lại và cảnh báo giờ đi ngủ.',
         security: [{ BearerAuth: [] }],
         description: 'Truy vấn tổng thời lượng bé đã dùng trong ngày, so sánh với giới hạn quy định, tính toán thời gian còn lại.',
         parameters: [
@@ -981,7 +1013,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       post: {
         tags: ['Children'],
-        summary: 'Ghi nhận thời lượng phiên sử dụng (khi bé đọc truyện/học)',
+        summary: '👶 [Kid Session | Parent] Ghi nhận thời lượng phiên sử dụng',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nGhi nhận thêm số phút đọc truyện của bé vào hệ thống kiểm soát thời gian sử dụng.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1017,7 +1050,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/characters': {
       post: {
         tags: ['Characters'],
-        summary: 'Tạo nhân vật gia đình mới (áp dụng hạn ngạch gói, thuần mô tả chữ an toàn)',
+        summary: '🔒 [Parent] Tạo nhân vật gia đình mới',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nTạo nhân vật gia đình mới từ mô tả chữ an toàn, liên kết với bé (tối đa 5 nhân vật với gói miễn phí).',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1074,7 +1108,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       get: {
         tags: ['Characters'],
-        summary: 'Lấy danh sách nhân vật của phụ huynh (hỗ trợ lọc theo role hoặc childId)',
+        summary: '🔒 [Parent] Lấy danh sách nhân vật của phụ huynh',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách nhân vật gia đình của phụ huynh (hỗ trợ lọc theo vai trò role hoặc theo bé childId).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1123,7 +1158,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/characters/{id}': {
       get: {
         tags: ['Characters'],
-        summary: 'Lấy thông tin chi tiết một nhân vật',
+        summary: '🔒 [Parent] Lấy thông tin chi tiết một nhân vật',
+        description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu nhân vật).\nXem chi tiết nhân vật gia đình, mô tả ngoại hình và trạng thái ảnh đại diện AI.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1161,7 +1197,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       put: {
         tags: ['Characters'],
-        summary: 'Cập nhật thông tin nhân vật',
+        summary: '🔒 [Parent] Cập nhật thông tin nhân vật',
+        description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu nhân vật).\nCập nhật tên gọi, vai trò hoặc đặc điểm nhận dạng của nhân vật.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1197,7 +1234,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       delete: {
         tags: ['Characters'],
-        summary: 'Xóa mềm nhân vật',
+        summary: '🔒 [Parent] Xóa mềm nhân vật',
+        description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu nhân vật).\nXóa mềm nhân vật khỏi danh sách gia đình.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1217,7 +1255,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/characters/{id}/portrait': {
       post: {
         tags: ['Characters'],
-        summary: 'Đưa yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi',
+        summary: '🔒 [Parent] Đưa yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nGửi yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi AI Request Queue (`character_portrait`).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1280,7 +1319,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/eq-skills': {
       get: {
         tags: ['EQ Skills'],
-        summary: 'Lấy danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn quốc tế CASEL',
+        summary: '🌐 [Public] Lấy danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn quốc tế CASEL',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nLấy danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn quốc tế CASEL kèm số lượng kịch bản truyện mẫu liên quan.',
+        security: [],
         parameters: [
           {
             name: 'search',
@@ -1321,7 +1362,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/eq-skills/{id}': {
       get: {
         tags: ['EQ Skills'],
-        summary: 'Xem chi tiết một kỹ năng EQ (chấp nhận UUID hoặc mã CASEL như self_awareness)',
+        summary: '🌐 [Public] Xem chi tiết một kỹ năng EQ',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem chi tiết một nhóm kỹ năng EQ chuẩn CASEL (chấp nhận UUID hoặc mã CASEL như self_awareness, social_awareness...).',
+        security: [],
         parameters: [
           {
             name: 'id',
@@ -1361,7 +1404,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/templates': {
       get: {
         tags: ['Templates'],
-        summary: 'Kho kịch bản truyện mẫu sư phạm (hỗ trợ lọc theo kỹ năng EQ, độ tuổi, từ khóa)',
+        summary: '🌐 [Public] Kho kịch bản truyện mẫu sư phạm',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nDuyệt kho kịch bản truyện mẫu sư phạm đang hoạt động (`active`), hỗ trợ tìm kiếm và lọc theo kỹ năng EQ, độ tuổi mục tiêu.',
+        security: [],
         parameters: [
           {
             name: 'primarySkillId',
@@ -1437,7 +1482,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       post: {
         tags: ['Templates'],
-        summary: 'Tạo kịch bản mẫu mới (với các vị trí nhân vật, các giai đoạn và các nhánh rẽ lựa chọn)',
+        summary: '🛡️ [Moderator | Admin] Tạo kịch bản mẫu mới',
+        description: '**Quyền truy cập:** `moderator` | `admin` (Yêu cầu tài khoản có quyền Quản trị hoặc Kiểm duyệt viên).\nTạo mới kịch bản truyện mẫu sư phạm bao gồm các vị trí thế vai nhân vật (slots), các hồi/giai đoạn (stages) và cây quyết định cảm xúc (choices & signals).',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1498,7 +1544,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     '/templates/{id}': {
       get: {
         tags: ['Templates'],
-        summary: 'Xem chi tiết bộ kịch bản mẫu (bao gồm đầy đủ slots nhân vật, các giai đoạn và cây quyết định)',
+        summary: '🌐 [Public] Xem chi tiết bộ kịch bản mẫu',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem chi tiết toàn bộ kịch bản truyện mẫu bao gồm các slots nhân vật, các giai đoạn và cây quyết định cảm xúc.',
+        security: [],
         parameters: [
           {
             name: 'id',
@@ -1535,7 +1583,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       put: {
         tags: ['Templates'],
-        summary: 'Cập nhật thông tin hoặc trạng thái kịch bản mẫu (active/draft/retired)',
+        summary: '🛡️ [Moderator | Admin] Cập nhật thông tin hoặc trạng thái kịch bản mẫu',
+        description: '**Quyền truy cập:** `moderator` | `admin` (Yêu cầu tài khoản có quyền Quản trị hoặc Kiểm duyệt viên).\nChỉnh sửa thông tin kịch bản truyện mẫu, hoặc cập nhật trạng thái hoạt động (`draft` / `active` / `retired`).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1571,7 +1620,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
       },
       delete: {
         tags: ['Templates'],
-        summary: 'Xóa hoặc chuyển kịch bản sang trạng thái ngưng dùng (retired nếu đã có truyện sử dụng)',
+        summary: '👑 [Admin] Xóa hoặc ngưng dùng kịch bản mẫu',
+        description: '**Quyền truy cập:** `admin` (Dành riêng cho Quản trị viên cấp cao).\nXóa kịch bản truyện mẫu (nếu đã có truyện phát sinh sẽ tự động chuyển sang trạng thái ngưng dùng `retired` để bảo toàn dữ liệu).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {

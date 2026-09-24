@@ -80,7 +80,7 @@ const createCharacter = async (parentId, characterData) => {
     });
 
     if (!child) {
-      throw ApiError.badRequest('Hồ sơ bé được liên kết không tồn tại hoặc đã bị xóa');
+      throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
     }
   }
 
@@ -95,7 +95,7 @@ const createCharacter = async (parentId, characterData) => {
 
   if (currentCount >= maxQuota) {
     throw ApiError.forbidden(
-      `Bạn đã đạt giới hạn tối đa ${maxQuota} nhân vật theo gói dịch vụ hiện tại. Vui lòng nâng cấp gói để tạo thêm nhân vật.`,
+      `You have reached the maximum limit of ${maxQuota} characters for your current subscription. Please upgrade to create more characters.`,
     );
   }
 
@@ -189,7 +189,7 @@ const getCharacterById = async (parentId, characterId) => {
   });
 
   if (!character) {
-    throw ApiError.notFound('Không tìm thấy nhân vật');
+    throw ApiError.notFound('Character not found');
   }
 
   return formatCharacterResponse(character);
@@ -212,7 +212,7 @@ const updateCharacter = async (parentId, characterId, updateData) => {
   });
 
   if (!existingCharacter) {
-    throw ApiError.notFound('Không tìm thấy nhân vật');
+    throw ApiError.notFound('Character not found');
   }
 
   // If childId is provided/updated, verify validity
@@ -226,7 +226,7 @@ const updateCharacter = async (parentId, characterId, updateData) => {
     });
 
     if (!child) {
-      throw ApiError.badRequest('Hồ sơ bé được liên kết không tồn tại hoặc đã bị xóa');
+      throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
     }
   }
 
@@ -271,7 +271,7 @@ const deleteCharacter = async (parentId, characterId) => {
   });
 
   if (!existingCharacter) {
-    throw ApiError.notFound('Không tìm thấy nhân vật');
+    throw ApiError.notFound('Character not found');
   }
 
   await prisma.character.update({
@@ -308,7 +308,7 @@ const requestPortraitGeneration = async (parentId, characterId, options = {}) =>
   });
 
   if (!character) {
-    throw ApiError.notFound('Không tìm thấy nhân vật');
+    throw ApiError.notFound('Character not found');
   }
 
   const styleDescriptions = {

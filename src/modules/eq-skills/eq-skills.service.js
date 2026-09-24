@@ -71,7 +71,7 @@ const getEqSkillById = async (idOrCode) => {
   });
 
   if (!skill) {
-    throw ApiError.notFound('Không tìm thấy kỹ năng EQ');
+    throw ApiError.notFound('EQ skill not found');
   }
 
   return {

@@ -129,7 +129,7 @@ const getTemplateById = async (templateId) => {
   });
 
   if (!template) {
-    throw ApiError.notFound('Không tìm thấy kịch bản mẫu');
+    throw ApiError.notFound('Template not found');
   }
 
   return template;
@@ -147,11 +147,11 @@ const createTemplate = async (userId, templateData) => {
   // Verify primary EQ skill exists
   const skill = await prisma.eqSkill.findUnique({ where: { id: primarySkillId } });
   if (!skill) {
-    throw ApiError.badRequest('Kỹ năng EQ chính không tồn tại');
+    throw ApiError.badRequest('Primary EQ skill does not exist');
   }
 
   if (ageMin > ageMax) {
-    throw ApiError.badRequest('Độ tuổi tối thiểu (ageMin) không được lớn hơn độ tuổi tối đa (ageMax)');
+    throw ApiError.badRequest('Minimum age (ageMin) cannot be greater than maximum age (ageMax)');
   }
 
   return prisma.$transaction(async (tx) => {
@@ -248,20 +248,20 @@ const createTemplate = async (userId, templateData) => {
 const updateTemplate = async (templateId, updateData) => {
   const existing = await prisma.template.findUnique({ where: { id: templateId } });
   if (!existing) {
-    throw ApiError.notFound('Không tìm thấy kịch bản mẫu');
+    throw ApiError.notFound('Template not found');
   }
 
   if (updateData.primarySkillId) {
     const skill = await prisma.eqSkill.findUnique({ where: { id: updateData.primarySkillId } });
     if (!skill) {
-      throw ApiError.badRequest('Kỹ năng EQ chính không tồn tại');
+      throw ApiError.badRequest('Primary EQ skill does not exist');
     }
   }
 
   const ageMin = updateData.ageMin !== undefined ? updateData.ageMin : existing.ageMin;
   const ageMax = updateData.ageMax !== undefined ? updateData.ageMax : existing.ageMax;
   if (ageMin > ageMax) {
-    throw ApiError.badRequest('Độ tuổi tối thiểu không được lớn hơn độ tuổi tối đa');
+    throw ApiError.badRequest('Minimum age cannot be greater than maximum age');
   }
 
   return prisma.template.update({
@@ -298,7 +298,7 @@ const deleteTemplate = async (templateId) => {
   });
 
   if (!existing) {
-    throw ApiError.notFound('Không tìm thấy kịch bản mẫu');
+    throw ApiError.notFound('Template not found');
   }
 
   // If stories are already using this template, retire it rather than cascade delete
