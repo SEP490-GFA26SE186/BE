@@ -336,9 +336,10 @@ enum CaselCompetency {
 model User {
   id              String    @id @default(uuid()) @db.Uuid
   role            UserRole  @default(parent)
+  username        String    @unique @db.VarChar(50)
   email           String    @unique @db.Citext
   passwordHash    String    @map("password_hash") @db.VarChar(255)
-  fullName        String    @map("full_name") @db.VarChar(150)
+  fullName        String?   @map("full_name") @db.VarChar(150)
   phone           String?   @db.VarChar(20)
   kidExitPinHash  String?   @map("kid_exit_pin_hash") @db.VarChar(255)
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz()

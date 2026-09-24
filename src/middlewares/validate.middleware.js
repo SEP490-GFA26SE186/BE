@@ -25,10 +25,17 @@ const validate = (schema) => (req, _res, next) => {
   const result = schema.safeParse(dataToValidate);
 
   if (!result.success) {
-    const errors = result.error.errors.map((err) => ({
-      path: err.path.join('.'),
-      message: err.message,
-    }));
+    const errorIssues = result.error.issues || result.error.errors || [];
+    const errors = errorIssues.map((err) => {
+      const pathArray =
+        ['body', 'query', 'params'].includes(err.path[0])
+          ? err.path.slice(1)
+          : err.path;
+      return {
+        path: pathArray.join('.'),
+        message: err.message,
+      };
+    });
     return next(new ApiError(StatusCodes.BAD_REQUEST, 'Validation failed', errors));
   }
 

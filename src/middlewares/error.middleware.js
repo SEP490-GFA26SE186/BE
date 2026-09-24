@@ -34,9 +34,7 @@ const errorHandler = (err, _req, res, _next) => {
     response.errors = errors;
   }
 
-  if (env.nodeEnv === 'development') {
-    response.stack = err.stack;
-  }
+  // Stack trace is logged to server console below, hidden from client response
 
   console.error('[ERROR]', err);
 
