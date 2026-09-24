@@ -41,8 +41,30 @@ const validate = (schema) => (req, _res, next) => {
 
   // Replace req data with parsed (and transformed) values
   if (result.data.body) req.body = result.data.body;
-  if (result.data.query) req.query = result.data.query;
-  if (result.data.params) req.params = result.data.params;
+  if (result.data.query) {
+    try {
+      req.query = result.data.query;
+    } catch {
+      Object.defineProperty(req, 'query', {
+        value: result.data.query,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+    }
+  }
+  if (result.data.params) {
+    try {
+      req.params = result.data.params;
+    } catch {
+      Object.defineProperty(req, 'params', {
+        value: result.data.params,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
+    }
+  }
 
   return next();
 };
