@@ -29,6 +29,41 @@ const register = z.object({
   }),
 });
 
+const login = z.object({
+  body: z
+    .object({
+      emailOrUsername: z.string().trim().optional(),
+      email: z.string().trim().optional(),
+      username: z.string().trim().optional(),
+      password: z
+        .string({ required_error: 'Password is required' })
+        .min(1, 'Password is required'),
+    })
+    .refine((data) => data.emailOrUsername || data.email || data.username, {
+      message: 'Email or username is required',
+      path: ['emailOrUsername'],
+    }),
+});
+
+const refreshTokens = z.object({
+  body: z.object({
+    refreshToken: z
+      .string({ required_error: 'Refresh token is required' })
+      .min(1, 'Refresh token is required'),
+  }),
+});
+
+const logout = z.object({
+  body: z.object({
+    refreshToken: z
+      .string({ required_error: 'Refresh token is required' })
+      .min(1, 'Refresh token is required'),
+  }),
+});
+
 export default {
   register,
+  login,
+  refreshTokens,
+  logout,
 };
