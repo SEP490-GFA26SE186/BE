@@ -26,6 +26,8 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
     { name: 'Email Verification', description: 'Gửi và xác thực địa chỉ email qua Brevo' },
     { name: 'Children', description: 'Quản lý hồ sơ bé và kiểm soát thời gian sử dụng màn hình' },
     { name: 'Characters', description: 'Quản lý nhân vật gia đình đưa vào truyện và chân dung AI' },
+    { name: 'EQ Skills', description: 'Danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn CASEL' },
+    { name: 'Templates', description: 'Thư viện kịch bản truyện mẫu sư phạm và cây quyết định cảm xúc' },
   ],
   components: {
     securitySchemes: {
@@ -149,6 +151,100 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
               },
             },
           },
+        },
+      },
+      EqSkill: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid', example: '841c1656-9de0-404d-ac91-4202335bf08f' },
+          caselCode: {
+            type: 'string',
+            enum: ['self_awareness', 'self_management', 'social_awareness', 'relationship_skills', 'responsible_decision_making'],
+            example: 'self_awareness',
+          },
+          nameVi: { type: 'string', example: 'Tự nhận thức' },
+          nameEn: { type: 'string', example: 'Self-Awareness' },
+          description: { type: 'string', example: 'Khả năng hiểu rõ cảm xúc, suy nghĩ và giá trị của bản thân...' },
+          displayOrder: { type: 'integer', example: 1 },
+          activeTemplatesCount: { type: 'integer', example: 3 },
+        },
+      },
+      TemplateSlot: {
+        type: 'object',
+        properties: {
+          slotKey: { type: 'string', example: '{CON}' },
+          characterRole: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'], example: 'self' },
+          defaultName: { type: 'string', example: 'Bé' },
+        },
+      },
+      TemplateChoiceSignal: {
+        type: 'object',
+        properties: {
+          skillId: { type: 'string', format: 'uuid' },
+          delta: { type: 'integer', example: 2 },
+          skill: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              caselCode: { type: 'string', example: 'relationship_skills' },
+              nameVi: { type: 'string', example: 'Kỹ năng quan hệ' },
+            },
+          },
+        },
+      },
+      TemplateChoiceType: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          choiceOrder: { type: 'integer', example: 1 },
+          typeCode: { type: 'string', example: 'CHIA_SE_DOI_LUOT' },
+          description: { type: 'string', example: 'Nhường bạn chơi trước 5 phút rồi đổi lượt cho nhau' },
+          isProsocial: { type: 'boolean', example: true },
+          choiceSignals: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/TemplateChoiceSignal' },
+          },
+        },
+      },
+      TemplateStage: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          stageOrder: { type: 'integer', example: 1 },
+          learningObjective: { type: 'string', example: 'Nhận diện niềm vui khi có món đồ chơi mới...' },
+          emotionToName: { type: 'string', nullable: true, example: 'bực bội' },
+          leadInPages: { type: 'integer', example: 2 },
+          isClimax: { type: 'boolean', example: true },
+          choiceTypes: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/TemplateChoiceType' },
+          },
+        },
+      },
+      Template: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid', example: '3c7766ca-55cf-4c9d-aef1-5aaf1ee79772' },
+          title: { type: 'string', example: 'Tập chia sẻ đồ chơi cùng bạn' },
+          description: { type: 'string', example: 'Giúp bé nhận diện niềm vui khi chơi chung...' },
+          primarySkill: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              caselCode: { type: 'string', example: 'relationship_skills' },
+              nameVi: { type: 'string', example: 'Kỹ năng quan hệ' },
+            },
+          },
+          ageMin: { type: 'integer', example: 4 },
+          ageMax: { type: 'integer', example: 7 },
+          status: { type: 'string', enum: ['draft', 'active', 'retired'], example: 'active' },
+          slots: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/TemplateSlot' },
+          },
+          stagesCount: { type: 'integer', example: 3 },
+          storiesCount: { type: 'integer', example: 0 },
+          createdAt: { type: 'string', format: 'date-time' },
         },
       },
     },
@@ -1178,6 +1274,317 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
             },
           },
           404: { description: 'Không tìm thấy nhân vật' },
+        },
+      },
+    },
+    '/eq-skills': {
+      get: {
+        tags: ['EQ Skills'],
+        summary: 'Lấy danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn quốc tế CASEL',
+        parameters: [
+          {
+            name: 'search',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Tìm kiếm theo tên hoặc mô tả kỹ năng',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Danh sách kỹ năng EQ thành công',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/SuccessResponse' },
+                    {
+                      properties: {
+                        data: {
+                          properties: {
+                            skills: {
+                              type: 'array',
+                              items: { $ref: '#/components/schemas/EqSkill' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/eq-skills/{id}': {
+      get: {
+        tags: ['EQ Skills'],
+        summary: 'Xem chi tiết một kỹ năng EQ (chấp nhận UUID hoặc mã CASEL như self_awareness)',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+            example: 'relationship_skills',
+            description: 'UUID hoặc caselCode của kỹ năng',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Lấy chi tiết kỹ năng EQ thành công',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/SuccessResponse' },
+                    {
+                      properties: {
+                        data: {
+                          properties: {
+                            skill: { $ref: '#/components/schemas/EqSkill' },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          404: { description: 'Không tìm thấy kỹ năng EQ' },
+        },
+      },
+    },
+    '/templates': {
+      get: {
+        tags: ['Templates'],
+        summary: 'Kho kịch bản truyện mẫu sư phạm (hỗ trợ lọc theo kỹ năng EQ, độ tuổi, từ khóa)',
+        parameters: [
+          {
+            name: 'primarySkillId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'Lọc theo ID kỹ năng EQ chính',
+          },
+          {
+            name: 'age',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer' },
+            example: 5,
+            description: 'Lọc kịch bản phù hợp với độ tuổi của bé (ageMin <= age <= ageMax)',
+          },
+          {
+            name: 'search',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Tìm kiếm theo tiêu đề hoặc mô tả',
+          },
+          {
+            name: 'status',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['draft', 'active', 'retired'], default: 'active' },
+            description: 'Trạng thái kịch bản (mặc định active)',
+          },
+          {
+            name: 'page',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 10 },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Lấy danh sách kịch bản mẫu thành công',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    message: { type: 'string' },
+                    data: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Template' },
+                    },
+                    pagination: {
+                      type: 'object',
+                      properties: {
+                        page: { type: 'integer' },
+                        limit: { type: 'integer' },
+                        total: { type: 'integer' },
+                        totalPages: { type: 'integer' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        tags: ['Templates'],
+        summary: 'Tạo kịch bản mẫu mới (với các vị trí nhân vật, các giai đoạn và các nhánh rẽ lựa chọn)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'primarySkillId', 'slots'],
+                properties: {
+                  title: { type: 'string', example: 'Học cách kiểm soát cơn giận' },
+                  description: { type: 'string', example: 'Giúp bé nhận diện cơn giận và các cách hạ hỏa an toàn' },
+                  primarySkillId: { type: 'string', format: 'uuid' },
+                  ageMin: { type: 'integer', example: 4 },
+                  ageMax: { type: 'integer', example: 7 },
+                  status: { type: 'string', enum: ['draft', 'active', 'retired'], default: 'draft' },
+                  slots: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/TemplateSlot' },
+                  },
+                  stages: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['stageOrder', 'learningObjective'],
+                      properties: {
+                        stageOrder: { type: 'integer', example: 1 },
+                        learningObjective: { type: 'string', example: 'Nhận diện nhịp tim đập nhanh khi bực mình' },
+                        emotionToName: { type: 'string', example: 'tức giận' },
+                        leadInPages: { type: 'integer', example: 1 },
+                        isClimax: { type: 'boolean', example: false },
+                        choices: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: ['choiceOrder', 'typeCode', 'description'],
+                            properties: {
+                              choiceOrder: { type: 'integer', example: 1 },
+                              typeCode: { type: 'string', example: 'DEM_TU_1_DEN_10' },
+                              description: { type: 'string', example: 'Dừng lại và đếm thầm từ 1 đến 10' },
+                              isProsocial: { type: 'boolean', example: true },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo kịch bản mẫu thành công' },
+          400: { description: 'Dữ liệu không hợp lệ' },
+        },
+      },
+    },
+    '/templates/{id}': {
+      get: {
+        tags: ['Templates'],
+        summary: 'Xem chi tiết bộ kịch bản mẫu (bao gồm đầy đủ slots nhân vật, các giai đoạn và cây quyết định)',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID kịch bản mẫu',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Lấy chi tiết kịch bản mẫu thành công',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/SuccessResponse' },
+                    {
+                      properties: {
+                        data: {
+                          properties: {
+                            template: { $ref: '#/components/schemas/Template' },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          404: { description: 'Không tìm thấy kịch bản mẫu' },
+        },
+      },
+      put: {
+        tags: ['Templates'],
+        summary: 'Cập nhật thông tin hoặc trạng thái kịch bản mẫu (active/draft/retired)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID kịch bản mẫu',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  description: { type: 'string' },
+                  primarySkillId: { type: 'string', format: 'uuid' },
+                  ageMin: { type: 'integer' },
+                  ageMax: { type: 'integer' },
+                  status: { type: 'string', enum: ['draft', 'active', 'retired'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật kịch bản mẫu thành công' },
+          404: { description: 'Không tìm thấy kịch bản mẫu' },
+        },
+      },
+      delete: {
+        tags: ['Templates'],
+        summary: 'Xóa hoặc chuyển kịch bản sang trạng thái ngưng dùng (retired nếu đã có truyện sử dụng)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID kịch bản mẫu',
+          },
+        ],
+        responses: {
+          200: { description: 'Xóa hoặc lưu trữ kịch bản mẫu thành công' },
+          404: { description: 'Không tìm thấy kịch bản mẫu' },
         },
       },
     },
