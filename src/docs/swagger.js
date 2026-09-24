@@ -36,6 +36,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Characters', description: 'Quản lý nhân vật gia đình đưa vào truyện và chân dung AI' },
     { name: 'EQ Skills', description: 'Danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn CASEL' },
     { name: 'Templates', description: 'Thư viện kịch bản truyện mẫu sư phạm và cây quyết định cảm xúc' },
+    { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
+    { name: 'Reading Sessions', description: 'Phiên đọc truyện tương tác, lựa chọn nhánh rẽ cảm xúc và đánh giá chỉ số EQ' },
   ],
   components: {
     securitySchemes: {
@@ -1635,6 +1637,300 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         responses: {
           200: { description: 'Xóa hoặc lưu trữ kịch bản mẫu thành công' },
           404: { description: 'Không tìm thấy kịch bản mẫu' },
+        },
+      },
+    },
+
+    // ---- BOOKSHELF ----
+    '/bookshelf': {
+      get: {
+        tags: ['Bookshelf'],
+        summary: '🔒 [Parent | Kid Session] Lấy danh sách truyện trên kệ sách của bé',
+        description: '**Quyền truy cập:** `parent`, `admin`, hoặc phiên đọc `kid_session`.\nLấy toàn bộ truyện trên kệ sách của bé kèm tiến độ đọc mới nhất (phần trăm hoàn thành, trang đang đọc dở).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'childId',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID hồ sơ bé',
+          },
+          {
+            name: 'search',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Tìm kiếm theo tên truyện',
+          },
+          {
+            name: 'page',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 10 },
+          },
+        ],
+        responses: {
+          200: { description: 'Lấy danh sách kệ sách thành công' },
+          400: { description: 'Dữ liệu không hợp lệ' },
+          401: { description: 'Chưa đăng nhập' },
+          404: { description: 'Không tìm thấy hồ sơ bé' },
+        },
+      },
+      post: {
+        tags: ['Bookshelf'],
+        summary: '🔒 [Parent] Thêm truyện vào kệ sách của bé',
+        description: '**Quyền truy cập:** `parent`, `admin`.\nThêm một câu chuyện vào kệ sách cá nhân của bé.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['childId', 'storyId'],
+                properties: {
+                  childId: { type: 'string', format: 'uuid' },
+                  storyId: { type: 'string', format: 'uuid' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Thêm truyện vào kệ sách thành công' },
+          404: { description: 'Không tìm thấy hồ sơ bé hoặc truyện' },
+        },
+      },
+    },
+
+    '/bookshelf/check/{storyId}': {
+      get: {
+        tags: ['Bookshelf'],
+        summary: '🔒 [Parent | Kid Session] Kiểm tra truyện đã có trên kệ sách của bé chưa',
+        description: '**Quyền truy cập:** `parent`, `admin`, hoặc phiên đọc `kid_session`.\nKiểm tra xem truyện đã được thêm vào kệ sách của bé hay chưa.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'storyId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID câu chuyện',
+          },
+          {
+            name: 'childId',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID hồ sơ bé',
+          },
+        ],
+        responses: {
+          200: { description: 'Kiểm tra trạng thái kệ sách thành công' },
+        },
+      },
+    },
+
+    '/bookshelf/{storyId}': {
+      delete: {
+        tags: ['Bookshelf'],
+        summary: '🔒 [Parent] Xóa truyện khỏi kệ sách của bé',
+        description: '**Quyền truy cập:** `parent`, `admin`.\nXóa một câu chuyện khỏi kệ sách của bé (không làm mất lịch sử đọc truyện đã ghi nhận).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'storyId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID câu chuyện',
+          },
+          {
+            name: 'childId',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID hồ sơ bé',
+          },
+        ],
+        responses: {
+          200: { description: 'Xóa truyện khỏi kệ sách thành công' },
+          404: { description: 'Truyện không có trên kệ sách' },
+        },
+      },
+    },
+
+    // ---- READING SESSIONS ----
+    '/reading-sessions/start': {
+      post: {
+        tags: ['Reading Sessions'],
+        summary: '🔒 [Parent | Kid Session] Bắt đầu hoặc tiếp tục phiên đọc truyện tương tác',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nKhởi động phiên đọc truyện cho bé. Nếu đã có phiên dở dang (`in_progress`) sẽ tự động tiếp tục trang đang đọc; nếu chọn `isReplay: true` sẽ bắt đầu lại từ trang đầu tiên.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['childId', 'storyId'],
+                properties: {
+                  childId: { type: 'string', format: 'uuid' },
+                  storyId: { type: 'string', format: 'uuid' },
+                  isReplay: { type: 'boolean', default: false, description: 'Đọc lại từ đầu' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Khởi động phiên đọc truyện thành công' },
+          400: { description: 'Truyện chưa có nội dung trang' },
+          404: { description: 'Không tìm thấy hồ sơ bé hoặc câu chuyện' },
+        },
+      },
+    },
+
+    '/reading-sessions/{sessionId}': {
+      get: {
+        tags: ['Reading Sessions'],
+        summary: '🔒 [Parent | Kid Session] Lấy trạng thái chi tiết phiên đọc truyện',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thông tin trang hiện tại, các lựa chọn rẽ nhánh, tiến độ và lịch sử các quyết định đã chọn trong phiên.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'sessionId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID phiên đọc truyện',
+          },
+        ],
+        responses: {
+          200: { description: 'Lấy trạng thái phiên đọc thành công' },
+          404: { description: 'Không tìm thấy phiên đọc' },
+        },
+      },
+    },
+
+    '/reading-sessions/{sessionId}/choice': {
+      post: {
+        tags: ['Reading Sessions'],
+        summary: '👶 [Kid Session | Parent] Bé chọn phương án xử lý tình huống cảm xúc',
+        description: '**Quyền truy cập:** `kid_session` hoặc `parent`.\nGhi nhận lựa chọn của bé tại nhánh rẽ tình huống. Hệ thống sẽ điều hướng đến trang hệ quả tương ứng, hoặc hoàn thành truyện và tự động tính toán chỉ số EQ.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'sessionId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID phiên đọc truyện',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['pageId', 'choiceId'],
+                properties: {
+                  pageId: { type: 'string', format: 'uuid', description: 'ID trang hiện tại' },
+                  choiceId: { type: 'string', format: 'uuid', description: 'ID nhánh rẽ bé lựa chọn' },
+                  timeToDecideMs: { type: 'integer', example: 3500, description: 'Thời gian bé suy nghĩ (mili-giây)' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Ghi nhận lựa chọn thành công và trả về trang tiếp theo hoặc kết quả EQ' },
+          400: { description: 'Phiên đọc đã kết thúc hoặc sai ID trang' },
+          404: { description: 'Không tìm thấy lựa chọn tương ứng' },
+        },
+      },
+    },
+
+    '/reading-sessions/{sessionId}/complete': {
+      post: {
+        tags: ['Reading Sessions'],
+        summary: '🔒 [Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nĐánh dấu kết thúc phiên đọc truyện, tổng hợp điểm số 5 năng lực EQ chuẩn CASEL và tự động tích lũy thời gian sử dụng màn hình của bé.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'sessionId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID phiên đọc truyện',
+          },
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  durationSeconds: { type: 'integer', example: 120, description: 'Thời lượng phiên đọc (giây)' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Hoàn thành phiên đọc và tạo báo cáo EQ thành công' },
+          404: { description: 'Không tìm thấy phiên đọc' },
+        },
+      },
+    },
+
+    '/reading-sessions/child/{childId}/history': {
+      get: {
+        tags: ['Reading Sessions'],
+        summary: '🔒 [Parent | Kid Session] Xem lịch sử các phiên đọc truyện của bé',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLấy danh sách các câu chuyện bé đã đọc, số lượng lựa chọn cảm xúc đã đưa ra và điểm số EQ đạt được qua từng phiên.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'childId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID hồ sơ bé',
+          },
+          {
+            name: 'status',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['in_progress', 'completed', 'abandoned'] },
+            description: 'Lọc theo trạng thái phiên đọc',
+          },
+          {
+            name: 'page',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 10 },
+          },
+        ],
+        responses: {
+          200: { description: 'Lấy lịch sử đọc truyện của bé thành công' },
+          404: { description: 'Không tìm thấy hồ sơ bé' },
         },
       },
     },

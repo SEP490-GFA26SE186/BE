@@ -12,6 +12,11 @@ import { errorConverter, errorHandler } from './middlewares/index.js';
 import ApiError from './utils/ApiError.js';
 import v1Routes from './routes/v1/index.js';
 
+// Global support for serializing BigInt (Prisma autoincrement ID) to JSON string
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 const app = express();
 
 // ---------------------------------------------------------------------------
