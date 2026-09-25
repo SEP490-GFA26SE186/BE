@@ -9,6 +9,8 @@ import bookshelfRoutes from '../../modules/bookshelf/bookshelf.routes.js';
 import readingSessionsRoutes from '../../modules/reading-sessions/reading-sessions.routes.js';
 import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
 import moderationRoutes from '../../modules/moderation/moderation.routes.js';
+import { plansRouter, creditPacksRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
+import walletsRoutes from '../../modules/wallets/wallets.routes.js';
 
 const router = express.Router();
 
@@ -27,5 +29,10 @@ router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);
 router.use('/marketplace', marketplaceRoutes);
 router.use('/moderation', moderationRoutes);
+router.use('/plans', plansRouter);
+router.use('/credit-packs', creditPacksRouter);
+router.use('/subscriptions', subscriptionsRouter);
+router.use('/wallets', walletsRoutes);
 
 export default router;
+

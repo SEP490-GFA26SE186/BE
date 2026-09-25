@@ -9,13 +9,13 @@ const swaggerSpec = {
 **StoryWeaver AI** - Nền tảng sáng tác truyện tương tác cá nhân hóa và giáo dục trí tuệ cảm xúc (EQ) cho trẻ em.
 API Backend cung cấp đầy đủ các chức năng quản lý tài khoản phụ huynh, bảo mật chế độ trẻ em (Kid Mode PIN & Session), xác thực email, và tích hợp cơ sở dữ liệu Supabase.
 
-### 🔐 Bảng Phân Quyền Truy Cập (Role-Based Access Control - RBAC)
+### Bảng Phân Quyền Truy Cập (Role-Based Access Control - RBAC)
 Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện truy cập:
-- 🌐 **[Public]**: Không yêu cầu đăng nhập. Bất kỳ ai cũng có thể truy cập (Health check, Login, Register, Xem danh mục EQ, Duyệt kịch bản mẫu...).
-- 🔒 **[Parent]**: Yêu cầu xác thực tài khoản Phụ huynh (\`parent\`, \`moderator\`, \`admin\`) qua Bearer Access Token.
-- 👶 **[Kid Session | Parent]**: Dành cho phiên đọc Chế độ Trẻ em (\`kid_session\` token) hoặc tài khoản Phụ huynh.
-- 🛡️ **[Moderator | Admin]**: Dành cho Kiểm duyệt viên và Quản trị viên (\`moderator\`, \`admin\`) quản lý nội dung sư phạm, duyệt chợ truyện.
-- 👑 **[Admin]**: Dành riêng cho Quản trị viên cấp cao (\`admin\`) quản trị cấu hình hệ thống và xóa dữ liệu nhạy cảm.
+- **[Public]**: Không yêu cầu đăng nhập. Bất kỳ ai cũng có thể truy cập (Health check, Login, Register, Xem danh mục EQ, Duyệt kịch bản mẫu...).
+- **[Parent]**: Yêu cầu xác thực tài khoản Phụ huynh (\`parent\`, \`moderator\`, \`admin\`) qua Bearer Access Token.
+- **[Kid Session | Parent]**: Dành cho phiên đọc Chế độ Trẻ em (\`kid_session\` token) hoặc tài khoản Phụ huynh.
+- **[Moderator | Admin]**: Dành cho Kiểm duyệt viên và Quản trị viên (\`moderator\`, \`admin\`) quản lý nội dung sư phạm, duyệt chợ truyện.
+- **[Admin]**: Dành riêng cho Quản trị viên cấp cao (\`admin\`) quản trị cấu hình hệ thống và xóa dữ liệu nhạy cảm.
     `,
     contact: {
       name: 'StoryWeaver AI Team (GFA26SE186)',
@@ -40,6 +40,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Reading Sessions', description: 'Phiên đọc truyện tương tác, lựa chọn nhánh rẽ cảm xúc và đánh giá chỉ số EQ' },
     { name: 'Marketplace', description: 'Chợ truyện cộng đồng: hồ sơ tác giả, đăng bán, nhận miễn phí và đánh giá sản phẩm' },
     { name: 'Moderation', description: 'Kiểm duyệt an toàn nội dung, từ khóa cấm, duyệt tác phẩm và báo cáo vi phạm' },
+    { name: 'Plans & Subscriptions', description: 'Gói thành viên, định mức tạo truyện/chân dung AI và quyền lợi tài khoản' },
+    { name: 'Credit Packs', description: 'Gói nạp xu (Credit Packs) bổ sung lượt tạo AI linh hoạt' },
+    { name: 'Wallets & Financials', description: 'Ví xu phụ huynh, số dư thu nhập tác giả (Seller Wallet), sổ cái giao dịch và yêu cầu rút tiền' },
   ],
   components: {
     securitySchemes: {
@@ -265,7 +268,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/health': {
       get: {
         tags: ['Health'],
-        summary: '🌐 [Public] Kiểm tra trạng thái server',
+        summary: '[Public] Kiểm tra trạng thái server',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nKiểm tra trạng thái hoạt động của server và database connectivity.',
         security: [],
         responses: {
@@ -291,7 +294,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/register': {
       post: {
         tags: ['Auth'],
-        summary: '🌐 [Public] Đăng ký tài khoản phụ huynh mới',
+        summary: '[Public] Đăng ký tài khoản phụ huynh mới',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTạo tài khoản mới, khởi tạo ví tiền và tự động gửi email xác thực qua Brevo.',
         security: [],
         requestBody: {
@@ -345,7 +348,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/login': {
       post: {
         tags: ['Auth'],
-        summary: '🌐 [Public] Đăng nhập vào hệ thống',
+        summary: '[Public] Đăng nhập vào hệ thống',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nCho phép đăng nhập bằng email hoặc username kèm theo mật khẩu.',
         security: [],
         requestBody: {
@@ -397,7 +400,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/refresh-tokens': {
       post: {
         tags: ['Auth'],
-        summary: '🌐 [Public] Làm mới token (Token Rotation)',
+        summary: '[Public] Làm mới token (Token Rotation)',
         description: '**Quyền truy cập:** `Public` (Cần refreshToken trong body).\nGửi refresh token cũ để nhận về cặp access token và refresh token mới.',
         security: [],
         requestBody: {
@@ -445,7 +448,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/logout': {
       post: {
         tags: ['Auth'],
-        summary: '🌐 [Public] Đăng xuất khỏi hệ thống',
+        summary: '[Public] Đăng xuất khỏi hệ thống',
         description: '**Quyền truy cập:** `Public` (Cần refreshToken trong body).\nVô hiệu hóa và thu hồi refresh token hiện tại.',
         security: [],
         requestBody: {
@@ -471,7 +474,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/me': {
       get: {
         tags: ['Auth'],
-        summary: '🔒 [Parent | Moderator | Admin] Lấy thông tin tài khoản hiện tại',
+        summary: '[Parent | Moderator | Admin] Lấy thông tin tài khoản hiện tại',
         description: '**Quyền truy cập:** Đã đăng nhập (`parent`, `moderator`, `admin`).\nLấy thông tin tài khoản đang đăng nhập kèm số dư ví credit/earning.',
         security: [{ BearerAuth: [] }],
         responses: {
@@ -521,7 +524,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/kid-pin/set': {
       post: {
         tags: ['Kid Mode'],
-        summary: '🔒 [Parent] Thiết lập mã PIN thoát Kid Mode lần đầu',
+        summary: '[Parent] Thiết lập mã PIN thoát Kid Mode lần đầu',
         description: '**Quyền truy cập:** `parent` | `admin`.\nThiết lập mã PIN (4-6 chữ số) lần đầu dùng để khóa và thoát khỏi Chế độ Trẻ em.',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -549,7 +552,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/kid-pin/change': {
       put: {
         tags: ['Kid Mode'],
-        summary: '🔒 [Parent] Thay đổi mã PIN thoát Kid Mode',
+        summary: '[Parent] Thay đổi mã PIN thoát Kid Mode',
         description: '**Quyền truy cập:** `parent` | `admin`.\nThay đổi mã PIN thoát Kid Mode (yêu cầu mã PIN hiện tại hoặc mật khẩu phụ huynh).',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -578,7 +581,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/kid-mode/enter': {
       post: {
         tags: ['Kid Mode'],
-        summary: '🔒 [Parent] Chuyển sang Chế độ Trẻ em (Kid Mode)',
+        summary: '[Parent] Chuyển sang Chế độ Trẻ em (Kid Mode)',
         description: '**Quyền truy cập:** `parent` | `admin`.\nKích hoạt Chế độ Trẻ em cho một bé cụ thể, sinh ra token phiên làm việc `kid_session` giới hạn quyền.',
         security: [{ BearerAuth: [] }],
         description: 'Bắt buộc phụ huynh phải có mã PIN. Cấp token phiên `kid_session` có phạm vi đọc truyện của riêng bé.',
@@ -635,7 +638,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/kid-mode/exit': {
       post: {
         tags: ['Kid Mode'],
-        summary: '👶 [Kid Session | Parent] Thoát Chế độ Trẻ em về Chế độ Phụ huynh',
+        summary: '[Kid Session | Parent] Thoát Chế độ Trẻ em về Chế độ Phụ huynh',
         description: '**Quyền truy cập:** Phiên đọc bé (`kid_session`) hoặc Phụ huynh.\nThoát khỏi Chế độ Trẻ em về Chế độ Phụ huynh bằng cách xác thực mã PIN thoát (4-6 chữ số).',
         security: [],
         description: 'Nhập đúng mã PIN để đóng phiên đọc của bé và khôi phục quyền phụ huynh.',
@@ -686,7 +689,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/send-verification-email': {
       post: {
         tags: ['Email Verification'],
-        summary: '🌐 [Public] Yêu cầu gửi lại email xác thực',
+        summary: '[Public] Yêu cầu gửi lại email xác thực',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nYêu cầu gửi lại liên kết kích hoạt tài khoản qua dịch vụ Brevo transactional email.',
         security: [],
         description: 'Gửi link xác minh email qua Brevo. Có thể truyền email hoặc dùng Bearer token.',
@@ -713,7 +716,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/verify-email': {
       get: {
         tags: ['Email Verification'],
-        summary: '🌐 [Public] Xác thực Email qua link (dành cho trình duyệt)',
+        summary: '[Public] Xác thực Email qua link (dành cho trình duyệt)',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nNhấp link trong email để kích hoạt tài khoản, hiển thị giao diện HTML thân thiện.',
         security: [],
         parameters: [
@@ -733,7 +736,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Email Verification'],
-        summary: '🌐 [Public] Xác thực Email qua API (dành cho Mobile App / Frontend)',
+        summary: '[Public] Xác thực Email qua API (dành cho Mobile App / Frontend)',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nGửi token xác thực email qua JSON body để nhận kết quả dạng REST API chuẩn.',
         security: [],
         requestBody: {
@@ -761,7 +764,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/children': {
       get: {
         tags: ['Children'],
-        summary: '🔒 [Parent] Lấy danh sách hồ sơ các bé của phụ huynh',
+        summary: '[Parent] Lấy danh sách hồ sơ các bé của phụ huynh',
         description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách toàn bộ hồ sơ các bé thuộc tài khoản phụ huynh hiện tại.',
         security: [{ BearerAuth: [] }],
         responses: {
@@ -795,7 +798,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Children'],
-        summary: '🔒 [Parent] Tạo hồ sơ bé mới',
+        summary: '[Parent] Tạo hồ sơ bé mới',
         description: '**Quyền truy cập:** `parent` | `admin`.\nTạo hồ sơ bé mới (tự động kiểm tra hạn ngạch gói cước, miễn phí tối đa 2 bé).',
         security: [{ BearerAuth: [] }],
         description: 'Tạo hồ sơ cho bé. Kiểm tra giới hạn số lượng bé theo gói cước (mặc định miễn phí 2 bé).',
@@ -850,7 +853,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/children/{id}': {
       get: {
         tags: ['Children'],
-        summary: '🔒 [Parent] Lấy chi tiết hồ sơ một bé',
+        summary: '[Parent] Lấy chi tiết hồ sơ một bé',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nXem chi tiết hồ sơ bé kèm cấu hình giờ đi ngủ và hạn mức màn hình.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -891,7 +894,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       put: {
         tags: ['Children'],
-        summary: '🔒 [Parent] Cập nhật hồ sơ bé',
+        summary: '[Parent] Cập nhật hồ sơ bé',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nCập nhật thông tin bé, giờ đi ngủ, giọng đọc ưa thích hoặc giới hạn màn hình.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -950,7 +953,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       delete: {
         tags: ['Children'],
-        summary: '🔒 [Parent] Xóa hồ sơ bé (Soft delete)',
+        summary: '[Parent] Xóa hồ sơ bé (Soft delete)',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nXóa mềm hồ sơ bé và tự động thu hồi mọi phiên đọc truyện đang hoạt động.',
         security: [{ BearerAuth: [] }],
         description: 'Xóa mềm hồ sơ bé và đồng thời thu hồi mọi token phiên Kid Session đang hoạt động của bé.',
@@ -974,7 +977,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/children/{id}/usage': {
       get: {
         tags: ['Children'],
-        summary: '👶 [Kid Session | Parent] Xem thống kê thời lượng sử dụng màn hình của bé',
+        summary: '[Kid Session | Parent] Xem thống kê thời lượng sử dụng màn hình của bé',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thống kê thời lượng sử dụng màn hình trong ngày của bé, số phút còn lại và cảnh báo giờ đi ngủ.',
         security: [{ BearerAuth: [] }],
         description: 'Truy vấn tổng thời lượng bé đã dùng trong ngày, so sánh với giới hạn quy định, tính toán thời gian còn lại.',
@@ -1017,7 +1020,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Children'],
-        summary: '👶 [Kid Session | Parent] Ghi nhận thời lượng phiên sử dụng',
+        summary: '[Kid Session | Parent] Ghi nhận thời lượng phiên sử dụng',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nGhi nhận thêm số phút đọc truyện của bé vào hệ thống kiểm soát thời gian sử dụng.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1054,7 +1057,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/characters': {
       post: {
         tags: ['Characters'],
-        summary: '🔒 [Parent] Tạo nhân vật gia đình mới',
+        summary: '[Parent] Tạo nhân vật gia đình mới',
         description: '**Quyền truy cập:** `parent` | `admin`.\nTạo nhân vật gia đình mới từ mô tả chữ an toàn, liên kết với bé (tối đa 5 nhân vật với gói miễn phí).',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -1112,7 +1115,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       get: {
         tags: ['Characters'],
-        summary: '🔒 [Parent] Lấy danh sách nhân vật của phụ huynh',
+        summary: '[Parent] Lấy danh sách nhân vật của phụ huynh',
         description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách nhân vật gia đình của phụ huynh (hỗ trợ lọc theo vai trò role hoặc theo bé childId).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1162,7 +1165,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/characters/{id}': {
       get: {
         tags: ['Characters'],
-        summary: '🔒 [Parent] Lấy thông tin chi tiết một nhân vật',
+        summary: '[Parent] Lấy thông tin chi tiết một nhân vật',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu nhân vật).\nXem chi tiết nhân vật gia đình, mô tả ngoại hình và trạng thái ảnh đại diện AI.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1201,7 +1204,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       put: {
         tags: ['Characters'],
-        summary: '🔒 [Parent] Cập nhật thông tin nhân vật',
+        summary: '[Parent] Cập nhật thông tin nhân vật',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu nhân vật).\nCập nhật tên gọi, vai trò hoặc đặc điểm nhận dạng của nhân vật.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1238,7 +1241,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       delete: {
         tags: ['Characters'],
-        summary: '🔒 [Parent] Xóa mềm nhân vật',
+        summary: '[Parent] Xóa mềm nhân vật',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu nhân vật).\nXóa mềm nhân vật khỏi danh sách gia đình.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1259,7 +1262,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/characters/{id}/portrait': {
       post: {
         tags: ['Characters'],
-        summary: '🔒 [Parent] Đưa yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi',
+        summary: '[Parent] Đưa yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi',
         description: '**Quyền truy cập:** `parent` | `admin`.\nGửi yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi AI Request Queue (`character_portrait`).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1323,7 +1326,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/eq-skills': {
       get: {
         tags: ['EQ Skills'],
-        summary: '🌐 [Public] Lấy danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn quốc tế CASEL',
+        summary: '[Public] Lấy danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn quốc tế CASEL',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nLấy danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn quốc tế CASEL kèm số lượng kịch bản truyện mẫu liên quan.',
         security: [],
         parameters: [
@@ -1366,7 +1369,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/eq-skills/{id}': {
       get: {
         tags: ['EQ Skills'],
-        summary: '🌐 [Public] Xem chi tiết một kỹ năng EQ',
+        summary: '[Public] Xem chi tiết một kỹ năng EQ',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem chi tiết một nhóm kỹ năng EQ chuẩn CASEL (chấp nhận UUID hoặc mã CASEL như self_awareness, social_awareness...).',
         security: [],
         parameters: [
@@ -1408,7 +1411,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/templates': {
       get: {
         tags: ['Templates'],
-        summary: '🌐 [Public] Kho kịch bản truyện mẫu sư phạm',
+        summary: '[Public] Kho kịch bản truyện mẫu sư phạm',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nDuyệt kho kịch bản truyện mẫu sư phạm đang hoạt động (`active`), hỗ trợ tìm kiếm và lọc theo kỹ năng EQ, độ tuổi mục tiêu.',
         security: [],
         parameters: [
@@ -1486,7 +1489,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Templates'],
-        summary: '🛡️ [Moderator | Admin] Tạo kịch bản mẫu mới',
+        summary: '[Moderator | Admin] Tạo kịch bản mẫu mới',
         description: '**Quyền truy cập:** `moderator` | `admin` (Yêu cầu tài khoản có quyền Quản trị hoặc Kiểm duyệt viên).\nTạo mới kịch bản truyện mẫu sư phạm bao gồm các vị trí thế vai nhân vật (slots), các hồi/giai đoạn (stages) và cây quyết định cảm xúc (choices & signals).',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -1548,7 +1551,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/templates/{id}': {
       get: {
         tags: ['Templates'],
-        summary: '🌐 [Public] Xem chi tiết bộ kịch bản mẫu',
+        summary: '[Public] Xem chi tiết bộ kịch bản mẫu',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem chi tiết toàn bộ kịch bản truyện mẫu bao gồm các slots nhân vật, các giai đoạn và cây quyết định cảm xúc.',
         security: [],
         parameters: [
@@ -1587,7 +1590,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       put: {
         tags: ['Templates'],
-        summary: '🛡️ [Moderator | Admin] Cập nhật thông tin hoặc trạng thái kịch bản mẫu',
+        summary: '[Moderator | Admin] Cập nhật thông tin hoặc trạng thái kịch bản mẫu',
         description: '**Quyền truy cập:** `moderator` | `admin` (Yêu cầu tài khoản có quyền Quản trị hoặc Kiểm duyệt viên).\nChỉnh sửa thông tin kịch bản truyện mẫu, hoặc cập nhật trạng thái hoạt động (`draft` / `active` / `retired`).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1624,7 +1627,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       delete: {
         tags: ['Templates'],
-        summary: '👑 [Admin] Xóa hoặc ngưng dùng kịch bản mẫu',
+        summary: '[Admin] Xóa hoặc ngưng dùng kịch bản mẫu',
         description: '**Quyền truy cập:** `admin` (Dành riêng cho Quản trị viên cấp cao).\nXóa kịch bản truyện mẫu (nếu đã có truyện phát sinh sẽ tự động chuyển sang trạng thái ngưng dùng `retired` để bảo toàn dữ liệu).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1647,7 +1650,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/bookshelf': {
       get: {
         tags: ['Bookshelf'],
-        summary: '🔒 [Parent | Kid Session] Lấy danh sách truyện trên kệ sách của bé',
+        summary: '[Parent | Kid Session] Lấy danh sách truyện trên kệ sách của bé',
         description: '**Quyền truy cập:** `parent`, `admin`, hoặc phiên đọc `kid_session`.\nLấy toàn bộ truyện trên kệ sách của bé kèm tiến độ đọc mới nhất (phần trăm hoàn thành, trang đang đọc dở).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1687,7 +1690,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Bookshelf'],
-        summary: '🔒 [Parent] Thêm truyện vào kệ sách của bé',
+        summary: '[Parent] Thêm truyện vào kệ sách của bé',
         description: '**Quyền truy cập:** `parent`, `admin`.\nThêm một câu chuyện vào kệ sách cá nhân của bé.',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -1715,7 +1718,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/bookshelf/check/{storyId}': {
       get: {
         tags: ['Bookshelf'],
-        summary: '🔒 [Parent | Kid Session] Kiểm tra truyện đã có trên kệ sách của bé chưa',
+        summary: '[Parent | Kid Session] Kiểm tra truyện đã có trên kệ sách của bé chưa',
         description: '**Quyền truy cập:** `parent`, `admin`, hoặc phiên đọc `kid_session`.\nKiểm tra xem truyện đã được thêm vào kệ sách của bé hay chưa.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1743,7 +1746,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/bookshelf/{storyId}': {
       delete: {
         tags: ['Bookshelf'],
-        summary: '🔒 [Parent] Xóa truyện khỏi kệ sách của bé',
+        summary: '[Parent] Xóa truyện khỏi kệ sách của bé',
         description: '**Quyền truy cập:** `parent`, `admin`.\nXóa một câu chuyện khỏi kệ sách của bé (không làm mất lịch sử đọc truyện đã ghi nhận).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1773,7 +1776,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/reading-sessions/start': {
       post: {
         tags: ['Reading Sessions'],
-        summary: '🔒 [Parent | Kid Session] Bắt đầu hoặc tiếp tục phiên đọc truyện tương tác',
+        summary: '[Parent | Kid Session] Bắt đầu hoặc tiếp tục phiên đọc truyện tương tác',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nKhởi động phiên đọc truyện cho bé. Nếu đã có phiên dở dang (`in_progress`) sẽ tự động tiếp tục trang đang đọc; nếu chọn `isReplay: true` sẽ bắt đầu lại từ trang đầu tiên.',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -1803,7 +1806,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/reading-sessions/{sessionId}': {
       get: {
         tags: ['Reading Sessions'],
-        summary: '🔒 [Parent | Kid Session] Lấy trạng thái chi tiết phiên đọc truyện',
+        summary: '[Parent | Kid Session] Lấy trạng thái chi tiết phiên đọc truyện',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thông tin trang hiện tại, các lựa chọn rẽ nhánh, tiến độ và lịch sử các quyết định đã chọn trong phiên.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1825,7 +1828,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/reading-sessions/{sessionId}/choice': {
       post: {
         tags: ['Reading Sessions'],
-        summary: '👶 [Kid Session | Parent] Bé chọn phương án xử lý tình huống cảm xúc',
+        summary: '[Kid Session | Parent] Bé chọn phương án xử lý tình huống cảm xúc',
         description: '**Quyền truy cập:** `kid_session` hoặc `parent`.\nGhi nhận lựa chọn của bé tại nhánh rẽ tình huống. Hệ thống sẽ điều hướng đến trang hệ quả tương ứng, hoặc hoàn thành truyện và tự động tính toán chỉ số EQ.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1864,7 +1867,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/reading-sessions/{sessionId}/complete': {
       post: {
         tags: ['Reading Sessions'],
-        summary: '🔒 [Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
+        summary: '[Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nĐánh dấu kết thúc phiên đọc truyện, tổng hợp điểm số 5 năng lực EQ chuẩn CASEL và tự động tích lũy thời gian sử dụng màn hình của bé.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1899,7 +1902,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/reading-sessions/child/{childId}/history': {
       get: {
         tags: ['Reading Sessions'],
-        summary: '🔒 [Parent | Kid Session] Xem lịch sử các phiên đọc truyện của bé',
+        summary: '[Parent | Kid Session] Xem lịch sử các phiên đọc truyện của bé',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLấy danh sách các câu chuyện bé đã đọc, số lượng lựa chọn cảm xúc đã đưa ra và điểm số EQ đạt được qua từng phiên.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1941,7 +1944,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/price-tiers': {
       get: {
         tags: ['Marketplace'],
-        summary: '🌐 [Public] Xem danh sách các mức giá bán niêm yết',
+        summary: '[Public] Xem danh sách các mức giá bán niêm yết',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem toàn bộ các mức giá niêm yết cho phép tác giả đặt giá khi xuất bản truyện (kèm mốc 0 VND miễn phí).',
         security: [],
         responses: {
@@ -1953,7 +1956,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/listings': {
       get: {
         tags: ['Marketplace'],
-        summary: '🌐 [Public] Khám phá thư viện truyện cộng đồng',
+        summary: '[Public] Khám phá thư viện truyện cộng đồng',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTìm kiếm và lọc các tác phẩm truyện đã qua kiểm duyệt sư phạm, lọc theo kỹ năng EQ, độ tuổi mục tiêu, miễn phí/trả phí, sắp xếp theo lượt mua, đánh giá hoặc ngày đăng.',
         security: [],
         parameters: [
@@ -1974,7 +1977,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/listings/{id}': {
       get: {
         tags: ['Marketplace'],
-        summary: '🌐 [Public] Xem chi tiết tác phẩm truyện trên chợ',
+        summary: '[Public] Xem chi tiết tác phẩm truyện trên chợ',
         description: '**Quyền truy cập:** `Public` (Nếu đã đăng nhập sẽ tự động kiểm tra quyền sở hữu `isOwned`).\nXem chi tiết thông tin truyện, tác giả, mức giá, số lượt tải/mua và điểm đánh giá trung bình.',
         security: [],
         parameters: [
@@ -1990,7 +1993,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/listings/{id}/reviews': {
       get: {
         tags: ['Marketplace'],
-        summary: '🌐 [Public] Xem các đánh giá nhận xét của tác phẩm',
+        summary: '[Public] Xem các đánh giá nhận xét của tác phẩm',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem toàn bộ nhận xét, số sao đánh giá (1-5★) và phản hồi từ tác giả.',
         security: [],
         parameters: [
@@ -2005,7 +2008,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/seller/register': {
       post: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Đăng ký trở thành tác giả cộng đồng',
+        summary: '[Parent] Đăng ký trở thành tác giả cộng đồng',
         description: '**Quyền truy cập:** `parent`.\nNộp hồ sơ trở thành Tác giả kể chuyện (bút danh, tiểu sử, chuyên môn và thông tin nhận nhuận bút ngân hàng).',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -2037,7 +2040,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/seller/me': {
       get: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Xem hồ sơ tác giả của mình',
+        summary: '[Parent] Xem hồ sơ tác giả của mình',
         description: '**Quyền truy cập:** `parent`.\nXem trạng thái duyệt tác giả (pending/approved/suspended), số lượng tác phẩm và điểm đánh giá tích lũy.',
         security: [{ BearerAuth: [] }],
         responses: {
@@ -2046,7 +2049,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       put: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Cập nhật thông tin tác giả và tài khoản ngân hàng',
+        summary: '[Parent] Cập nhật thông tin tác giả và tài khoản ngân hàng',
         description: '**Quyền truy cập:** `parent`.\nChỉnh sửa bút danh, tiểu sử hoặc tài khoản ngân hàng nhận tiền rút nhuận bút.',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -2077,7 +2080,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/seller/my-listings': {
       get: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Xem danh sách các tác phẩm đăng bán của tác giả',
+        summary: '[Parent] Xem danh sách các tác phẩm đăng bán của tác giả',
         description: '**Quyền truy cập:** `parent` (Tác giả đã đăng ký).\nXem các tác phẩm đã đăng bán cùng trạng thái duyệt (submitted, in_review, published, changes_requested, rejected).',
         security: [{ BearerAuth: [] }],
         responses: {
@@ -2089,7 +2092,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/listings': {
       post: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Đăng bán tác phẩm truyện lên chợ (chờ kiểm duyệt)',
+        summary: '[Parent] Đăng bán tác phẩm truyện lên chợ (chờ kiểm duyệt)',
         description: '**Quyền truy cập:** `parent` (Tác giả đã được duyệt `approved`).\nĐăng tải câu chuyện lên chợ cộng đồng kèm định mức giá. Hệ thống sẽ tự động đưa vào hàng đợi kiểm duyệt sư phạm.',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -2122,7 +2125,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/listings/{id}/claim-free': {
       post: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Nhận câu chuyện miễn phí vào thư viện sở hữu',
+        summary: '[Parent] Nhận câu chuyện miễn phí vào thư viện sở hữu',
         description: '**Quyền truy cập:** `parent`.\nNhận quyền đọc trọn đời cho một câu chuyện miễn phí (0 VND) trên chợ vào thư viện (`Entitlement`).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2138,7 +2141,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/listings/{id}/reviews': {
       post: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Đánh giá và nhận xét tác phẩm truyện',
+        summary: '[Parent] Đánh giá và nhận xét tác phẩm truyện',
         description: '**Quyền truy cập:** `parent` (Đã sở hữu quyền đọc truyện).\nChấm điểm sao (1-5★), bình luận và gắn các nhãn khen ngợi sư phạm (`child_liked`, `clear_lesson`...).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2176,7 +2179,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/marketplace/reviews/{reviewId}/reply': {
       post: {
         tags: ['Marketplace'],
-        summary: '🔒 [Parent] Tác giả phản hồi nhận xét của độc giả',
+        summary: '[Parent] Tác giả phản hồi nhận xét của độc giả',
         description: '**Quyền truy cập:** `parent` (Chính chủ tác giả của câu chuyện).\nViết lời cảm ơn hoặc phản hồi trao đổi với phụ huynh dưới phần bình luận.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2207,7 +2210,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/checklist-items': {
       get: {
         tags: ['Moderation'],
-        summary: '🌐 [Public] Xem 7 tiêu chí sư phạm dùng để duyệt truyện',
+        summary: '[Public] Xem 7 tiêu chí sư phạm dùng để duyệt truyện',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem danh sách 7 nguyên tắc sư phạm an toàn cho trẻ em được áp dụng khi kiểm duyệt nội dung cộng đồng.',
         security: [],
         responses: {
@@ -2219,7 +2222,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/check-text': {
       post: {
         tags: ['Moderation'],
-        summary: '🌐 [Public] Kiểm tra văn bản nhanh với bộ từ khóa cấm',
+        summary: '[Public] Kiểm tra văn bản nhanh với bộ từ khóa cấm',
         description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nQuét nhanh văn bản truyện xem có chứa từ khóa thô tục, bạo lực hay nhạy cảm không.',
         security: [],
         requestBody: {
@@ -2245,7 +2248,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/reports': {
       post: {
         tags: ['Moderation'],
-        summary: '🔒 [Parent] Gửi báo cáo nội dung vi phạm hoặc bài học không phù hợp',
+        summary: '[Parent] Gửi báo cáo nội dung vi phạm hoặc bài học không phù hợp',
         description: '**Quyền truy cập:** `parent`.\nPhụ huynh gửi báo cáo vi phạm tác phẩm hoặc nhận xét (danh mục: đáng sợ, bạo lực, bài học sai lệch...). Nếu 1 truyện nhận >= 3 báo cáo trong 24h sẽ tự động tạm đình chỉ.',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -2275,7 +2278,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       get: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Xem danh sách các báo cáo vi phạm từ cộng đồng',
+        summary: '[Moderator | Admin] Xem danh sách các báo cáo vi phạm từ cộng đồng',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nLấy danh sách các phản ánh của phụ huynh cần xử lý.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2292,7 +2295,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/reports/{reportId}/resolve': {
       put: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Xử lý đóng hoặc bác bỏ báo cáo vi phạm',
+        summary: '[Moderator | Admin] Xử lý đóng hoặc bác bỏ báo cáo vi phạm',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nCập nhật trạng thái xử lý báo cáo vi phạm (đã xử lý `resolved` hoặc bác bỏ `dismissed`).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2321,7 +2324,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/keywords': {
       get: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Xem danh mục từ khóa cấm / nhạy cảm',
+        summary: '[Moderator | Admin] Xem danh mục từ khóa cấm / nhạy cảm',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nXem toàn bộ từ khóa nằm trong danh sách đen lọc tự động.',
         security: [{ BearerAuth: [] }],
         responses: {
@@ -2330,7 +2333,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Thêm từ khóa cấm mới vào hệ thống',
+        summary: '[Moderator | Admin] Thêm từ khóa cấm mới vào hệ thống',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nThêm từ khóa cần chặn (`block`) hoặc cảnh báo (`warn`).',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -2358,7 +2361,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/keywords/{id}': {
       delete: {
         tags: ['Moderation'],
-        summary: '👑 [Admin] Xóa từ khóa cấm khỏi hệ thống',
+        summary: '[Admin] Xóa từ khóa cấm khỏi hệ thống',
         description: '**Quyền truy cập:** `admin` (Dành riêng cho Quản trị viên tối cao).\nXóa vĩnh viễn từ khóa khỏi danh mục cấm.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2374,7 +2377,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/reviews/queue': {
       get: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Xem hàng đợi tác phẩm chờ kiểm duyệt',
+        summary: '[Moderator | Admin] Xem hàng đợi tác phẩm chờ kiểm duyệt',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nDanh sách các truyện do tác giả nộp lên chợ đang chờ thẩm định sư phạm.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2390,7 +2393,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/reviews/{listingId}/claim': {
       post: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Nhận thẩm định một tác phẩm truyện',
+        summary: '[Moderator | Admin] Nhận thẩm định một tác phẩm truyện',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nKiểm duyệt viên khóa quyền duyệt tác phẩm trong 24 giờ để tránh bị trùng lặp thẩm định.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2406,7 +2409,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/reviews/{reviewId}/decision': {
       post: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Đưa ra quyết định duyệt hoặc yêu cầu chỉnh sửa',
+        summary: '[Moderator | Admin] Đưa ra quyết định duyệt hoặc yêu cầu chỉnh sửa',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nĐưa ra phán quyết (`approved` - chính thức xuất bản ra chợ; `changes_requested` - yêu cầu tác giả sửa; `rejected` - từ chối; `taken_down` - gỡ bỏ).',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2446,7 +2449,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/strikes': {
       post: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Phạt đánh gậy tác giả vi phạm tiêu chuẩn cộng đồng',
+        summary: '[Moderator | Admin] Phạt đánh gậy tác giả vi phạm tiêu chuẩn cộng đồng',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nÁp dụng biện pháp xử phạt tác giả. Tích lũy 3 gậy còn hiệu lực trong 90 ngày sẽ khiến tài khoản Seller tự động bị đình chỉ (`suspended`).',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -2475,7 +2478,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/sellers/{sellerId}/strikes': {
       get: {
         tags: ['Moderation'],
-        summary: '🛡️ [Moderator | Admin] Xem lịch sử xử phạt của một tác giả',
+        summary: '[Moderator | Admin] Xem lịch sử xử phạt của một tác giả',
         description: '**Quyền truy cập:** `moderator`, `admin`.\nXem toàn bộ gậy vi phạm còn hiệu lực và lịch sử kháng cáo của tác giả.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -2483,6 +2486,441 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         ],
         responses: {
           200: { description: 'Lấy lịch sử xử phạt thành công' },
+        },
+      },
+    },
+
+    /* =========================================================================
+     * PLANS & SUBSCRIPTIONS
+     * ========================================================================= */
+    '/plans': {
+      get: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Public] Xem danh sách gói thành viên đang hoạt động',
+        description: '**Quyền truy cập:** Mọi người dùng (không yêu cầu đăng nhập).\nTrả về danh sách các gói đăng ký định kỳ (Free, Monthly, Yearly) kèm theo định mức AI story, AI image, số lượng hồ sơ bé và nhân vật tối đa.',
+        responses: {
+          200: { description: 'Lấy danh sách gói thành viên thành công' },
+        },
+      },
+      post: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Admin] Tạo mới gói thành viên',
+        description: '**Quyền truy cập:** `admin`.\nTạo gói đăng ký thành viên mới trên hệ thống.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['code', 'name', 'period', 'priceVnd', 'aiStoryQuota', 'aiImageQuota', 'maxChildren', 'maxCharacters'],
+                properties: {
+                  code: { type: 'string', example: 'FAMILY_VIP' },
+                  name: { type: 'string', example: 'Gói Gia Đình VIP' },
+                  period: { type: 'string', enum: ['month', 'year'], example: 'month' },
+                  priceVnd: { type: 'integer', example: 199000 },
+                  aiStoryQuota: { type: 'integer', example: 50 },
+                  aiImageQuota: { type: 'integer', example: 100 },
+                  maxChildren: { type: 'integer', example: 5 },
+                  maxCharacters: { type: 'integer', example: 25 },
+                  canSell: { type: 'boolean', example: true },
+                  isActive: { type: 'boolean', example: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo gói thành viên thành công' },
+        },
+      },
+    },
+
+    '/plans/{id}': {
+      get: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Public] Xem chi tiết gói thành viên',
+        description: '**Quyền truy cập:** Mọi người dùng.',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Lấy chi tiết gói thành viên thành công' },
+          404: { description: 'Không tìm thấy gói thành viên' },
+        },
+      },
+      put: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Admin] Cập nhật thông tin gói thành viên',
+        description: '**Quyền truy cập:** `admin`.\nCập nhật quyền lợi, giá tiền hoặc định mức của gói thành viên.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  priceVnd: { type: 'integer' },
+                  aiStoryQuota: { type: 'integer' },
+                  aiImageQuota: { type: 'integer' },
+                  maxChildren: { type: 'integer' },
+                  maxCharacters: { type: 'integer' },
+                  canSell: { type: 'boolean' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật gói thành viên thành công' },
+        },
+      },
+      delete: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Admin] Vô hiệu hóa gói thành viên',
+        description: '**Quyền truy cập:** `admin`.\nChuyển trạng thái gói thành viên sang không hoạt động (`isActive = false`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Vô hiệu hóa gói thành viên thành công' },
+        },
+      },
+    },
+
+    /* =========================================================================
+     * CREDIT PACKS
+     * ========================================================================= */
+    '/credit-packs': {
+      get: {
+        tags: ['Credit Packs'],
+        summary: '[Public] Xem danh sách các gói nạp xu',
+        description: '**Quyền truy cập:** Mọi người dùng.\nDanh sách các gói xu kèm số xu thưởng tặng thêm để người dùng bổ sung lượt tạo AI ngoài định mức gói tháng.',
+        responses: {
+          200: { description: 'Lấy danh sách gói nạp xu thành công' },
+        },
+      },
+      post: {
+        tags: ['Credit Packs'],
+        summary: '[Admin] Tạo mới gói nạp xu',
+        description: '**Quyền truy cập:** `admin`.\nTạo gói nạp xu mới với số xu cơ bản và số xu thưởng thêm.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'credits', 'priceVnd'],
+                properties: {
+                  name: { type: 'string', example: 'Gói Tiết Kiệm (300 Xu + 50 Xu)' },
+                  credits: { type: 'integer', example: 300 },
+                  bonusCredits: { type: 'integer', example: 50 },
+                  priceVnd: { type: 'integer', example: 300000 },
+                  isActive: { type: 'boolean', example: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo gói nạp xu thành công' },
+        },
+      },
+    },
+
+    '/credit-packs/{id}': {
+      get: {
+        tags: ['Credit Packs'],
+        summary: '[Public] Xem chi tiết gói nạp xu',
+        description: '**Quyền truy cập:** Mọi người dùng.',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Lấy chi tiết gói nạp xu thành công' },
+          404: { description: 'Không tìm thấy gói nạp xu' },
+        },
+      },
+      put: {
+        tags: ['Credit Packs'],
+        summary: '[Admin] Cập nhật thông tin gói nạp xu',
+        description: '**Quyền truy cập:** `admin`.\nChỉnh sửa số xu, xu thưởng hoặc đơn giá gói nạp.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  credits: { type: 'integer' },
+                  bonusCredits: { type: 'integer' },
+                  priceVnd: { type: 'integer' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật gói nạp xu thành công' },
+        },
+      },
+      delete: {
+        tags: ['Credit Packs'],
+        summary: '[Admin] Vô hiệu hóa gói nạp xu',
+        description: '**Quyền truy cập:** `admin`.\nChuyển trạng thái gói nạp sang không hoạt động (`isActive = false`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Vô hiệu hóa gói nạp xu thành công' },
+        },
+      },
+    },
+
+    /* =========================================================================
+     * SUBSCRIPTIONS
+     * ========================================================================= */
+    '/subscriptions/me': {
+      get: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Parent] Xem thông tin gói đăng ký và định mức sử dụng hiện tại',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nXem chi tiết gói thành viên đang sử dụng, thời gian hết hạn, số lượng hồ sơ bé/nhân vật đã tạo và số lượt AI story / AI image còn lại trong chu kỳ.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Lấy thông tin gói thành viên hiện tại thành công' },
+        },
+      },
+    },
+
+    '/subscriptions/subscribe-free': {
+      post: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Parent] Kích hoạt đăng ký gói dùng thử miễn phí (Free Tier)',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nKích hoạt gói trải nghiệm miễn phí (0 VND) trong 30 ngày cho phụ huynh chưa có gói trả phí.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  planId: { type: 'string', format: 'uuid', description: 'ID gói Free (tùy chọn)' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đăng ký gói miễn phí thành công' },
+        },
+      },
+    },
+
+    '/subscriptions/cancel': {
+      post: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Parent] Hủy gia hạn gói thành viên hiện tại',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nHủy trạng thái kích hoạt tự động của gói đăng ký hiện tại.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Hủy gói thành viên thành công' },
+        },
+      },
+    },
+
+    '/subscriptions/admin/all': {
+      get: {
+        tags: ['Plans & Subscriptions'],
+        summary: '[Admin] Danh sách toàn bộ gói đăng ký người dùng',
+        description: '**Quyền truy cập:** `admin`.\nQuản trị viên xem và lọc lịch sử đăng ký gói của toàn bộ người dùng kèm phân trang.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'expired', 'cancelled'] } },
+          { name: 'parentId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Lấy danh sách đăng ký thành công' },
+        },
+      },
+    },
+
+    /* =========================================================================
+     * WALLETS & FINANCIALS
+     * ========================================================================= */
+    '/wallets/me': {
+      get: {
+        tags: ['Wallets & Financials'],
+        summary: '[Parent] Xem số dư ví xu và số dư thu nhập tác giả',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nTrả về số dư xu (`creditBalance`) và các số dư doanh thu tác giả (`earningPendingVnd`, `earningAvailableVnd`, `earningLockedVnd`).',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Lấy thông tin ví thành công' },
+        },
+      },
+    },
+
+    '/wallets/ledger': {
+      get: {
+        tags: ['Wallets & Financials'],
+        summary: '[Parent] Tra cứu lịch sử biến động số dư / Sổ cái giao dịch',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nXem toàn bộ lịch sử nạp xu, tiêu dùng xu, cộng doanh thu bán truyện, giữ tiền rút và đối soát.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'walletType', in: 'query', schema: { type: 'string', enum: ['credit', 'earning'] } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Lấy sổ cái ví thành công' },
+        },
+      },
+    },
+
+    '/wallets/admin/grant-credits': {
+      post: {
+        tags: ['Wallets & Financials'],
+        summary: '[Admin] Cấp bù hoặc thưởng xu thủ công cho người dùng',
+        description: '**Quyền truy cập:** `admin`.\nCộng xu vào ví người dùng và tự động ghi sổ cái `credit_admin_grant`.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['userId', 'credits'],
+                properties: {
+                  userId: { type: 'string', format: 'uuid' },
+                  credits: { type: 'integer', example: 50 },
+                  reason: { type: 'string', example: 'Đền bù sự cố mạng AI ngày 25/09' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cấp xu cho người dùng thành công' },
+        },
+      },
+    },
+
+    '/wallets/withdrawals': {
+      post: {
+        tags: ['Wallets & Financials'],
+        summary: '[Parent] Tác giả gửi yêu cầu rút tiền doanh thu về ngân hàng',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin` (yêu cầu hồ sơ Seller đã được duyệt và có thông tin tài khoản ngân hàng).\nTối thiểu 50,000 VND. Số tiền rút sẽ được chuyển từ `earningAvailableVnd` sang `earningLockedVnd` trong khi chờ Admin thanh toán.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['amountVnd'],
+                properties: {
+                  amountVnd: { type: 'integer', minimum: 50000, example: 200000 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Gửi yêu cầu rút tiền thành công' },
+        },
+      },
+    },
+
+    '/wallets/withdrawals/me': {
+      get: {
+        tags: ['Wallets & Financials'],
+        summary: '[Parent] Xem lịch sử các yêu cầu rút tiền của tôi',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nDanh sách các yêu cầu rút tiền kèm trạng thái (`requested`, `paid`, `rejected`, `cancelled`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['requested', 'paid', 'rejected', 'cancelled'] } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Lấy danh sách yêu cầu rút tiền thành công' },
+        },
+      },
+    },
+
+    '/wallets/withdrawals/{id}/cancel': {
+      delete: {
+        tags: ['Wallets & Financials'],
+        summary: '[Parent] Hủy yêu cầu rút tiền đang chờ xử lý',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin` (chỉ áp dụng cho yêu cầu của chính mình và đang ở trạng thái `requested`).\nSố tiền tạm khóa sẽ được hoàn trả ngay lập tức về số dư khả dụng `earningAvailableVnd`.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Hủy yêu cầu rút tiền thành công' },
+        },
+      },
+    },
+
+    '/wallets/admin/withdrawals': {
+      get: {
+        tags: ['Wallets & Financials'],
+        summary: '[Admin] Xem danh sách các yêu cầu rút tiền cần đối soát',
+        description: '**Quyền truy cập:** `admin`.\nXem và lọc các yêu cầu rút tiền của tác giả kèm ảnh chụp tài khoản ngân hàng.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['requested', 'paid', 'rejected', 'cancelled'] } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Lấy danh sách yêu cầu rút tiền thành công' },
+        },
+      },
+    },
+
+    '/wallets/admin/withdrawals/{id}/process': {
+      post: {
+        tags: ['Wallets & Financials'],
+        summary: '[Admin] Xử lý duyệt chi trả hoặc từ chối yêu cầu rút tiền',
+        description: '**Quyền truy cập:** `admin`.\n- Khi chọn `paid`: Bắt buộc cung cấp mã giao dịch ngân hàng `bankTransactionRef`. Số tiền sẽ được trừ khỏi `earningLockedVnd`.\n- Khi chọn `rejected`: Bắt buộc cung cấp lý do `rejectReason`. Số tiền sẽ được hoàn về `earningAvailableVnd` của tác giả.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: {
+                  status: { type: 'string', enum: ['paid', 'rejected'] },
+                  bankTransactionRef: { type: 'string', example: 'FT260925183921' },
+                  rejectReason: { type: 'string', example: 'Số tài khoản người thụ hưởng không chính xác' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Xử lý yêu cầu rút tiền thành công' },
         },
       },
     },
