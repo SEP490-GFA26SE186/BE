@@ -38,6 +38,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Templates', description: 'Thư viện kịch bản truyện mẫu sư phạm và cây quyết định cảm xúc' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
     { name: 'Reading Sessions', description: 'Phiên đọc truyện tương tác, lựa chọn nhánh rẽ cảm xúc và đánh giá chỉ số EQ' },
+    { name: 'Marketplace', description: 'Chợ truyện cộng đồng: hồ sơ tác giả, đăng bán, nhận miễn phí và đánh giá sản phẩm' },
+    { name: 'Moderation', description: 'Kiểm duyệt an toàn nội dung, từ khóa cấm, duyệt tác phẩm và báo cáo vi phạm' },
   ],
   components: {
     securitySchemes: {
@@ -1931,6 +1933,556 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         responses: {
           200: { description: 'Lấy lịch sử đọc truyện của bé thành công' },
           404: { description: 'Không tìm thấy hồ sơ bé' },
+        },
+      },
+    },
+
+    // ---- MARKETPLACE ----
+    '/marketplace/price-tiers': {
+      get: {
+        tags: ['Marketplace'],
+        summary: '🌐 [Public] Xem danh sách các mức giá bán niêm yết',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem toàn bộ các mức giá niêm yết cho phép tác giả đặt giá khi xuất bản truyện (kèm mốc 0 VND miễn phí).',
+        security: [],
+        responses: {
+          200: { description: 'Lấy danh sách các khung giá thành công' },
+        },
+      },
+    },
+
+    '/marketplace/listings': {
+      get: {
+        tags: ['Marketplace'],
+        summary: '🌐 [Public] Khám phá thư viện truyện cộng đồng',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTìm kiếm và lọc các tác phẩm truyện đã qua kiểm duyệt sư phạm, lọc theo kỹ năng EQ, độ tuổi mục tiêu, miễn phí/trả phí, sắp xếp theo lượt mua, đánh giá hoặc ngày đăng.',
+        security: [],
+        parameters: [
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo tiêu đề hoặc mô tả' },
+          { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' }, description: 'Lọc theo ID kỹ năng EQ' },
+          { name: 'age', in: 'query', schema: { type: 'integer' }, description: 'Lọc theo độ tuổi của bé' },
+          { name: 'isFree', in: 'query', schema: { type: 'string', enum: ['true', 'false'] }, description: 'Lọc truyện miễn phí' },
+          { name: 'sortBy', in: 'query', schema: { type: 'string', enum: ['newest', 'rating', 'popular', 'price_asc', 'price_desc'], default: 'newest' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        ],
+        responses: {
+          200: { description: 'Lấy danh sách truyện chợ cộng đồng thành công' },
+        },
+      },
+    },
+
+    '/marketplace/listings/{id}': {
+      get: {
+        tags: ['Marketplace'],
+        summary: '🌐 [Public] Xem chi tiết tác phẩm truyện trên chợ',
+        description: '**Quyền truy cập:** `Public` (Nếu đã đăng nhập sẽ tự động kiểm tra quyền sở hữu `isOwned`).\nXem chi tiết thông tin truyện, tác giả, mức giá, số lượt tải/mua và điểm đánh giá trung bình.',
+        security: [],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Lấy chi tiết tác phẩm thành công' },
+          404: { description: 'Không tìm thấy tác phẩm' },
+        },
+      },
+    },
+
+    '/marketplace/listings/{id}/reviews': {
+      get: {
+        tags: ['Marketplace'],
+        summary: '🌐 [Public] Xem các đánh giá nhận xét của tác phẩm',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem toàn bộ nhận xét, số sao đánh giá (1-5★) và phản hồi từ tác giả.',
+        security: [],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Lấy danh sách đánh giá thành công' },
+        },
+      },
+    },
+
+    '/marketplace/seller/register': {
+      post: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Đăng ký trở thành tác giả cộng đồng',
+        description: '**Quyền truy cập:** `parent`.\nNộp hồ sơ trở thành Tác giả kể chuyện (bút danh, tiểu sử, chuyên môn và thông tin nhận nhuận bút ngân hàng).',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['displayName'],
+                properties: {
+                  displayName: { type: 'string', example: 'Cô Mai Kể Chuyện' },
+                  bio: { type: 'string', example: 'Giáo viên mầm non với tình yêu thương trẻ thơ' },
+                  expertise: { type: 'string', example: 'Giáo dục mầm non, tâm lý trẻ em' },
+                  bankName: { type: 'string', example: 'Vietcombank' },
+                  bankAccountNumber: { type: 'string', example: '0123456789' },
+                  bankAccountHolder: { type: 'string', example: 'NGUYEN THI MAI' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Nộp hồ sơ tác giả thành công, chờ kiểm duyệt' },
+          400: { description: 'Bạn đã đăng ký tác giả trước đó' },
+        },
+      },
+    },
+
+    '/marketplace/seller/me': {
+      get: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Xem hồ sơ tác giả của mình',
+        description: '**Quyền truy cập:** `parent`.\nXem trạng thái duyệt tác giả (pending/approved/suspended), số lượng tác phẩm và điểm đánh giá tích lũy.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Lấy hồ sơ tác giả thành công' },
+        },
+      },
+      put: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Cập nhật thông tin tác giả và tài khoản ngân hàng',
+        description: '**Quyền truy cập:** `parent`.\nChỉnh sửa bút danh, tiểu sử hoặc tài khoản ngân hàng nhận tiền rút nhuận bút.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  displayName: { type: 'string' },
+                  bio: { type: 'string' },
+                  expertise: { type: 'string' },
+                  bankName: { type: 'string' },
+                  bankAccountNumber: { type: 'string' },
+                  bankAccountHolder: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật hồ sơ tác giả thành công' },
+          404: { description: 'Chưa có hồ sơ tác giả' },
+        },
+      },
+    },
+
+    '/marketplace/seller/my-listings': {
+      get: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Xem danh sách các tác phẩm đăng bán của tác giả',
+        description: '**Quyền truy cập:** `parent` (Tác giả đã đăng ký).\nXem các tác phẩm đã đăng bán cùng trạng thái duyệt (submitted, in_review, published, changes_requested, rejected).',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Lấy danh sách tác phẩm của tác giả thành công' },
+        },
+      },
+    },
+
+    '/marketplace/listings': {
+      post: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Đăng bán tác phẩm truyện lên chợ (chờ kiểm duyệt)',
+        description: '**Quyền truy cập:** `parent` (Tác giả đã được duyệt `approved`).\nĐăng tải câu chuyện lên chợ cộng đồng kèm định mức giá. Hệ thống sẽ tự động đưa vào hàng đợi kiểm duyệt sư phạm.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['publishedStoryId', 'priceTierId', 'title'],
+                properties: {
+                  publishedStoryId: { type: 'string', format: 'uuid' },
+                  priceTierId: { type: 'string', format: 'uuid' },
+                  title: { type: 'string', example: 'Chú Thỏ Trắng Biết Lắng Nghe' },
+                  description: { type: 'string' },
+                  coverImageKey: { type: 'string' },
+                  hasAiContent: { type: 'boolean', default: false },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Nộp tác phẩm lên chợ thành công, đang chờ duyệt' },
+          403: { description: 'Tài khoản chưa được duyệt làm tác giả' },
+          409: { description: 'Truyện này đã được đăng bán trước đó' },
+        },
+      },
+    },
+
+    '/marketplace/listings/{id}/claim-free': {
+      post: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Nhận câu chuyện miễn phí vào thư viện sở hữu',
+        description: '**Quyền truy cập:** `parent`.\nNhận quyền đọc trọn đời cho một câu chuyện miễn phí (0 VND) trên chợ vào thư viện (`Entitlement`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Nhận truyện miễn phí vào thư viện thành công' },
+          400: { description: 'Truyện này có phí, vui lòng đặt mua qua giỏ hàng' },
+        },
+      },
+    },
+
+    '/marketplace/listings/{id}/reviews': {
+      post: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Đánh giá và nhận xét tác phẩm truyện',
+        description: '**Quyền truy cập:** `parent` (Đã sở hữu quyền đọc truyện).\nChấm điểm sao (1-5★), bình luận và gắn các nhãn khen ngợi sư phạm (`child_liked`, `clear_lesson`...).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['rating'],
+                properties: {
+                  rating: { type: 'integer', minimum: 1, maximum: 5, example: 5 },
+                  comment: { type: 'string', example: 'Bé rất thích tranh vẽ và bài học chia sẻ này!' },
+                  tags: {
+                    type: 'array',
+                    items: {
+                      type: 'string',
+                      enum: ['child_liked', 'age_appropriate', 'clear_lesson', 'beautiful_art', 'good_narration'],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Gửi đánh giá nhận xét thành công' },
+          403: { description: 'Bạn cần sở hữu truyện trước khi đánh giá' },
+        },
+      },
+    },
+
+    '/marketplace/reviews/{reviewId}/reply': {
+      post: {
+        tags: ['Marketplace'],
+        summary: '🔒 [Parent] Tác giả phản hồi nhận xét của độc giả',
+        description: '**Quyền truy cập:** `parent` (Chính chủ tác giả của câu chuyện).\nViết lời cảm ơn hoặc phản hồi trao đổi với phụ huynh dưới phần bình luận.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['reply'],
+                properties: {
+                  reply: { type: 'string', example: 'Cảm ơn mẹ và bé đã ủng hộ tác phẩm ạ!' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đăng phản hồi thành công' },
+          403: { description: 'Chỉ tác giả của câu chuyện mới được quyền phản hồi' },
+        },
+      },
+    },
+
+    // ---- MODERATION & SAFETY ----
+    '/moderation/checklist-items': {
+      get: {
+        tags: ['Moderation'],
+        summary: '🌐 [Public] Xem 7 tiêu chí sư phạm dùng để duyệt truyện',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem danh sách 7 nguyên tắc sư phạm an toàn cho trẻ em được áp dụng khi kiểm duyệt nội dung cộng đồng.',
+        security: [],
+        responses: {
+          200: { description: 'Lấy danh sách 7 tiêu chí sư phạm thành công' },
+        },
+      },
+    },
+
+    '/moderation/check-text': {
+      post: {
+        tags: ['Moderation'],
+        summary: '🌐 [Public] Kiểm tra văn bản nhanh với bộ từ khóa cấm',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nQuét nhanh văn bản truyện xem có chứa từ khóa thô tục, bạo lực hay nhạy cảm không.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['text'],
+                properties: {
+                  text: { type: 'string', example: 'Nội dung truyện cần kiểm tra độ an toàn' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Kiểm tra độ sạch của văn bản thành công' },
+        },
+      },
+    },
+
+    '/moderation/reports': {
+      post: {
+        tags: ['Moderation'],
+        summary: '🔒 [Parent] Gửi báo cáo nội dung vi phạm hoặc bài học không phù hợp',
+        description: '**Quyền truy cập:** `parent`.\nPhụ huynh gửi báo cáo vi phạm tác phẩm hoặc nhận xét (danh mục: đáng sợ, bạo lực, bài học sai lệch...). Nếu 1 truyện nhận >= 3 báo cáo trong 24h sẽ tự động tạm đình chỉ.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['category'],
+                properties: {
+                  listingId: { type: 'string', format: 'uuid' },
+                  pageId: { type: 'string', format: 'uuid' },
+                  productReviewId: { type: 'string', format: 'uuid' },
+                  category: {
+                    type: 'string',
+                    enum: ['scary', 'violent', 'inappropriate_lesson', 'personal_info', 'technical_error', 'other'],
+                  },
+                  description: { type: 'string', example: 'Hình ảnh ở trang 3 có chi tiết hơi đáng sợ với bé nhỏ tuổi' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Báo cáo vi phạm đã được tiếp nhận' },
+        },
+      },
+      get: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Xem danh sách các báo cáo vi phạm từ cộng đồng',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nLấy danh sách các phản ánh của phụ huynh cần xử lý.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'resolved', 'dismissed'] } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        ],
+        responses: {
+          200: { description: 'Lấy danh sách báo cáo vi phạm thành công' },
+        },
+      },
+    },
+
+    '/moderation/reports/{reportId}/resolve': {
+      put: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Xử lý đóng hoặc bác bỏ báo cáo vi phạm',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nCập nhật trạng thái xử lý báo cáo vi phạm (đã xử lý `resolved` hoặc bác bỏ `dismissed`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'reportId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: {
+                  status: { type: 'string', enum: ['resolved', 'dismissed'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Xử lý báo cáo vi phạm thành công' },
+        },
+      },
+    },
+
+    '/moderation/keywords': {
+      get: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Xem danh mục từ khóa cấm / nhạy cảm',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nXem toàn bộ từ khóa nằm trong danh sách đen lọc tự động.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Lấy danh sách từ khóa cấm thành công' },
+        },
+      },
+      post: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Thêm từ khóa cấm mới vào hệ thống',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nThêm từ khóa cần chặn (`block`) hoặc cảnh báo (`warn`).',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['keyword'],
+                properties: {
+                  keyword: { type: 'string', example: 'tu_khoa_nhay_cam' },
+                  severity: { type: 'string', enum: ['block', 'warn'], default: 'block' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Thêm từ khóa cấm thành công' },
+          409: { description: 'Từ khóa đã tồn tại trong danh sách' },
+        },
+      },
+    },
+
+    '/moderation/keywords/{id}': {
+      delete: {
+        tags: ['Moderation'],
+        summary: '👑 [Admin] Xóa từ khóa cấm khỏi hệ thống',
+        description: '**Quyền truy cập:** `admin` (Dành riêng cho Quản trị viên tối cao).\nXóa vĩnh viễn từ khóa khỏi danh mục cấm.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa từ khóa thành công' },
+          404: { description: 'Không tìm thấy từ khóa' },
+        },
+      },
+    },
+
+    '/moderation/reviews/queue': {
+      get: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Xem hàng đợi tác phẩm chờ kiểm duyệt',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nDanh sách các truyện do tác giả nộp lên chợ đang chờ thẩm định sư phạm.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        ],
+        responses: {
+          200: { description: 'Lấy hàng đợi kiểm duyệt thành công' },
+        },
+      },
+    },
+
+    '/moderation/reviews/{listingId}/claim': {
+      post: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Nhận thẩm định một tác phẩm truyện',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nKiểm duyệt viên khóa quyền duyệt tác phẩm trong 24 giờ để tránh bị trùng lặp thẩm định.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'listingId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Nhận duyệt tác phẩm thành công' },
+          409: { description: 'Tác phẩm đang được kiểm duyệt bởi kiểm duyệt viên khác' },
+        },
+      },
+    },
+
+    '/moderation/reviews/{reviewId}/decision': {
+      post: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Đưa ra quyết định duyệt hoặc yêu cầu chỉnh sửa',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nĐưa ra phán quyết (`approved` - chính thức xuất bản ra chợ; `changes_requested` - yêu cầu tác giả sửa; `rejected` - từ chối; `taken_down` - gỡ bỏ).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['decision'],
+                properties: {
+                  decision: { type: 'string', enum: ['approved', 'changes_requested', 'rejected', 'taken_down'] },
+                  comment: { type: 'string', example: 'Cốt truyện phù hợp, tranh vẽ đạt chuẩn sư phạm' },
+                  checklist: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        checklistItemId: { type: 'string', format: 'uuid' },
+                        passed: { type: 'boolean' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Ghi nhận quyết định kiểm duyệt thành công' },
+        },
+      },
+    },
+
+    '/moderation/strikes': {
+      post: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Phạt đánh gậy tác giả vi phạm tiêu chuẩn cộng đồng',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nÁp dụng biện pháp xử phạt tác giả. Tích lũy 3 gậy còn hiệu lực trong 90 ngày sẽ khiến tài khoản Seller tự động bị đình chỉ (`suspended`).',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['sellerId', 'source', 'reason'],
+                properties: {
+                  sellerId: { type: 'string', format: 'uuid' },
+                  source: { type: 'string', enum: ['report', 'rejection', 'takedown'] },
+                  sourceId: { type: 'string', format: 'uuid' },
+                  reason: { type: 'string', example: 'Cố tình chèn nội dung bạo lực không phù hợp với lứa tuổi 3-6' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Phạt gậy tác giả thành công' },
+        },
+      },
+    },
+
+    '/moderation/sellers/{sellerId}/strikes': {
+      get: {
+        tags: ['Moderation'],
+        summary: '🛡️ [Moderator | Admin] Xem lịch sử xử phạt của một tác giả',
+        description: '**Quyền truy cập:** `moderator`, `admin`.\nXem toàn bộ gậy vi phạm còn hiệu lực và lịch sử kháng cáo của tác giả.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'sellerId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Lấy lịch sử xử phạt thành công' },
         },
       },
     },

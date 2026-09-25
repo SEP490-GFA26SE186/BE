@@ -7,6 +7,8 @@ import eqSkillsRoutes from '../../modules/eq-skills/eq-skills.routes.js';
 import templatesRoutes from '../../modules/templates/templates.routes.js';
 import bookshelfRoutes from '../../modules/bookshelf/bookshelf.routes.js';
 import readingSessionsRoutes from '../../modules/reading-sessions/reading-sessions.routes.js';
+import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
+import moderationRoutes from '../../modules/moderation/moderation.routes.js';
 
 const router = express.Router();
 
@@ -23,5 +25,7 @@ router.use('/eq-skills', eqSkillsRoutes);
 router.use('/templates', templatesRoutes);
 router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);
+router.use('/marketplace', marketplaceRoutes);
+router.use('/moderation', moderationRoutes);
 
 export default router;

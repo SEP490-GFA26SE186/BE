@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting Seed: Story Templates & Pedagogical Scaffolding...');
+  console.log('Starting Seed: Story Templates & Pedagogical Scaffolding...');
 
   // 1. Get or create system pedagogy author
   const authorEmail = 'pedagogy@storyweaver.ai';
