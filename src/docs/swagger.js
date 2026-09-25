@@ -36,6 +36,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Characters', description: 'Quản lý nhân vật gia đình đưa vào truyện và chân dung AI' },
     { name: 'EQ Skills', description: 'Danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn CASEL' },
     { name: 'Templates', description: 'Thư viện kịch bản truyện mẫu sư phạm và cây quyết định cảm xúc' },
+    { name: 'Stories', description: 'Sáng tác truyện, quản lý trang, lựa chọn rẽ nhánh và chế độ kiểm duyệt phụ huynh' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
     { name: 'Reading Sessions', description: 'Phiên đọc truyện tương tác, lựa chọn nhánh rẽ cảm xúc và đánh giá chỉ số EQ' },
     { name: 'Marketplace', description: 'Chợ truyện cộng đồng: hồ sơ tác giả, đăng bán, nhận miễn phí và đánh giá sản phẩm' },
@@ -2921,6 +2922,322 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           200: { description: 'Xử lý yêu cầu rút tiền thành công' },
+        },
+      },
+    },
+
+    // ==========================================
+    // Stories Paths
+    // ==========================================
+    '/stories': {
+      post: {
+        tags: ['Stories'],
+        summary: '[Parent] Khởi tạo truyện mới từ khuôn mẫu sư phạm',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nTạo bản thảo truyện mới (`kind = private`, `status = draft`). Nếu bật `autoInitializePages = true`, hệ thống tự sinh khung các trang theo các phân đoạn và các nhánh lựa chọn của khuôn.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['templateId', 'title'],
+                properties: {
+                  templateId: { type: 'string', format: 'uuid', example: '11111111-2222-3333-4444-555555555555' },
+                  title: { type: 'string', example: 'Chiếc xe cứu hỏa của Bo' },
+                  coverImageKey: { type: 'string', nullable: true, example: 'stories/covers/cover-1.jpg' },
+                  useAiImage: { type: 'boolean', default: false },
+                  useTts: { type: 'boolean', default: true },
+                  autoInitializePages: { type: 'boolean', default: true },
+                  characters: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['slotKey'],
+                      properties: {
+                        slotKey: { type: 'string', example: '{CON}' },
+                        characterId: { type: 'string', format: 'uuid', nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo truyện thành công' },
+        },
+      },
+      get: {
+        tags: ['Stories'],
+        summary: '[Parent] Danh sách truyện của phụ huynh',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nLấy danh sách truyện do tài khoản hiện tại tạo, hỗ trợ phân trang và lọc theo trạng thái (`draft`, `ready`), loại (`private`, `published`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'kind', in: 'query', schema: { type: 'string', enum: ['private', 'published'] } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['draft', 'generating', 'ready'] } },
+          { name: 'templateId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách truyện paginated' },
+        },
+      },
+    },
+
+    '/stories/{id}': {
+      get: {
+        tags: ['Stories'],
+        summary: '[Parent] Chi tiết câu chuyện kèm cây quyết định và các trang',
+        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nTrả về toàn bộ thông tin truyện, nhân vật gắn vào slot, và danh sách trang (gồm tình huống, lựa chọn rẽ nhánh và trang kết quả) theo thứ tự đọc.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Chi tiết truyện thành công' },
+          404: { description: 'Không tìm thấy truyện' },
+        },
+      },
+      put: {
+        tags: ['Stories'],
+        summary: '[Parent] Cập nhật thông tin tiêu đề, ảnh bìa, cài đặt truyện',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string', example: 'Chiếc xe cứu hỏa của Bo (bản sửa)' },
+                  coverImageKey: { type: 'string', nullable: true },
+                  useAiImage: { type: 'boolean' },
+                  useTts: { type: 'boolean' },
+                  status: { type: 'string', enum: ['draft', 'generating', 'ready'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật truyện thành công' },
+        },
+      },
+      delete: {
+        tags: ['Stories'],
+        summary: '[Parent] Xóa mềm truyện',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa truyện thành công' },
+        },
+      },
+    },
+
+    '/stories/{id}/characters': {
+      put: {
+        tags: ['Stories'],
+        summary: '[Parent] Gán nhân vật gia đình vào các vị trí (slots) của truyện',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.\nCho phép gán hoặc thay đổi nhân vật gia đình (ví dụ `{CON}` gắn với bé Bo, `{ME}` gắn với Mẹ Lan).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['characters'],
+                properties: {
+                  characters: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['slotKey'],
+                      properties: {
+                        slotKey: { type: 'string', example: '{CON}' },
+                        characterId: { type: 'string', format: 'uuid', nullable: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Gán nhân vật thành công' },
+        },
+      },
+    },
+
+    '/stories/{id}/pages': {
+      post: {
+        tags: ['Stories'],
+        summary: '[Parent] Thêm một trang mới vào truyện',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['stageId', 'pageKind'],
+                properties: {
+                  stageId: { type: 'string', format: 'uuid' },
+                  pageKind: { type: 'string', enum: ['lead_in', 'situation', 'consequence', 'ending'] },
+                  pageOrder: { type: 'integer', example: 1 },
+                  fromChoiceId: { type: 'string', format: 'uuid', nullable: true },
+                  contentText: { type: 'string', example: 'Hôm nay trời nắng đẹp, Bo rủ em Na ra công viên chơi...' },
+                  backgroundId: { type: 'string', format: 'uuid', nullable: true },
+                  origin: { type: 'string', enum: ['human', 'ai', 'ai_edited'], default: 'human' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Thêm trang thành công' },
+        },
+      },
+    },
+
+    '/stories/{id}/pages/{pageId}': {
+      put: {
+        tags: ['Stories'],
+        summary: '[Parent] Chỉnh sửa nội dung câu chữ và hình ảnh trang truyện (Story Editor)',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.\nNếu trang ban đầu do AI viết (`origin = ai`), khi phụ huynh chỉnh sửa chữ hệ thống sẽ tự động chuyển cờ sang `origin = ai_edited`.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'pageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  contentText: { type: 'string', example: 'Nội dung câu chuyện đã được phụ huynh trau chuốt lại...' },
+                  backgroundId: { type: 'string', format: 'uuid', nullable: true },
+                  imageKey: { type: 'string', nullable: true },
+                  audioKey: { type: 'string', nullable: true },
+                  origin: { type: 'string', enum: ['human', 'ai', 'ai_edited'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật trang thành công' },
+        },
+      },
+      delete: {
+        tags: ['Stories'],
+        summary: '[Parent] Xóa một trang và tự động đánh số lại thứ tự các trang tiếp theo',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'pageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa trang thành công' },
+        },
+      },
+    },
+
+    '/stories/{id}/pages/{pageId}/choices/{choiceId}': {
+      put: {
+        tags: ['Stories'],
+        summary: '[Parent] Chỉnh sửa câu chữ của một nhánh lựa chọn hành vi',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'pageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'choiceId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['choiceText'],
+                properties: {
+                  choiceText: { type: 'string', example: 'Bo dừng lại, hít một hơi sâu và đếm đến 3' },
+                  audioKey: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật lựa chọn thành công' },
+        },
+      },
+    },
+
+    '/stories/{id}/review': {
+      post: {
+        tags: ['Stories'],
+        summary: '[Parent] Phê duyệt truyện - Phụ huynh xác nhận đã đọc và duyệt 100% trang',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.\nKiểm tra điều kiện: Truyện có trang, tất cả các trang và lựa chọn đều có nội dung không được bỏ trống. Khi duyệt thành công, truyện được cấp cờ `reviewedAt = now()`, chuyển trạng thái `ready` và đủ điều kiện để đưa vào Giá sách của bé.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Duyệt truyện thành công' },
+          400: { description: 'Truyện chưa hoàn thiện (còn trang trống)' },
+        },
+      },
+    },
+
+    '/stories/{id}/publish-version': {
+      post: {
+        tags: ['Stories'],
+        summary: '[Seller / Parent] Tạo bản sao xuất bản (Gỡ cá nhân hóa tự động)',
+        description: '**Quyền truy cập:** Chủ sở hữu truyện.\nChỉ thực hiện được khi truyện riêng đã được duyệt (`reviewedAt` khác null). Hệ thống sao chép truyện sang `kind = published`, tự động thay thế tên nhân vật riêng tư bằng tên mặc định của khuôn để bảo vệ danh tính của con trước khi đăng bán trên Marketplace.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string', example: 'Bài học chia sẻ đồ chơi của bạn Thỏ' },
+                  coverImageKey: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo bản sao xuất bản thành công' },
         },
       },
     },

@@ -10,6 +10,7 @@ import readingSessionsRoutes from '../../modules/reading-sessions/reading-sessio
 import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
 import moderationRoutes from '../../modules/moderation/moderation.routes.js';
 import { plansRouter, creditPacksRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
+import storiesRoutes from '../../modules/stories/stories.routes.js';
 import walletsRoutes from '../../modules/wallets/wallets.routes.js';
 
 const router = express.Router();
@@ -25,6 +26,7 @@ router.use('/children', childrenRoutes);
 router.use('/characters', charactersRoutes);
 router.use('/eq-skills', eqSkillsRoutes);
 router.use('/templates', templatesRoutes);
+router.use('/stories', storiesRoutes);
 router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);
 router.use('/marketplace', marketplaceRoutes);
