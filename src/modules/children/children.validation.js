@@ -33,6 +33,16 @@ const createChild = z.object({
       .trim()
       .max(50, 'Preferred voice must not exceed 50 characters')
       .optional(),
+    appearance: z
+      .string()
+      .trim()
+      .max(500, 'Appearance description must not exceed 500 characters')
+      .optional(),
+    portraitImageKey: z
+      .string()
+      .trim()
+      .max(300, 'Portrait image key must not exceed 300 characters')
+      .optional(),
   }),
 });
 
@@ -73,6 +83,18 @@ const updateChild = z.object({
       .max(50, 'Preferred voice must not exceed 50 characters')
       .nullable()
       .optional(),
+    appearance: z
+      .string()
+      .trim()
+      .max(500)
+      .nullable()
+      .optional(),
+    portraitImageKey: z
+      .string()
+      .trim()
+      .max(300)
+      .nullable()
+      .optional(),
   }),
 });
 
@@ -105,9 +127,43 @@ const logUsageSession = z.object({
     id: z.string().uuid('Invalid child ID format'),
   }),
   body: z.object({
-    startedAt: z.string().datetime({ message: 'Started at must be a valid ISO 8601 datetime' }).optional(),
-    endedAt: z.string().datetime({ message: 'Ended at must be a valid ISO 8601 datetime' }).optional(),
-    durationSeconds: z.number().int().min(1, 'Duration must be at least 1 second'),
+    durationSeconds: z
+      .number({ required_error: 'Duration in seconds is required' })
+      .int()
+      .positive('Duration must be positive'),
+    startedAt: z.string().datetime().optional(),
+    endedAt: z.string().datetime().optional(),
+  }),
+});
+
+const updateAvatar = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid child ID format'),
+  }),
+  body: z.object({
+    appearance: z.string().trim().max(500).optional(),
+    portraitImageKey: z.string().trim().max(300).optional(),
+  }),
+});
+
+const getEqReport = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid child ID format'),
+  }),
+  query: z.object({
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  }),
+});
+
+const getChildBookshelf = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid child ID format'),
+  }),
+  query: z.object({
+    page: z.string().regex(/^\d+$/).transform(Number).default('1'),
+    limit: z.string().regex(/^\d+$/).transform(Number).default('10'),
+    search: z.string().trim().optional(),
   }),
 });
 
@@ -118,4 +174,7 @@ export default {
   deleteChild,
   getUsage,
   logUsageSession,
+  updateAvatar,
+  getEqReport,
+  getChildBookshelf,
 };

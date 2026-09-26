@@ -31,6 +31,9 @@ router.post(
 const requireModerator = [auth, authorize('admin', 'moderator')];
 const requireAdmin = [auth, authorize('admin')];
 
+import contentLibraryController from '../content-library/content-library.controller.js';
+import contentLibraryValidation from '../content-library/content-library.validation.js';
+
 // Blocked keywords management
 router.get('/keywords', ...requireModerator, moderationController.getBlockedKeywords);
 router.post(
@@ -38,6 +41,18 @@ router.post(
   ...requireModerator,
   validate(moderationValidation.createKeyword),
   moderationController.addBlockedKeyword,
+);
+router.post(
+  '/keywords/bulk',
+  ...requireModerator,
+  validate(contentLibraryValidation.bulkImportKeywords),
+  contentLibraryController.bulkImportKeywords,
+);
+router.put(
+  '/keywords/:id',
+  ...requireModerator,
+  validate(contentLibraryValidation.updateKeyword),
+  contentLibraryController.updateKeyword,
 );
 router.delete('/keywords/:id', ...requireAdmin, moderationController.deleteBlockedKeyword);
 

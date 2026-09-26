@@ -20,6 +20,22 @@ router
   .delete(validate(childrenValidation.deleteChild), childrenController.deleteChild);
 
 router
+  .route('/:id/overview')
+  .get(validate(childrenValidation.getChild), childrenController.getChildOverview);
+
+router
+  .route('/:id/avatar')
+  .put(validate(childrenValidation.updateAvatar), childrenController.updateChildAvatar);
+
+router
+  .route('/:id/eq-report')
+  .get(validate(childrenValidation.getEqReport), childrenController.getChildEqReport);
+
+router
+  .route('/:id/bookshelf')
+  .get(validate(childrenValidation.getChildBookshelf), childrenController.getChildBookshelf);
+
+router
   .route('/:id/usage')
   .get(validate(childrenValidation.getUsage), childrenController.getChildUsage)
   .post(validate(childrenValidation.logUsageSession), childrenController.logUsageSession);

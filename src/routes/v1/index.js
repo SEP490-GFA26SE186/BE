@@ -13,6 +13,12 @@ import { plansRouter, creditPacksRouter, subscriptionsRouter } from '../../modul
 import storiesRoutes from '../../modules/stories/stories.routes.js';
 import walletsRoutes from '../../modules/wallets/wallets.routes.js';
 
+import contentLibraryRouter, {
+  backgroundsRouter,
+  uiAudioAssetsRouter,
+  checklistItemsRouter,
+} from '../../modules/content-library/content-library.routes.js';
+
 const router = express.Router();
 
 // Health check
@@ -23,10 +29,15 @@ router.get('/health', (_req, res) => {
 // Module routes
 router.use('/auth', authRoutes);
 router.use('/children', childrenRoutes);
+router.use('/child-profiles', childrenRoutes);
 router.use('/characters', charactersRoutes);
 router.use('/eq-skills', eqSkillsRoutes);
 router.use('/templates', templatesRoutes);
 router.use('/stories', storiesRoutes);
+router.use('/backgrounds', backgroundsRouter);
+router.use('/ui-audio-assets', uiAudioAssetsRouter);
+router.use('/checklist-items', checklistItemsRouter);
+router.use('/content-library', contentLibraryRouter);
 router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);
 router.use('/marketplace', marketplaceRoutes);

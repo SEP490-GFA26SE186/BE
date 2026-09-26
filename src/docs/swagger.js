@@ -37,6 +37,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'EQ Skills', description: 'Danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn CASEL' },
     { name: 'Templates', description: 'Thư viện kịch bản truyện mẫu sư phạm và cây quyết định cảm xúc' },
     { name: 'Stories', description: 'Sáng tác truyện, quản lý trang, lựa chọn rẽ nhánh và chế độ kiểm duyệt phụ huynh' },
+    { name: 'Content Library', description: 'Thư viện tài nguyên sư phạm: ảnh nền mặc định, âm thanh UI, tiêu chuẩn kiểm duyệt và cấu hình kịch bản' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
     { name: 'Reading Sessions', description: 'Phiên đọc truyện tương tác, lựa chọn nhánh rẽ cảm xúc và đánh giá chỉ số EQ' },
     { name: 'Marketplace', description: 'Chợ truyện cộng đồng: hồ sơ tác giả, đăng bán, nhận miễn phí và đánh giá sản phẩm' },
@@ -1055,6 +1056,90 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
       },
     },
+
+    '/children/{id}/overview': {
+      get: {
+        tags: ['Children'],
+        summary: '[Parent] Xem tổng quan bảng điều khiển của bé (Dashboard Overview)',
+        description: 'Tổng hợp toàn diện thông tin bé: hồ sơ, tuổi tính theo ngày sinh, nhân vật đại diện (self character), thời lượng màn hình hôm nay, trạng thái giờ đi ngủ, thống kê kệ sách, truyện đang đọc dở và biểu đồ radar 5 năng lực EQ.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID hồ sơ bé' },
+        ],
+        responses: {
+          200: { description: 'Tổng quan hồ sơ và tiến độ học tập của bé' },
+          404: { description: 'Không tìm thấy hồ sơ bé' },
+        },
+      },
+    },
+
+    '/children/{id}/avatar': {
+      put: {
+        tags: ['Children'],
+        summary: '[Parent] Cập nhật chân dung / ngoại hình đại diện của bé',
+        description: 'Cập nhật ảnh đại diện và mô tả ngoại hình nhân vật `self` của bé dùng làm ảnh tham chiếu khi vẽ truyện.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID hồ sơ bé' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  appearance: { type: 'string', example: 'Bé trai 6 tuổi, tóc cắt ngắn, mắt to tròn, mặc áo thun xanh' },
+                  portraitImageKey: { type: 'string', example: 'characters/portraits/be-bo-avatar.webp' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật avatar thành công' },
+          404: { description: 'Không tìm thấy hồ sơ bé' },
+        },
+      },
+    },
+
+    '/children/{id}/eq-report': {
+      get: {
+        tags: ['Children'],
+        summary: '[Parent] Báo cáo 5 nhóm năng lực cảm xúc EQ của bé (Radar Chart)',
+        description: 'Tổng hợp điểm số tích lũy từ các lựa chọn rẽ nhánh trong các câu chuyện bé đã đọc, phân bổ theo 5 năng lực CASEL: Tự nhận thức, Tự quản lý, Nhận thức xã hội, Kỹ năng quan hệ, Ra quyết định có trách nhiệm.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID hồ sơ bé' },
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Ngày bắt đầu (YYYY-MM-DD)' },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Ngày kết thúc (YYYY-MM-DD)' },
+        ],
+        responses: {
+          200: { description: 'Báo cáo điểm số EQ và tỷ lệ phần trăm theo năng lực' },
+          404: { description: 'Không tìm thấy hồ sơ bé' },
+        },
+      },
+    },
+
+    '/children/{id}/bookshelf': {
+      get: {
+        tags: ['Children'],
+        summary: '[Parent] Lấy danh sách truyện trên kệ sách của riêng bé',
+        description: 'Truy vấn nhanh kệ sách của bé mà không cần truyền query childId qua `/bookshelf`.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID hồ sơ bé' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: {
+          200: { description: 'Danh sách truyện trên kệ sách' },
+          404: { description: 'Không tìm thấy hồ sơ bé' },
+        },
+      },
+    },
+
     '/characters': {
       post: {
         tags: ['Characters'],
@@ -3238,6 +3323,610 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           201: { description: 'Tạo bản sao xuất bản thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Content Library: Backgrounds
+    // =========================================================================
+    '/backgrounds': {
+      get: {
+        tags: ['Content Library'],
+        summary: '[Public / Parent] Lấy danh sách ảnh nền mặc định',
+        description: 'Dùng khi phụ huynh tạo truyện với `useAiImage = false` hoặc duyệt thư viện ảnh nền có sẵn.',
+        parameters: [
+          { name: 'tags', in: 'query', schema: { type: 'string' }, description: 'Lọc theo nhãn (VD: phòng ngủ, trường học, rừng cây)' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo tên hoặc nhãn ảnh' },
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Chỉ lấy ảnh đang hoạt động (true/false)' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách ảnh nền phân trang' },
+        },
+      },
+      post: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Tải lên / Tạo ảnh nền mặc định mới',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'imageKey'],
+                properties: {
+                  name: { type: 'string', example: 'Phòng khách ấm cúng ban ngày' },
+                  imageKey: { type: 'string', example: 'backgrounds/living-room-day.webp' },
+                  tags: { type: 'string', example: 'nha_cua,phong_khach,ban_ngay' },
+                  isActive: { type: 'boolean', default: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Thêm mới ảnh nền thành công' },
+        },
+      },
+    },
+
+    '/backgrounds/{id}': {
+      get: {
+        tags: ['Content Library'],
+        summary: 'Lấy chi tiết ảnh nền theo ID',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Chi tiết ảnh nền' },
+          404: { description: 'Không tìm thấy ảnh nền' },
+        },
+      },
+      put: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Cập nhật thông tin ảnh nền',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  imageKey: { type: 'string' },
+                  tags: { type: 'string' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật thành công' },
+        },
+      },
+      delete: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Xóa hoặc chuyển trạng thái ngưng hoạt động của ảnh nền',
+        description: 'Nếu ảnh nền đã gắn với trang truyện, hệ thống tự động tắt kích hoạt (`isActive: false`) để bảo toàn tính toàn vẹn dữ liệu.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa hoặc tắt kích hoạt thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Content Library: UI Audio Assets
+    // =========================================================================
+    '/ui-audio-assets': {
+      get: {
+        tags: ['Content Library'],
+        summary: 'Lấy danh sách tài nguyên âm thanh giao diện',
+        parameters: [
+          { name: 'lang', in: 'query', schema: { type: 'string', default: 'vi' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách âm thanh giao diện' },
+        },
+      },
+      post: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Tạo mới âm thanh giao diện',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['key', 'textContent', 'audioKey'],
+                properties: {
+                  key: { type: 'string', example: 'PROMPT_CHOOSE_BRANCH' },
+                  lang: { type: 'string', default: 'vi', example: 'vi' },
+                  textContent: { type: 'string', example: 'Bây giờ bạn nhỏ hãy chọn xem chuyện gì sẽ xảy ra tiếp theo nhé!' },
+                  audioKey: { type: 'string', example: 'ui-audio/choose-branch-vi.mp3' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo mới thành công' },
+        },
+      },
+    },
+
+    '/ui-audio-assets/by-key/{key}': {
+      get: {
+        tags: ['Content Library'],
+        summary: 'Lấy âm thanh giao diện theo mã key và ngôn ngữ',
+        parameters: [
+          { name: 'key', in: 'path', required: true, schema: { type: 'string' }, example: 'PROMPT_CHOOSE_BRANCH' },
+          { name: 'lang', in: 'query', schema: { type: 'string', default: 'vi' } },
+        ],
+        responses: {
+          200: { description: 'Chi tiết file âm thanh' },
+        },
+      },
+    },
+
+    '/ui-audio-assets/{id}': {
+      get: {
+        tags: ['Content Library'],
+        summary: 'Lấy chi tiết âm thanh giao diện theo ID',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Chi tiết âm thanh' },
+        },
+      },
+      put: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Cập nhật âm thanh giao diện',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  key: { type: 'string' },
+                  lang: { type: 'string' },
+                  textContent: { type: 'string' },
+                  audioKey: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật thành công' },
+        },
+      },
+      delete: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Xóa âm thanh giao diện',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Content Library: Checklist Items (7 Tiêu chuẩn sư phạm)
+    // =========================================================================
+    '/checklist-items': {
+      get: {
+        tags: ['Content Library'],
+        summary: 'Lấy danh sách 7 tiêu chuẩn sư phạm phục vụ kiểm duyệt truyện',
+        parameters: [
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
+        ],
+        responses: {
+          200: { description: 'Danh sách tiêu chuẩn kiểm duyệt' },
+        },
+      },
+      post: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Tạo mới tiêu chuẩn kiểm duyệt',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['code', 'description'],
+                properties: {
+                  code: { type: 'string', example: 'NO_VIOLENCE' },
+                  description: { type: 'string', example: 'Không chứa hình ảnh hoặc hành vi bạo lực, xúc phạm thân thể' },
+                  displayOrder: { type: 'integer', default: 1 },
+                  isActive: { type: 'boolean', default: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo mới thành công' },
+        },
+      },
+    },
+
+    '/checklist-items/{id}': {
+      get: {
+        tags: ['Content Library'],
+        summary: 'Lấy chi tiết tiêu chuẩn kiểm duyệt',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Chi tiết' },
+        },
+      },
+      put: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Cập nhật tiêu chuẩn kiểm duyệt',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  code: { type: 'string' },
+                  description: { type: 'string' },
+                  displayOrder: { type: 'integer' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật thành công' },
+        },
+      },
+      delete: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Xóa hoặc tắt kích hoạt tiêu chuẩn kiểm duyệt',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa hoặc tắt kích hoạt thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Content Library: Stats & Bulk Keywords
+    // =========================================================================
+    '/content-library/stats': {
+      get: {
+        tags: ['Content Library'],
+        summary: '[Moderator / Admin] Thống kê toàn bộ tài nguyên Content Library',
+        description: 'Tổng số kịch bản mẫu theo trạng thái, số ảnh nền, file âm thanh, tiêu chuẩn kiểm duyệt và từ khóa cấm.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Báo cáo thống kê tổng hợp' },
+        },
+      },
+    },
+
+    '/content-library/keywords/bulk': {
+      post: {
+        tags: ['Content Library', 'Moderation'],
+        summary: '[Moderator / Admin] Nhập hàng loạt từ khóa cấm (Bulk Import)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['keywords'],
+                properties: {
+                  keywords: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['keyword'],
+                      properties: {
+                        keyword: { type: 'string', example: 'tự hại' },
+                        severity: { type: 'string', enum: ['block', 'warn'], default: 'block' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Kết quả nhập hàng loạt từ khóa' },
+        },
+      },
+    },
+
+    '/content-library/keywords/{id}': {
+      put: {
+        tags: ['Content Library', 'Moderation'],
+        summary: '[Moderator / Admin] Cập nhật từ khóa cấm',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  keyword: { type: 'string' },
+                  severity: { type: 'string', enum: ['block', 'warn'] },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật từ khóa cấm thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Content Library: Granular Template Configuration (Stages, Slots, Choices)
+    // =========================================================================
+    '/templates/{id}/stages': {
+      post: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Thêm phân đoạn sư phạm cho kịch bản mẫu',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['stageOrder', 'learningObjective'],
+                properties: {
+                  stageOrder: { type: 'integer', example: 1 },
+                  learningObjective: { type: 'string', example: 'Nhận diện cảm xúc ghen tị khi em gái có đồ chơi mới' },
+                  emotionToName: { type: 'string', example: 'Ghen tị' },
+                  leadInPages: { type: 'integer', default: 1 },
+                  isClimax: { type: 'boolean', default: false },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Thêm phân đoạn thành công' },
+        },
+      },
+    },
+
+    '/templates/stages/{stageId}': {
+      put: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Cập nhật phân đoạn sư phạm',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'stageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  stageOrder: { type: 'integer' },
+                  learningObjective: { type: 'string' },
+                  emotionToName: { type: 'string' },
+                  leadInPages: { type: 'integer' },
+                  isClimax: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật thành công' },
+        },
+      },
+      delete: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Xóa phân đoạn sư phạm',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'stageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa thành công' },
+        },
+      },
+    },
+
+    '/templates/{id}/slots': {
+      post: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Cập nhật danh sách vị trí nhân vật (slots)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['slots'],
+                properties: {
+                  slots: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['slotKey', 'characterRole', 'defaultName'],
+                      properties: {
+                        slotKey: { type: 'string', example: '{CON}' },
+                        characterRole: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'] },
+                        defaultName: { type: 'string', example: 'Bé Bi' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật slots thành công' },
+        },
+      },
+    },
+
+    '/templates/{id}/slots/{slotKey}': {
+      delete: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Xóa một vị trí nhân vật (slot)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'slotKey', in: 'path', required: true, schema: { type: 'string' }, example: '{CON}' },
+        ],
+        responses: {
+          200: { description: 'Xóa slot thành công' },
+        },
+      },
+    },
+
+    '/templates/stages/{stageId}/choices': {
+      post: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Thêm lựa chọn rẽ nhánh kèm điểm tín hiệu cảm xúc CASEL',
+        description: 'Tín hiệu cảm xúc do chuyên gia / Moderator chỉ định, là căn cứ khoa học khách quan để đánh giá EQ của bé khi chọn.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'stageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['choiceOrder', 'typeCode', 'description'],
+                properties: {
+                  choiceOrder: { type: 'integer', example: 1 },
+                  typeCode: { type: 'string', example: 'DUNG_LAI_THO_SAU' },
+                  description: { type: 'string', example: 'Dừng lại, hít một hơi thật sâu và đếm từ 1 đến 5' },
+                  isProsocial: { type: 'boolean', default: true },
+                  signals: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['skillId', 'delta'],
+                      properties: {
+                        skillId: { type: 'string', format: 'uuid' },
+                        delta: { type: 'integer', example: 5 },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Thêm lựa chọn rẽ nhánh thành công' },
+        },
+      },
+    },
+
+    '/templates/choices/{choiceId}': {
+      put: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Cập nhật lựa chọn rẽ nhánh và điểm tín hiệu cảm xúc',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'choiceId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  choiceOrder: { type: 'integer' },
+                  typeCode: { type: 'string' },
+                  description: { type: 'string' },
+                  isProsocial: { type: 'boolean' },
+                  signals: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        skillId: { type: 'string', format: 'uuid' },
+                        delta: { type: 'integer' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật thành công' },
+        },
+      },
+      delete: {
+        tags: ['Content Library', 'Templates'],
+        summary: '[Moderator / Admin] Xóa lựa chọn rẽ nhánh',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'choiceId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa thành công' },
         },
       },
     },
