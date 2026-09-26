@@ -371,12 +371,11 @@ const createListing = async (user, data) => {
     throw ApiError.notFound('Story not found or does not belong to your account');
   }
 
-  // Ensure story kind is published
+  // Ensure story kind is published (must be created through de-personalization flow)
   if (story.kind !== 'published') {
-    await prisma.story.update({
-      where: { id: story.id },
-      data: { kind: 'published' },
-    });
+    throw ApiError.badRequest(
+      'Chỉ có thể đăng bán câu chuyện đã tạo bản sao xuất bản (gỡ thông tin cá nhân). Vui lòng tạo bản xuất bản qua API /stories/:id/publish-version trước khi tạo bài đăng.'
+    );
   }
 
   // 3. Verify price tier

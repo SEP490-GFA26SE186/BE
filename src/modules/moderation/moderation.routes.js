@@ -89,4 +89,20 @@ router.post(
 );
 router.get('/sellers/:sellerId/strikes', ...requireModerator, moderationController.getSellerStrikes);
 
+// Strike Appeals (Khiếu nại gậy cảnh cáo)
+router.post(
+  '/strikes/:strikeId/appeals',
+  auth,
+  validate(moderationValidation.createStrikeAppeal),
+  moderationController.createStrikeAppeal,
+);
+router.get('/my-appeals', auth, moderationController.getMyStrikeAppeals);
+router.get('/appeals', ...requireModerator, validate(moderationValidation.getStrikeAppeals), moderationController.getStrikeAppeals);
+router.post(
+  '/appeals/:appealId/decide',
+  ...requireAdmin,
+  validate(moderationValidation.decideStrikeAppeal),
+  moderationController.decideStrikeAppeal,
+);
+
 export default router;

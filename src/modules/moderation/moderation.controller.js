@@ -172,6 +172,62 @@ const getSellerStrikes = async (req, res, next) => {
   }
 };
 
+const createStrikeAppeal = async (req, res, next) => {
+  try {
+    const appeal = await moderationService.createStrikeAppeal(req.user, req.params.strikeId, req.body);
+    res.status(StatusCodes.CREATED).json({
+      success: true,
+      message: 'Gửi đơn khiếu nại gậy cảnh cáo thành công, đang chờ Quản trị viên xét duyệt',
+      data: appeal,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getMyStrikeAppeals = async (req, res, next) => {
+  try {
+    const appeals = await moderationService.getMyStrikeAppeals(req.user);
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: appeals,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getStrikeAppeals = async (req, res, next) => {
+  try {
+    const result = await moderationService.getStrikeAppeals(req.query);
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: result.appeals,
+      pagination: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const decideStrikeAppeal = async (req, res, next) => {
+  try {
+    const result = await moderationService.decideStrikeAppeal(req.user, req.params.appealId, req.body);
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getChecklistItems,
   getBlockedKeywords,
@@ -186,4 +242,8 @@ export default {
   resolveReport,
   issueStrike,
   getSellerStrikes,
+  createStrikeAppeal,
+  getMyStrikeAppeals,
+  getStrikeAppeals,
+  decideStrikeAppeal,
 };

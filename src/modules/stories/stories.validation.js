@@ -146,10 +146,25 @@ const publishStoryVersion = z.object({
   params: z.object({
     id: z.string().uuid('Invalid story ID format'),
   }),
-  body: z.object({
-    title: z.string().trim().min(1).max(200).optional(),
-    coverImageKey: z.string().trim().max(300).nullable().optional(),
-  }).optional(),
+  body: z
+    .object({
+      title: z.string().trim().min(1).max(200).optional(),
+      coverImageKey: z.string().trim().max(300).nullable().optional(),
+      nameReplacements: z
+        .array(
+          z.object({
+            slotKey: z.string().trim().min(1).max(30).optional(),
+            fromName: z.string().trim().min(1).max(100).optional(),
+            customName: z
+              .string({ required_error: 'Tên thay thế là bắt buộc' })
+              .trim()
+              .min(1, 'Tên thay thế không được để trống')
+              .max(100, 'Tên không quá 100 ký tự'),
+          })
+        )
+        .optional(),
+    })
+    .optional(),
 });
 
 export default {

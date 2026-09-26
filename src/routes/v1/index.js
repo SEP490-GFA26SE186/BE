@@ -18,6 +18,9 @@ import contentLibraryRouter, {
   uiAudioAssetsRouter,
   checklistItemsRouter,
 } from '../../modules/content-library/content-library.routes.js';
+import notificationsRoutes from '../../modules/notifications/notifications.routes.js';
+import reportsRoutes from '../../modules/reports/reports.routes.js';
+import platformRoutes from '../../modules/platform/platform.routes.js';
 
 const router = express.Router();
 
@@ -42,6 +45,10 @@ router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);
 router.use('/marketplace', marketplaceRoutes);
 router.use('/moderation', moderationRoutes);
+router.use('/notifications', notificationsRoutes);
+router.use('/reports', reportsRoutes);
+router.use('/admin', platformRoutes);
+router.use('/platform', platformRoutes);
 router.use('/plans', plansRouter);
 router.use('/credit-packs', creditPacksRouter);
 router.use('/subscriptions', subscriptionsRouter);

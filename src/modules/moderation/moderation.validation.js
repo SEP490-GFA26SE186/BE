@@ -83,6 +83,38 @@ const issueStrike = z.object({
   }),
 });
 
+const createStrikeAppeal = z.object({
+  params: z.object({
+    strikeId: z.string().uuid('Invalid strike ID format'),
+  }),
+  body: z.object({
+    reason: z
+      .string({ required_error: 'Lý do khiếu nại không được bỏ trống' })
+      .trim()
+      .min(10, 'Lý do khiếu nại phải có ít nhất 10 ký tự')
+      .max(1000, 'Lý do khiếu nại không được vượt quá 1000 ký tự'),
+  }),
+});
+
+const decideStrikeAppeal = z.object({
+  params: z.object({
+    appealId: z.string().uuid('Invalid appeal ID format'),
+  }),
+  body: z.object({
+    status: z.enum(['approved', 'rejected'], { required_error: 'Quyết định phải là approved hoặc rejected' }),
+    decisionNote: z.string().trim().max(1000).optional(),
+  }),
+});
+
+const getStrikeAppeals = z.object({
+  query: z.object({
+    status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
+    sellerId: z.string().uuid().optional(),
+    page: z.string().regex(/^\d+$/).transform(Number).default('1'),
+    limit: z.string().regex(/^\d+$/).transform(Number).default('20'),
+  }),
+});
+
 export default {
   createKeyword,
   checkText,
@@ -91,4 +123,7 @@ export default {
   createReport,
   resolveReport,
   issueStrike,
+  createStrikeAppeal,
+  decideStrikeAppeal,
+  getStrikeAppeals,
 };

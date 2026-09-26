@@ -2,9 +2,14 @@ import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 
 /**
- * Helper to check story ownership or elevated privileges
+ * Helper to check story ownership or elevated privileges and active listing lock
+ * @param {Object} user - Authenticated user
+ * @param {string} storyId - Story ID
+ * @param {boolean} requireOwner - Require current user to be owner
+ * @param {boolean} checkMutationLock - Check if story is locked by an active marketplace listing
+ * @returns {Promise<Object>} Story record
  */
-const verifyStoryAccess = async (user, storyId, requireOwner = false) => {
+const verifyStoryAccess = async (user, storyId, requireOwner = false, checkMutationLock = false) => {
   const story = await prisma.story.findFirst({
     where: {
       id: storyId,
@@ -33,6 +38,32 @@ const verifyStoryAccess = async (user, storyId, requireOwner = false) => {
 
   if (!isOwner && story.kind !== 'published' && !isElevated) {
     throw ApiError.forbidden('Access denied to private story');
+  }
+
+  // If modifying a story, verify it's not currently locked by an active or pending marketplace listing
+  if (checkMutationLock) {
+    const activeListing = await prisma.listing.findFirst({
+      where: {
+        publishedStoryId: storyId,
+        status: { in: ['submitted', 'in_review', 'published'] },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (activeListing) {
+      const statusMap = {
+        submitted: 'đang chờ kiểm duyệt',
+        in_review: 'đang được thẩm định bởi kiểm duyệt viên',
+        published: 'đã được xuất bản trên Marketplace',
+      };
+      const statusLabel = statusMap[activeListing.status] || activeListing.status;
+      throw ApiError.badRequest(
+        `Không thể chỉnh sửa hoặc xóa câu chuyện vì tác phẩm ${statusLabel}. Vui lòng tạo phiên bản mới hoặc xử lý bài đăng hiện tại.`
+      );
+    }
   }
 
   return story;
@@ -430,11 +461,7 @@ const getStoryById = async (user, storyId) => {
  * @returns {Promise<Object>} Updated story
  */
 const updateStory = async (user, storyId, data) => {
-  const story = await verifyStoryAccess(user, storyId, true);
-
-  if (story.kind === 'published' && user.role !== 'admin') {
-    throw ApiError.badRequest('Published stories are frozen. Create a new revision to make changes.');
-  }
+  const story = await verifyStoryAccess(user, storyId, true, true);
 
   const updated = await prisma.story.update({
     where: { id: story.id },
@@ -457,19 +484,7 @@ const updateStory = async (user, storyId, data) => {
  * @returns {Promise<Object>} Deletion result
  */
 const deleteStory = async (user, storyId) => {
-  const story = await verifyStoryAccess(user, storyId, true);
-
-  // Check if story is published on marketplace
-  const activeListing = await prisma.listing.findFirst({
-    where: {
-      publishedStoryId: story.id,
-      status: { in: ['submitted', 'in_review', 'published'] },
-    },
-  });
-
-  if (activeListing) {
-    throw ApiError.badRequest('Cannot delete a story that is currently active or in review on the marketplace');
-  }
+  const story = await verifyStoryAccess(user, storyId, true, true);
 
   await prisma.story.update({
     where: { id: story.id },
@@ -487,7 +502,7 @@ const deleteStory = async (user, storyId) => {
  * @returns {Promise<Object>} Updated character bindings
  */
 const bindCharacters = async (user, storyId, characters) => {
-  const story = await verifyStoryAccess(user, storyId, true);
+  const story = await verifyStoryAccess(user, storyId, true, true);
 
   const characterIds = characters.map((c) => c.characterId).filter(Boolean);
   if (characterIds.length > 0) {
@@ -538,7 +553,7 @@ const bindCharacters = async (user, storyId, characters) => {
  * @returns {Promise<Object>} Updated page
  */
 const updatePage = async (user, storyId, pageId, data) => {
-  await verifyStoryAccess(user, storyId, true);
+  await verifyStoryAccess(user, storyId, true, true);
 
   const page = await prisma.storyPage.findFirst({
     where: {
@@ -589,7 +604,7 @@ const updatePage = async (user, storyId, pageId, data) => {
  * @returns {Promise<Object>} Created page
  */
 const createPage = async (user, storyId, data) => {
-  await verifyStoryAccess(user, storyId, true);
+  await verifyStoryAccess(user, storyId, true, true);
 
   let pageOrder = data.pageOrder;
   if (!pageOrder) {
@@ -625,7 +640,7 @@ const createPage = async (user, storyId, data) => {
  * @returns {Promise<Object>} Deletion result
  */
 const deletePage = async (user, storyId, pageId) => {
-  await verifyStoryAccess(user, storyId, true);
+  await verifyStoryAccess(user, storyId, true, true);
 
   const page = await prisma.storyPage.findFirst({
     where: { id: pageId, storyId },
@@ -668,7 +683,7 @@ const deletePage = async (user, storyId, pageId) => {
  * @returns {Promise<Object>} Updated choice
  */
 const updateChoice = async (user, storyId, pageId, choiceId, data) => {
-  await verifyStoryAccess(user, storyId, true);
+  await verifyStoryAccess(user, storyId, true, true);
 
   const choice = await prisma.storyChoice.findFirst({
     where: {
@@ -701,7 +716,7 @@ const updateChoice = async (user, storyId, pageId, choiceId, data) => {
  * @returns {Promise<Object>} Reviewed story
  */
 const reviewStory = async (user, storyId) => {
-  const story = await verifyStoryAccess(user, storyId, true);
+  const story = await verifyStoryAccess(user, storyId, true, true);
 
   // 1. Check minimum requirements
   const pages = await prisma.storyPage.findMany({
@@ -783,7 +798,7 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
     },
   });
 
-  // Prepare de-personalization: Map character names to slot default names
+  // Prepare de-personalization: Map character names to slot default names or parent custom names
   const slotDefaultNames = new Map(template.slots.map((s) => [s.slotKey, s.defaultName]));
 
   // Also replace any private character name occurrences
@@ -792,22 +807,63 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
     include: { character: true },
   });
 
+  // Map custom replacement names if provided by parent in options.nameReplacements
+  const customBySlot = new Map();
+  const customByName = new Map();
+
+  if (Array.isArray(options.nameReplacements)) {
+    for (const item of options.nameReplacements) {
+      const target = item?.customName?.trim();
+      if (!target) continue;
+      if (item.slotKey?.trim()) {
+        customBySlot.set(item.slotKey.trim(), target);
+      }
+      if (item.fromName?.trim()) {
+        customByName.set(item.fromName.trim().toLowerCase(), target);
+      }
+    }
+  }
+
   const nameReplacements = [];
   for (const sc of storyCharacters) {
     if (sc.character) {
-      const defaultName = slotDefaultNames.get(sc.slotKey) || 'Nhân vật';
+      const charName = sc.character.name;
+      const targetName =
+        customBySlot.get(sc.slotKey) ||
+        customByName.get(charName.toLowerCase()) ||
+        slotDefaultNames.get(sc.slotKey) ||
+        'Nhân vật';
+
       nameReplacements.push({
-        from: sc.character.name,
-        to: defaultName,
+        from: charName,
+        to: targetName,
       });
     }
   }
+
+  // Also support ad-hoc custom name replacements for nicknames not directly bound to characters
+  if (Array.isArray(options.nameReplacements)) {
+    for (const item of options.nameReplacements) {
+      const from = item?.fromName?.trim();
+      const to = item?.customName?.trim();
+      if (from && to && !nameReplacements.some((r) => r.from.toLowerCase() === from.toLowerCase())) {
+        nameReplacements.push({ from, to });
+      }
+    }
+  }
+
+  const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   const depersonalizeText = (text) => {
     if (!text) return text;
     let result = text;
     for (const rep of nameReplacements) {
-      const regex = new RegExp(`\\b${rep.from}\\b`, 'gi');
+      if (!rep.from) continue;
+      // Unicode word boundary lookaround supporting Vietnamese diacritics
+      const regex = new RegExp(
+        `(?<=^|[^\\p{L}\\p{N}])${escapeRegex(rep.from)}(?=$|[^\\p{L}\\p{N}])`,
+        'gui'
+      );
       result = result.replace(regex, rep.to);
     }
     return result;

@@ -551,6 +551,237 @@ const getSellerStrikes = async (sellerId) => {
   });
 };
 
+/**
+ * Seller submits an appeal against a creator strike
+ * @param {Object} user - Seller
+ * @param {string} strikeId
+ * @param {Object} payload - { reason }
+ * @returns {Promise<Object>}
+ */
+const createStrikeAppeal = async (user, strikeId, { reason }) => {
+  const strike = await prisma.creatorStrike.findUnique({
+    where: { id: strikeId },
+    include: { appeal: true },
+  });
+
+  if (!strike) {
+    throw ApiError.notFound('Không tìm thấy gậy cảnh cáo');
+  }
+
+  if (strike.sellerId !== user.id) {
+    throw ApiError.forbidden('Bạn chỉ có thể gửi khiếu nại đối với gậy cảnh cáo của chính mình');
+  }
+
+  if (strike.revokedAt) {
+    throw ApiError.badRequest('Gậy cảnh cáo này đã được gỡ bỏ trước đó');
+  }
+
+  if (strike.expiresAt < new Date()) {
+    throw ApiError.badRequest('Gậy cảnh cáo này đã hết hạn hiệu lực');
+  }
+
+  if (strike.appeal) {
+    throw ApiError.conflict('Gậy cảnh cáo này đã được gửi đơn khiếu nại trước đó');
+  }
+
+  const appeal = await prisma.strikeAppeal.create({
+    data: {
+      strikeId,
+      reason: reason.trim(),
+      status: 'pending',
+    },
+    include: {
+      strike: true,
+    },
+  });
+
+  return appeal;
+};
+
+/**
+ * Get all appeals submitted by current seller
+ * @param {Object} user - Seller
+ * @returns {Promise<Array>}
+ */
+const getMyStrikeAppeals = async (user) => {
+  return prisma.strikeAppeal.findMany({
+    where: {
+      strike: {
+        sellerId: user.id,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      strike: true,
+      decidedBy: {
+        select: { id: true, username: true, fullName: true },
+      },
+    },
+  });
+};
+
+/**
+ * Moderator / Admin queries all strike appeals with filtering and pagination
+ * @param {Object} filter - { status, sellerId, page, limit }
+ * @returns {Promise<Object>}
+ */
+const getStrikeAppeals = async (filter = {}) => {
+  const { status, sellerId, page = 1, limit = 20 } = filter;
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.max(1, Number(limit) || 20);
+  const skip = (pageNum - 1) * limitNum;
+
+  const where = {};
+  if (status) {
+    where.status = status;
+  }
+  if (sellerId) {
+    where.strike = { sellerId };
+  }
+
+  const [total, appeals] = await Promise.all([
+    prisma.strikeAppeal.count({ where }),
+    prisma.strikeAppeal.findMany({
+      where,
+      skip,
+      take: limitNum,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        strike: {
+          include: {
+            seller: {
+              select: {
+                userId: true,
+                penName: true,
+                user: { select: { email: true, fullName: true } },
+              },
+            },
+            issuedBy: {
+              select: { id: true, username: true, fullName: true },
+            },
+          },
+        },
+        decidedBy: {
+          select: { id: true, username: true, fullName: true },
+        },
+      },
+    }),
+  ]);
+
+  return {
+    total,
+    page: pageNum,
+    limit: limitNum,
+    totalPages: Math.ceil(total / limitNum),
+    appeals,
+  };
+};
+
+/**
+ * Admin decides on a strike appeal
+ * @param {Object} adminUser - Admin
+ * @param {string} appealId
+ * @param {Object} payload - { status: 'approved' | 'rejected', decisionNote }
+ * @returns {Promise<Object>}
+ */
+const decideStrikeAppeal = async (adminUser, appealId, { status, decisionNote }) => {
+  const appeal = await prisma.strikeAppeal.findUnique({
+    where: { id: appealId },
+    include: {
+      strike: true,
+    },
+  });
+
+  if (!appeal) {
+    throw ApiError.notFound('Không tìm thấy đơn khiếu nại');
+  }
+
+  if (appeal.status !== 'pending') {
+    throw ApiError.badRequest('Đơn khiếu nại này đã được xử lý trước đó');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // 1. Update appeal decision
+    const updatedAppeal = await tx.strikeAppeal.update({
+      where: { id: appealId },
+      data: {
+        status,
+        decidedById: adminUser.id,
+        decidedAt: new Date(),
+        decisionNote: decisionNote ? decisionNote.trim() : null,
+      },
+    });
+
+    let strikeRevoked = false;
+    let sellerReinstated = false;
+
+    // 2. If approved, revoke the strike
+    if (status === 'approved') {
+      await tx.creatorStrike.update({
+        where: { id: appeal.strikeId },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+      strikeRevoked = true;
+
+      // Check remaining active strikes count for seller
+      const activeCount = await tx.creatorStrike.count({
+        where: {
+          sellerId: appeal.strike.sellerId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (activeCount < 3) {
+        const sellerProfile = await tx.sellerProfile.findUnique({
+          where: { userId: appeal.strike.sellerId },
+        });
+
+        if (sellerProfile && sellerProfile.status === 'suspended') {
+          await tx.sellerProfile.update({
+            where: { userId: appeal.strike.sellerId },
+            data: { status: 'approved' },
+          });
+          sellerReinstated = true;
+        }
+      }
+    }
+
+    // 3. Send notification to the seller
+    const notifTitle =
+      status === 'approved'
+        ? 'Khiếu nại gậy cảnh cáo được chấp thuận'
+        : 'Khiếu nại gậy cảnh cáo bị từ chối';
+    const notifBody =
+      status === 'approved'
+        ? `Đơn khiếu nại gậy cảnh cáo của bạn đã được Quản trị viên chấp thuận và gỡ bỏ gậy.${decisionNote ? ' Lời nhắn: ' + decisionNote : ''}`
+        : `Đơn khiếu nại gậy cảnh cáo của bạn đã bị từ chối.${decisionNote ? ' Lý do: ' + decisionNote : ''}`;
+
+    await tx.notification.create({
+      data: {
+        userId: appeal.strike.sellerId,
+        type: status === 'approved' ? 'STRIKE_APPEAL_APPROVED' : 'STRIKE_APPEAL_REJECTED',
+        title: notifTitle,
+        body: notifBody,
+        refType: 'strike_appeal',
+        refId: appeal.id,
+      },
+    });
+
+    return {
+      appeal: updatedAppeal,
+      strikeRevoked,
+      sellerReinstated,
+      message:
+        status === 'approved'
+          ? 'Đã chấp thuận đơn khiếu nại và gỡ bỏ gậy cảnh cáo thành công'
+          : 'Đã từ chối đơn khiếu nại',
+    };
+  });
+};
+
 export default {
   getChecklistItems,
   getBlockedKeywords,
@@ -565,4 +796,8 @@ export default {
   resolveReport,
   issueStrike,
   getSellerStrikes,
+  createStrikeAppeal,
+  getMyStrikeAppeals,
+  getStrikeAppeals,
+  decideStrikeAppeal,
 };

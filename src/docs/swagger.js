@@ -45,6 +45,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Plans & Subscriptions', description: 'Gói thành viên, định mức tạo truyện/chân dung AI và quyền lợi tài khoản' },
     { name: 'Credit Packs', description: 'Gói nạp xu (Credit Packs) bổ sung lượt tạo AI linh hoạt' },
     { name: 'Wallets & Financials', description: 'Ví xu phụ huynh, số dư thu nhập tác giả (Seller Wallet), sổ cái giao dịch và yêu cầu rút tiền' },
+    { name: 'Notifications', description: 'Hệ thống thông báo đẩy cho người dùng (kết quả duyệt, mua hàng, gậy cảnh cáo, biến động số dư)' },
+    { name: 'Reports & Supervision', description: 'Báo cáo EQ biểu đồ radar, tiến trình học tập và giám sát nền tảng' },
+    { name: 'Platform & Audit Logs', description: 'Cài đặt tham số hệ thống và nhật ký kiểm toán quản trị' },
   ],
   components: {
     securitySchemes: {
@@ -3316,6 +3319,19 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 properties: {
                   title: { type: 'string', example: 'Bài học chia sẻ đồ chơi của bạn Thỏ' },
                   coverImageKey: { type: 'string' },
+                  nameReplacements: {
+                    type: 'array',
+                    description: 'Tùy chọn danh sách tên nhân vật thay thế theo từng slotKey hoặc theo tên riêng cũ. Nếu không cung cấp, hệ thống sẽ tự động dùng defaultName của kịch bản.',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        slotKey: { type: 'string', example: 'main_child' },
+                        fromName: { type: 'string', example: 'Bé Bo' },
+                        customName: { type: 'string', example: 'Bé Thỏ Thông Thái' },
+                      },
+                      required: ['customName'],
+                    },
+                  },
                 },
               },
             },
@@ -3927,6 +3943,275 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         ],
         responses: {
           200: { description: 'Xóa thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Moderation: Strike Appeals (Khiếu nại gậy cảnh cáo)
+    // =========================================================================
+    '/moderation/strikes/{strikeId}/appeals': {
+      post: {
+        tags: ['Moderation'],
+        summary: '[Seller] Gửi đơn khiếu nại đối với gậy cảnh cáo',
+        description: 'Tác giả (Seller) gửi giải trình và lý do khiếu nại đối với gậy cảnh cáo đã nhận từ kiểm duyệt viên.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'strikeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['reason'],
+                properties: {
+                  reason: { type: 'string', minLength: 10, example: 'Truyện của tôi tuân thủ hoàn toàn hướng dẫn, tình huống tranh chấp đồ chơi là để dạy bé bài học chia sẻ chứ không mang tính bạo lực.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Gửi đơn khiếu nại thành công' },
+          400: { description: 'Gậy đã hết hạn hoặc đã được gỡ bỏ' },
+          409: { description: 'Gậy này đã có đơn khiếu nại' },
+        },
+      },
+    },
+
+    '/moderation/my-appeals': {
+      get: {
+        tags: ['Moderation'],
+        summary: '[Seller] Xem danh sách đơn khiếu nại của chính mình',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Danh sách đơn khiếu nại của tác giả' },
+        },
+      },
+    },
+
+    '/moderation/appeals': {
+      get: {
+        tags: ['Moderation'],
+        summary: '[Moderator / Admin] Xem danh sách tất cả đơn khiếu nại gậy cảnh cáo',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['pending', 'approved', 'rejected', 'cancelled'] } },
+          { name: 'sellerId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách đơn khiếu nại phân trang' },
+        },
+      },
+    },
+
+    '/moderation/appeals/{appealId}/decide': {
+      post: {
+        tags: ['Moderation'],
+        summary: '[Admin] Phê duyệt hoặc từ chối đơn khiếu nại gậy cảnh cáo',
+        description: 'Chỉ Admin mới có quyền quyết định. Nếu chấp thuận (`approved`), hệ thống tự động gỡ bỏ gậy cảnh cáo (`revokedAt = now()`), khôi phục trạng thái hoạt động của Seller nếu trước đó bị đình chỉ, ghi nhật ký kiểm toán và gửi thông báo tới Seller.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'appealId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: {
+                  status: { type: 'string', enum: ['approved', 'rejected'], example: 'approved' },
+                  decisionNote: { type: 'string', example: 'Sau khi rà soát lại nội dung trang truyện, khiếu nại của tác giả là có cơ sở.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Xử lý quyết định thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Notifications (Hệ thống thông báo đẩy)
+    // =========================================================================
+    '/notifications': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'Lấy danh sách thông báo của tài khoản',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'unreadOnly', in: 'query', schema: { type: 'boolean' }, description: 'Chỉ lấy thông báo chưa đọc (true/false)' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách thông báo phân trang kèm số lượng chưa đọc' },
+        },
+      },
+    },
+
+    '/notifications/unread-count': {
+      get: {
+        tags: ['Notifications'],
+        summary: 'Lấy nhanh số lượng thông báo chưa đọc (cho huy hiệu badge icon)',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Số lượng thông báo chưa đọc' },
+        },
+      },
+    },
+
+    '/notifications/read-all': {
+      patch: {
+        tags: ['Notifications'],
+        summary: 'Đánh dấu tất cả thông báo là đã đọc',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Đã đánh dấu đọc tất cả' },
+        },
+      },
+    },
+
+    '/notifications/{id}/read': {
+      patch: {
+        tags: ['Notifications'],
+        summary: 'Đánh dấu một thông báo cụ thể là đã đọc',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Đánh dấu đã đọc thành công' },
+        },
+      },
+    },
+
+    '/notifications/{id}': {
+      delete: {
+        tags: ['Notifications'],
+        summary: 'Xóa một thông báo',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Xóa thông báo thành công' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Reports & Supervision
+    // =========================================================================
+    '/reports/eq/children/{childId}': {
+      get: {
+        tags: ['Reports & Supervision'],
+        summary: '[Parent] Báo cáo phân tích chuyên sâu EQ của bé',
+        description: 'Báo cáo toàn diện biểu đồ radar 5 năng lực CASEL, tiến trình phát triển theo thời gian, danh sách cảm xúc gặp phải nhiều nhất trong truyện và lời khuyên sư phạm cá nhân hóa cho phụ huynh dựa trên năng lực cần bồi dưỡng.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'childId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: { description: 'Báo cáo EQ chuyên sâu' },
+        },
+      },
+    },
+
+    '/reports/platform/overview': {
+      get: {
+        tags: ['Reports & Supervision'],
+        summary: '[Moderator / Admin] Tổng quan giám sát toàn nền tảng',
+        description: 'Thống kê tổng hợp số lượng phụ huynh, trẻ em, tỷ lệ truyện cá nhân/xuất bản, tình trạng chợ Marketplace, số báo cáo vi phạm đang chờ xử lý và mức độ tuân thủ an toàn.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Dữ liệu giám sát nền tảng' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Platform Settings & Admin Audit Logs
+    // =========================================================================
+    '/admin/settings': {
+      get: {
+        tags: ['Platform & Audit Logs'],
+        summary: '[Admin] Lấy danh sách toàn bộ cấu hình tham số hệ thống',
+        description: 'Tỷ lệ hoa hồng nền tảng (commission_rate: 30%), số ngày giam tiền (holding_days: 7), mức rút tiền tối thiểu (min_withdrawal_vnd), ngưỡng báo cáo tự động tạm gỡ (report_threshold). Tự động khởi tạo giá trị mặc định nếu bảng trống.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Danh sách cấu hình hệ thống' },
+        },
+      },
+    },
+
+    '/admin/settings/{key}': {
+      get: {
+        tags: ['Platform & Audit Logs'],
+        summary: '[Admin] Lấy chi tiết một tham số cấu hình',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'key', in: 'path', required: true, schema: { type: 'string' }, example: 'commission_rate' },
+        ],
+        responses: {
+          200: { description: 'Chi tiết cấu hình' },
+        },
+      },
+      put: {
+        tags: ['Platform & Audit Logs'],
+        summary: '[Admin] Cập nhật tham số cấu hình hệ thống',
+        description: 'Cập nhật giá trị cấu hình và tự động lưu vết vào nhật ký kiểm toán quản trị (Admin Audit Logs).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'key', in: 'path', required: true, schema: { type: 'string' }, example: 'commission_rate' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['value'],
+                properties: {
+                  value: { example: 30 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật tham số thành công' },
+        },
+      },
+    },
+
+    '/admin/audit-logs': {
+      get: {
+        tags: ['Platform & Audit Logs'],
+        summary: '[Admin] Truy vấn nhật ký kiểm toán quản trị',
+        description: 'Xem toàn bộ lịch sử thao tác của các Admin và Moderator (duyệt khiếu nại, cấp gậy, thay đổi cấu hình hệ thống, khóa tài khoản...).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'actorId', in: 'query', schema: { type: 'string', format: 'uuid' }, description: 'Lọc theo ID người thực hiện' },
+          { name: 'action', in: 'query', schema: { type: 'string' }, description: 'Lọc theo hành động (VD: UPDATE_PLATFORM_SETTING, APPROVE_STRIKE_APPEAL)' },
+          { name: 'targetType', in: 'query', schema: { type: 'string' }, description: 'Lọc theo đối tượng tác động (VD: PLATFORM_SETTING, STRIKE_APPEAL)' },
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách nhật ký kiểm toán phân trang' },
         },
       },
     },
