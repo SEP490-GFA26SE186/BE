@@ -22,6 +22,12 @@ import notificationsRoutes from '../../modules/notifications/notifications.route
 import reportsRoutes from '../../modules/reports/reports.routes.js';
 import platformRoutes from '../../modules/platform/platform.routes.js';
 
+import {
+  cartRouter,
+  ordersRouter,
+  entitlementsRouter,
+} from '../../modules/orders/orders.routes.js';
+
 const router = express.Router();
 
 // Health check
@@ -53,6 +59,9 @@ router.use('/plans', plansRouter);
 router.use('/credit-packs', creditPacksRouter);
 router.use('/subscriptions', subscriptionsRouter);
 router.use('/wallets', walletsRoutes);
+router.use('/cart', cartRouter);
+router.use('/orders', ordersRouter);
+router.use('/entitlements', entitlementsRouter);
 
 export default router;
 

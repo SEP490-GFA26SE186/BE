@@ -48,6 +48,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Notifications', description: 'Hệ thống thông báo đẩy cho người dùng (kết quả duyệt, mua hàng, gậy cảnh cáo, biến động số dư)' },
     { name: 'Reports & Supervision', description: 'Báo cáo EQ biểu đồ radar, tiến trình học tập và giám sát nền tảng' },
     { name: 'Platform & Audit Logs', description: 'Cài đặt tham số hệ thống và nhật ký kiểm toán quản trị' },
+    { name: 'Cart', description: 'Giỏ hàng mua sắm truyện chợ cộng đồng' },
+    { name: 'Orders', description: 'Đơn hàng mua gói Subscription, nạp Credit hoặc mua truyện' },
+    { name: 'Entitlements', description: 'Quyền sở hữu truyện chợ đã mua & cá nhân hóa vào giá sách' },
   ],
   components: {
     securitySchemes: {
@@ -4212,6 +4215,202 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         ],
         responses: {
           200: { description: 'Danh sách nhật ký kiểm toán phân trang' },
+        },
+      },
+    },
+
+    // ==========================================
+    // Cart Routes (/cart)
+    // ==========================================
+    '/cart': {
+      get: {
+        tags: ['Cart'],
+        summary: '[Parent] Xem danh sách truyện trong giỏ hàng',
+        description: 'Lấy các truyện đã thêm vào giỏ cùng tổng tạm tính (subtotalVnd).',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Danh sách sản phẩm trong giỏ hàng' },
+        },
+      },
+      post: {
+        tags: ['Cart'],
+        summary: '[Parent] Thêm truyện vào giỏ hàng',
+        description: 'Thêm một truyện đã xuất bản (listingId) vào giỏ hàng của phụ huynh.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['listingId'],
+                properties: {
+                  listingId: { type: 'string', format: 'uuid', example: 'a0000000-0000-0000-0000-000000000001' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Đã thêm truyện vào giỏ hàng' },
+          400: { description: 'Truyện không khả dụng, của chính mình hoặc đã sở hữu' },
+        },
+      },
+      delete: {
+        tags: ['Cart'],
+        summary: '[Parent] Làm trống toàn bộ giỏ hàng',
+        description: 'Xóa toàn bộ các sản phẩm đang có trong giỏ hàng.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Đã làm trống giỏ hàng' },
+        },
+      },
+    },
+
+    '/cart/{listingId}': {
+      delete: {
+        tags: ['Cart'],
+        summary: '[Parent] Xóa một truyện khỏi giỏ hàng',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'listingId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID tin bán listing cần xóa' },
+        ],
+        responses: {
+          200: { description: 'Đã xóa truyện khỏi giỏ hàng' },
+        },
+      },
+    },
+
+    // ==========================================
+    // Order Routes (/orders)
+    // ==========================================
+    '/orders': {
+      post: {
+        tags: ['Orders'],
+        summary: '[Parent] Tạo đơn hàng mới',
+        description: 'Tạo đơn hàng từ giỏ hàng (fromCart: true) hoặc mua trực tiếp một gói/truyện (itemType + itemId). Nếu tổng tiền = 0 (miễn phí), đơn hàng tự động hoàn tất và kích hoạt quyền lợi ngay lập tức.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  fromCart: { type: 'boolean', example: true },
+                  itemType: { type: 'string', enum: ['listing', 'plan', 'credit_pack'], example: 'listing' },
+                  itemId: { type: 'string', format: 'uuid' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo đơn hàng thành công' },
+          400: { description: 'Dữ liệu đơn hàng không hợp lệ' },
+        },
+      },
+    },
+
+    '/orders/me': {
+      get: {
+        tags: ['Orders'],
+        summary: '[Parent] Xem lịch sử các đơn hàng của tôi',
+        description: 'Lấy danh sách các đơn hàng đã đặt cùng trạng thái (pending, paid, cancelled, expired) và chi tiết sản phẩm.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['pending', 'paid', 'cancelled', 'expired'] } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        ],
+        responses: {
+          200: { description: 'Lịch sử đơn hàng' },
+        },
+      },
+    },
+
+    '/orders/{id}': {
+      get: {
+        tags: ['Orders'],
+        summary: '[Parent | Admin] Chi tiết đơn hàng',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Chi tiết đơn hàng' },
+          404: { description: 'Không tìm thấy đơn hàng' },
+        },
+      },
+    },
+
+    '/orders/{id}/cancel': {
+      post: {
+        tags: ['Orders'],
+        summary: '[Parent] Hủy đơn hàng đang chờ thanh toán',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          200: { description: 'Hủy đơn hàng thành công' },
+          400: { description: 'Chỉ có thể hủy đơn hàng ở trạng thái pending' },
+        },
+      },
+    },
+
+    // ==========================================
+    // Entitlement Routes (/entitlements)
+    // ==========================================
+    '/entitlements/me': {
+      get: {
+        tags: ['Entitlements'],
+        summary: '[Parent] Danh sách quyền sở hữu truyện đã mua từ chợ',
+        description: 'Lấy tất cả truyện phụ huynh đã mua hoặc nhận miễn phí trên chợ.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: { description: 'Danh sách quyền sở hữu truyện' },
+        },
+      },
+    },
+
+    '/entitlements/{id}/personalize': {
+      post: {
+        tags: ['Entitlements'],
+        summary: '[Parent] Cá nhân hóa truyện đã mua và đưa vào giá sách của con',
+        description: 'Gán các nhân vật gia đình của phụ huynh vào các slot nhân vật của câu truyện vừa mua, nhân bản thành một bản truyện private hoàn chỉnh và tự động đưa vào giá sách của bé.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID quyền sở hữu (Entitlement ID)' },
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string', example: 'Chuyến phiêu lưu của Bo Bo' },
+                  childId: { type: 'string', format: 'uuid', description: 'ID bé để tự động thêm vào giá sách (BookshelfItem)' },
+                  characters: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['slotKey'],
+                      properties: {
+                        slotKey: { type: 'string', example: 'main_character' },
+                        characterId: { type: 'string', format: 'uuid' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Cá nhân hóa truyện thành công' },
+          404: { description: 'Không tìm thấy quyền sở hữu hoặc truyện đã bị thu hồi' },
         },
       },
     },
