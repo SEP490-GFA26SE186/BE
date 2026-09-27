@@ -1,0 +1,80 @@
+{
+  "request_id": "0f6c2d1e-demo",
+  "topic": {
+    "title": "Con hay nổi giận",
+    "competency": "self_management",
+    "guidance": "Giúp trẻ nhận ra dấu hiệu của cơn giận và chọn cách hạ nhiệt."
+  },
+  "characters": [
+    {
+      "token": "{NV1}",
+      "description": "bé trai 6 tuổi, tóc ngắn, áo xanh",
+      "is_main": true
+    },
+    {
+      "token": "{NV2}",
+      "description": "em trai 4 tuổi, hay cười",
+      "is_main": false
+    },
+    {
+      "token": "{NV3}",
+      "description": "mẹ",
+      "is_main": false
+    }
+  ],
+  "situation": "{NV1} hay giành xe ô tô đỏ với {NV2}, bị lấy lại là khóc to.",
+  "tone": "gentle",
+  "pages": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6",
+    "p7",
+    "p8"
+  ],
+  "checkpoints": [
+    {
+      "id": "k1",
+      "type": "emotion_self",
+      "after": "p2"
+    },
+    {
+      "id": "k2",
+      "type": "perspective",
+      "after": "p4",
+      "target": "{NV2}"
+    },
+    {
+      "id": "k3",
+      "type": "problem_solving",
+      "after": "p5"
+    },
+    {
+      "id": "k4",
+      "type": "reflection",
+      "after": "p8"
+    }
+  ],
+  "limits": {
+    "page_min_words": 20,
+    "page_max_words": 70,
+    "sentence_max_words": 15,
+    "question_max_words": 15,
+    "option_max_words": 12,
+    "hint_max_words": 20,
+    "feedback_max_words": 25,
+    "max_scenes": 4
+  },
+  "forbidden_terms": [
+    "An",
+    "Bin"
+  ],
+  "blocked_keywords": [
+    {
+      "keyword": "đánh",
+      "severity": "warn"
+    }
+  ]
+}

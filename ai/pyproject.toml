@@ -1,0 +1,29 @@
+[project]
+name = "storyweaver-ai"
+version = "0.1.0"
+description = "StoryWeaver AI - AI inference service (text / image / TTS)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    # httpx dung cho CA HAI viec: goi provider va upload Supabase Storage qua
+    # REST API. Khong dung SDK supabase-py vi service nay chi can Storage —
+    # keo ca SDK vao la keo theo cả auth/realtime/postgrest khong dung tới.
+    "httpx>=0.27",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

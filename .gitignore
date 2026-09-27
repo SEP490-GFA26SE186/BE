@@ -1,41 +1,43 @@
-# dependencies
+# ---- dependencies ----
 node_modules/
+.venv/
+__pycache__/
+*.py[cod]
 
-# generated
-src/generated/
+# ---- prisma generated client ----
+api/src/generated/
 
-# environment
+# ---- environment (KHONG commit secrets) ----
 .env
 .env.local
 .env.production
+api/.env
+api/.env.local
+ai/.env
+ai/.env.local
 
-# prisma
-prisma/*.db
-prisma/*.db-journal
+# ---- build output ----
+dist/
+build/
+*.egg-info/
 
-# logs
+# ---- test / cache ----
+coverage/
+.pytest_cache/
+.ruff_cache/
+
+# ---- logs ----
 logs/
 *.log
 npm-debug.log*
 
-# build
-dist/
-build/
-
-# IDE
+# ---- IDE / OS ----
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# coverage
-coverage/
-
-/src/generated/prisma
-
-.md
-.docx
+# ---- bao cao capstone (ban .docx khong commit vao repo code) ----
+*.docx

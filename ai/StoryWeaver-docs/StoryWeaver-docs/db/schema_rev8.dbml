@@ -1,0 +1,1329 @@
+// =============================================================================
+// StoryWeaver AI - Database Schema (PostgreSQL)
+// SEP490 / SE186 - revision 8
+//
+// Mo hinh: C2C, truyen tuyen tinh + diem dung (checkpoint), cham EQ theo CASEL.
+// Thay doi so voi rev 7:
+//  - story_length them 'custom' cho truyen tu viet (cau truc tu do)
+//  - Bo page_rewrite / checkpoint_fill: AI chi viet ca truyen mot lan
+//  - Chi ban GOI; moi goi cap credit theo thang. Bo credit_packs, quota_source,
+//    chuyen doanh thu sang credit
+//  - Truyen mien phi di qua don 0d; bo entitlement_source
+//  - review_visibility -> hidden_at; plan_period -> duration_months
+//  - Bo bedtime, bo notifications
+// =============================================================================
+
+
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+
+Enum user_role {
+  admin
+  moderator
+  parent
+}
+
+Enum auth_token_type {
+  refresh
+  email_verify
+  password_reset
+  kid_session
+}
+
+
+
+Enum generation_status {
+  none
+  queued
+  generating
+  ready
+  failed
+}
+
+
+
+Enum story_length {
+  short
+  medium
+  long
+  custom
+}
+
+Enum checkpoint_type {
+  emotion_self
+  emotion_other
+  perspective
+  problem_solving
+  reflection
+}
+
+Enum emotion {
+  happy
+  sad
+  angry
+  scared
+  neutral
+}
+
+Enum option_role {
+  constructive
+  avoidant
+  impulsive
+}
+
+Enum story_kind {
+  private
+  published
+}
+
+Enum story_status {
+  draft
+  generating
+  ready
+}
+
+
+
+Enum content_origin {
+  human
+  ai
+  ai_edited
+}
+
+Enum play_status {
+  in_progress
+  completed
+  abandoned
+}
+
+Enum ai_request_type {
+  story_text
+  character_portrait
+  scene_image
+  narration
+}
+
+Enum ai_request_status {
+  queued
+  processing
+  succeeded
+  failed
+  blocked
+}
+
+Enum seller_status {
+  pending
+  approved
+  rejected
+  suspended
+}
+
+Enum listing_status {
+  submitted
+  in_review
+  changes_requested
+  rejected
+  published
+  suspended
+  archived
+}
+
+Enum review_tag {
+  child_liked
+  age_appropriate
+  clear_lesson
+  beautiful_art
+  good_narration
+}
+
+Enum subscription_status {
+  active
+  expired
+  cancelled
+}
+
+Enum order_status {
+  pending
+  paid
+  failed
+  cancelled
+  expired
+}
+
+Enum order_item_type {
+  plan
+  listing
+}
+
+Enum order_item_status {
+  active
+  refunded
+}
+
+Enum voucher_discount_type {
+  percent
+  fixed
+}
+
+Enum request_status {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+Enum withdrawal_status {
+  requested
+  paid
+  rejected
+  cancelled
+}
+
+Enum wallet_type {
+  credit
+  earning
+}
+
+Enum ledger_entry_type {
+  credit_grant
+  credit_expire
+  credit_hold
+  credit_release
+  credit_consume
+  earning_pending
+  earning_release
+  earning_reversal
+  withdrawal_hold
+  withdrawal_paid
+  withdrawal_release
+}
+
+Enum moderation_review_type {
+  submission
+  random_audit
+  report_followup
+}
+
+Enum moderation_decision {
+  approved
+  changes_requested
+  rejected
+  taken_down
+}
+
+Enum report_category {
+  scary
+  violent
+  inappropriate_lesson
+  personal_info
+  technical_error
+  other
+}
+
+Enum report_status {
+  open
+  resolved
+  dismissed
+}
+
+Enum strike_source {
+  report
+  rejection
+  takedown
+}
+
+Enum keyword_severity {
+  block
+  warn
+}
+
+Enum casel_competency {
+  self_awareness
+  self_management
+  social_awareness
+  relationship_skills
+  responsible_decision_making
+}
+
+
+// ---------------------------------------------------------------------------
+// 1. ACCOUNTS
+// ---------------------------------------------------------------------------
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  role user_role [not null, default: 'parent']
+  email citext [unique, not null]
+  password_hash varchar(255) [not null]
+  full_name varchar(150) [not null]
+  phone varchar(20)
+  kid_exit_pin_hash varchar(255) [note: 'NULL = chua dat PIN -> chan vao Kid Mode']
+  email_verified_at timestamptz
+  last_login_at timestamptz
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz [note: 'soft delete']
+
+  indexes {
+    role
+    deleted_at
+  }
+}
+
+Table auth_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, note: 'kid_session: van la phu huynh']
+  type auth_token_type [not null]
+  token_hash varchar(255) [unique, not null]
+  replaced_by_id uuid
+  child_id uuid [note: 'chi co gia tri khi type = kid_session']
+  expires_at timestamptz [not null]
+  consumed_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, type)
+    expires_at
+    child_id
+  }
+
+  Note: '''
+  CHECK: (type = kid_session) = (child_id IS NOT NULL)
+  CHECK: replaced_by_id IS NULL OR type = refresh
+  Partial unique: UNIQUE (child_id) WHERE type = kid_session AND consumed_at IS NULL
+  '''
+}
+
+Table child_profiles {
+  id uuid [pk, default: `gen_random_uuid()`]
+  parent_id uuid [not null]
+  name varchar(100) [not null]
+  birth_date date
+  daily_screen_time_minutes int [not null, default: 30]
+  preferred_voice varchar(50)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    parent_id
+  }
+}
+
+Table characters {
+  id uuid [pk, default: `gen_random_uuid()`]
+  parent_id uuid [not null, note: 'nhan vat thuoc gia dinh, dung chung cho moi con']
+  child_id uuid [note: 'nhan vat dai dien cho mot dua con cu the (neu co)']
+  name varchar(100) [not null]
+  appearance text [not null, note: 'mo ta bang chu, co the ghi quan he: em trai 4 tuoi...']
+  portrait_image_key varchar(300) [note: 'chan dung AI da duoc phu huynh chon, dung lam anh tham chieu']
+  gen_prompt text
+  gen_seed bigint
+  portrait_status generation_status [not null, default: 'none']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    parent_id
+    child_id [unique, note: 'moi con toi da 1 nhan vat dai dien']
+  }
+}
+
+Table child_usage_sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  child_id uuid [not null]
+  started_at timestamptz [not null, default: `now()`]
+  ended_at timestamptz
+  duration_seconds int [note: 'GENERATED ALWAYS STORED']
+  usage_date date [not null, note: 'GENERATED ALWAYS STORED, Asia/Ho_Chi_Minh']
+
+  indexes {
+    (child_id, usage_date)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. CONTENT LIBRARY (Moderator quan ly)
+// ---------------------------------------------------------------------------
+
+Table eq_skills {
+  id uuid [pk, default: `gen_random_uuid()`]
+  casel_code casel_competency [unique, not null]
+  name_vi varchar(100) [not null]
+  name_en varchar(100) [not null]
+  description text [not null]
+  display_order int [not null, default: 0]
+}
+
+Table topics {
+  id uuid [pk, default: `gen_random_uuid()`]
+  title varchar(200) [not null, note: 'loi doi thuong: Con hay noi gian']
+  skill_id uuid [not null, note: 'nang luc CASEL cua bai hoc']
+  guidance text [not null, note: 'vai cau huong dan noi dung, gui kem cho AI']
+  age_min int [not null, default: 5]
+  age_max int [not null, default: 8]
+  display_order int [not null, default: 0]
+  is_active boolean [not null, default: true]
+  created_by uuid [not null, note: 'moderator']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (is_active, skill_id)
+  }
+
+  Note: 'Danh sach bai hoc do Moderator quan ly. CHECK age_min <= age_max'
+}
+
+Table backgrounds {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(120) [not null]
+  image_key varchar(300) [not null]
+  tags varchar(200)
+  is_active boolean [not null, default: true]
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Thu vien nen mac dinh, dung khi use_ai_image = false'
+}
+
+Table ui_audio_assets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  key varchar(80) [not null]
+  lang varchar(10) [not null, default: 'vi']
+  text_content text [not null]
+  audio_key varchar(300) [not null]
+
+  indexes {
+    (key, lang) [unique]
+  }
+}
+
+Table blocked_keywords {
+  id uuid [pk, default: `gen_random_uuid()`]
+  keyword varchar(100) [unique, not null]
+  severity keyword_severity [not null, default: 'block']
+  is_active boolean [not null, default: true]
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table checklist_items {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(40) [unique, not null]
+  description text [not null, note: '7 nguyen tac su pham']
+  display_order int [not null, default: 0]
+  is_active boolean [not null, default: true]
+}
+
+
+// ---------------------------------------------------------------------------
+// 3. STORIES
+// ---------------------------------------------------------------------------
+
+Table stories {
+  id uuid [pk, default: `gen_random_uuid()`]
+  owner_id uuid [not null]
+  kind story_kind [not null, default: 'private']
+  source_story_id uuid [note: 'published: truyen rieng goc']
+  topic_id uuid [not null]
+  length story_length [not null, default: 'medium', note: 'short/medium/long: AI viet, he thong dat khung; custom: tu viet, cau truc tu do']
+  title varchar(200) [not null]
+  situation text [note: 'chuyen that phu huynh ke, luu dang token {NVx}']
+  use_ai_image boolean [not null, default: false]
+  use_tts boolean [not null, default: true]
+  status story_status [not null, default: 'draft']
+  reviewed_at timestamptz [note: 'phu huynh da luot het trang va diem dung']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    (owner_id, kind)
+    topic_id
+  }
+
+  Note: '''
+  private  : truyen phu huynh tao cho con minh, sua tu do
+  published: ban sao da go ca nhan hoa de ban; dong bang sau khi duyet
+  CHECK: kind <> published OR source_story_id IS NOT NULL
+  Chi dua vao gia sach khi reviewed_at IS NOT NULL
+  Truyen custom (validator khi luu): 4-20 trang, 0-6 diem dung co cham,
+    khong dat sau trang 1, reflection chi o cuoi
+  '''
+}
+
+Table story_characters {
+  story_id uuid [not null]
+  token varchar(10) [not null, note: '{NV1}, {NV2}...']
+  character_id uuid [note: 'truyen private: nhan vat gia dinh']
+  alias_name varchar(100) [note: 'truyen published: ten chung nguoi ban dat']
+  is_main boolean [not null, default: false]
+
+  indexes {
+    (story_id, token) [pk]
+    character_id
+  }
+
+  Note: '''
+  CHECK: (character_id IS NOT NULL) <> (alias_name IS NOT NULL)
+  Partial unique: UNIQUE (story_id) WHERE is_main
+  '''
+}
+
+Table story_scenes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  story_id uuid [not null]
+  scene_order int [not null]
+  description text [not null, note: 'mo ta canh tieng Anh, khong ten rieng']
+  image_key varchar(300) [note: 'khi use_ai_image = true']
+  background_id uuid [note: 'khi use_ai_image = false']
+  image_status generation_status [not null, default: 'none']
+
+  indexes {
+    (story_id, scene_order) [unique]
+  }
+
+  Note: 'Toi da 4 canh moi truyen; cac trang cung canh dung chung mot tranh'
+}
+
+Table story_pages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  story_id uuid [not null]
+  page_order int [not null]
+  scene_id uuid [not null]
+  content_text text [note: 'luu dang token {NVx}']
+  ai_original_text text [note: 'ban AI goc, de gan co AI chua chinh sua']
+  origin content_origin [not null, default: 'human']
+  audio_key varchar(300)
+  audio_status generation_status [not null, default: 'none']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (story_id, page_order) [unique]
+    scene_id
+  }
+}
+
+Table story_checkpoints {
+  id uuid [pk, default: `gen_random_uuid()`]
+  story_id uuid [not null]
+  after_page_id uuid [not null]
+  type checkpoint_type [not null]
+  target_token varchar(10) [note: 'bat buoc voi emotion_other, perspective']
+  question text
+  answer_emotion emotion [note: 'chi emotion_self / emotion_other']
+  hint text [note: 'noi khi tre chon sai lan dau; khong co voi problem_solving, reflection']
+  origin content_origin [not null, default: 'human']
+  question_audio_key varchar(300)
+  hint_audio_key varchar(300)
+
+  indexes {
+    after_page_id [unique, note: 'moi trang toi da 1 diem dung ngay sau no']
+    story_id
+  }
+
+  Note: '''
+  short/medium/long: kieu va vi tri do he thong dat; custom: nguoi viet tu dat.
+  CHECK: type IN (emotion_self, emotion_other) = (answer_emotion IS NOT NULL)
+  CHECK: type IN (emotion_other, perspective) = (target_token IS NOT NULL)
+  '''
+}
+
+Table checkpoint_options {
+  id uuid [pk, default: `gen_random_uuid()`]
+  checkpoint_id uuid [not null]
+  option_order int [not null]
+  text text
+  role option_role [note: 'chi problem_solving: vai do khung quy dinh']
+  is_correct boolean [note: 'chi perspective']
+  feedback text [note: 'chi problem_solving: cau he qua ngan']
+  text_audio_key varchar(300)
+  feedback_audio_key varchar(300)
+
+  indexes {
+    (checkpoint_id, option_order) [unique]
+  }
+
+  Note: '''
+  perspective    : dung 3 phuong an, dung 1 phuong an is_correct = true
+  problem_solving: dung 3 phuong an, du 3 role, moi role mot lan
+  Thu tu hien thi xao ngau nhien o frontend, option_order chi de luu tru
+  '''
+}
+
+Table bookshelf_items {
+  child_id uuid [not null]
+  story_id uuid [not null]
+  added_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (child_id, story_id) [pk]
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// 4. LEARNING
+// ---------------------------------------------------------------------------
+
+Table play_sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  child_id uuid [not null]
+  story_id uuid [not null]
+  is_first_play boolean [not null, note: 'chi lan choi dau duoc tinh diem EQ']
+  status play_status [not null, default: 'in_progress']
+  current_page_id uuid
+  started_at timestamptz [not null, default: `now()`]
+  last_activity_at timestamptz [not null, default: `now()`]
+  completed_at timestamptz
+
+  indexes {
+    (child_id, status)
+    (story_id, status)
+  }
+
+  Note: 'Partial unique: UNIQUE (child_id, story_id) WHERE is_first_play'
+}
+
+Table checkpoint_answers {
+  id bigserial [pk]
+  session_id uuid [not null]
+  checkpoint_id uuid [not null]
+  first_emotion emotion [note: 'lan chon dau, cau cam xuc']
+  first_option_id uuid [note: 'lan chon dau, cau co phuong an']
+  final_emotion emotion [note: 'sau goi y (neu co)']
+  final_option_id uuid
+  attempts int [not null, default: 1, note: 'CHECK BETWEEN 1 AND 2']
+  skipped boolean [not null, default: false]
+  time_to_first_ms int
+  question_replays int [not null, default: 0]
+  skill_id uuid [note: 'SNAPSHOT nang luc tinh diem; NULL voi reflection']
+  score numeric(3,2) [note: 'SNAPSHOT diem lan chon dau: 0 / 0.5 / 1; NULL neu skipped hoac reflection']
+  answered_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (session_id, checkpoint_id) [unique]
+    (skill_id, answered_at)
+  }
+
+  Note: '''
+  skill_id / score tinh ngay luc tra loi va dong bang:
+    emotion_self -> Tu nhan thuc; emotion_other, perspective -> Nhan thuc xa hoi;
+    problem_solving -> nang luc cua topic (constructive 1, avoidant 0.5, impulsive 0)
+  Doi topic hay doi cach cham ve sau khong lam thay doi lich su.
+  '''
+}
+
+Table eq_competency_stats {
+  child_id uuid [not null]
+  skill_id uuid [not null]
+  items int [not null, default: 0]
+  score_sum numeric(8,2) [not null, default: 0]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (child_id, skill_id) [pk]
+  }
+
+  Note: '''
+  CACHE toan bo lich su, chi tinh tu checkpoint_answers cua lan choi dau, khong skipped.
+  Diem = score_sum / items * 100; hien "chua du du lieu" khi items < 5.
+  Bieu do theo thang: truy van truc tiep checkpoint_answers theo answered_at.
+  Cron doi soat hang dem tinh lai tu du lieu goc.
+  '''
+}
+
+
+// ---------------------------------------------------------------------------
+// 5. AI
+// ---------------------------------------------------------------------------
+
+Table prompt_templates {
+  id uuid [pk, default: `gen_random_uuid()`]
+  request_type ai_request_type [not null]
+  version varchar(30) [not null]
+  template_text text [not null]
+  model_name varchar(100) [not null]
+  is_active boolean [not null, default: false]
+  activated_at timestamptz
+  created_by uuid [not null, note: 'admin']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (request_type, version) [unique]
+  }
+
+  Note: 'Partial unique: UNIQUE (request_type) WHERE is_active'
+}
+
+Table ai_requests {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  request_type ai_request_type [not null]
+  story_id uuid
+  page_id uuid
+  checkpoint_id uuid
+  scene_id uuid
+  character_id uuid
+  prompt_template_id uuid
+  provider varchar(40) [not null, default: 'mock']
+  model_name varchar(100)
+  status ai_request_status [not null, default: 'queued']
+  credits_charged int [not null, default: 0]
+  input_tokens int
+  output_tokens int
+  output_units int [note: 'so anh / so giay audio']
+  provider_cost_micros bigint [not null, default: 0]
+  attempts int [not null, default: 0]
+  locked_at timestamptz [note: 'bang nay kiem luon hang doi tac vu nen']
+  error_message text
+  idempotency_key varchar(120) [unique, not null]
+  created_at timestamptz [not null, default: `now()`]
+  finished_at timestamptz
+
+  indexes {
+    (status, created_at)
+    (user_id, created_at)
+    story_id
+  }
+
+  Note: '''
+  credits_charged = don gia trong platform_settings (ai_cost.<type>) luc giu credit.
+  That bai -> hoan credit (credit_release). CHECK: attempts <= 3
+  '''
+}
+
+
+// ---------------------------------------------------------------------------
+// 6. MARKETPLACE
+// ---------------------------------------------------------------------------
+
+Table seller_profiles {
+  user_id uuid [pk]
+  display_name varchar(100) [not null, note: 'biet danh cong khai']
+  bio text
+  expertise text
+  status seller_status [not null, default: 'pending']
+  reviewed_by uuid
+  reviewed_at timestamptz
+  bank_name varchar(100)
+  bank_account_number varchar(255) [note: 'ma hoa khi luu']
+  bank_account_holder varchar(150)
+  bank_updated_at timestamptz [note: 'chan rut tien 24 gio sau khi doi']
+  total_sales int [not null, default: 0]
+  rating_avg numeric(3,2)
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table price_tiers {
+  id uuid [pk, default: `gen_random_uuid()`]
+  label varchar(50) [not null]
+  price_vnd bigint [unique, not null]
+  is_active boolean [not null, default: true]
+}
+
+Table listings {
+  id uuid [pk, default: `gen_random_uuid()`]
+  seller_id uuid [not null]
+  published_story_id uuid [unique, not null, note: 'stories.kind = published']
+  previous_listing_id uuid [note: 'phien ban truoc']
+  title varchar(200) [not null]
+  description text
+  cover_image_key varchar(300)
+  price_tier_id uuid [not null]
+  status listing_status [not null, default: 'submitted']
+  has_ai_content boolean [not null, default: false, note: 'nhan co AI ho tro']
+  purchase_count int [not null, default: 0]
+  free_claim_count int [not null, default: 0]
+  rating_avg numeric(3,2)
+  rating_count int [not null, default: 0]
+  submitted_at timestamptz [not null, default: `now()`]
+  published_at timestamptz
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (status, published_at)
+    seller_id
+  }
+
+  Note: 'Bo dem cap nhat trong cung transaction + cron doi soat hang dem'
+}
+
+Table cart_items {
+  parent_id uuid [not null]
+  listing_id uuid [not null]
+  added_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (parent_id, listing_id) [pk]
+  }
+}
+
+Table entitlements {
+  id uuid [pk, default: `gen_random_uuid()`]
+  parent_id uuid [not null]
+  listing_id uuid [not null]
+  order_item_id uuid [not null, note: 'moi quyen deu den tu mot don; truyen mien phi = don 0d']
+  granted_at timestamptz [not null, default: `now()`]
+  revoked_at timestamptz
+
+  indexes {
+    parent_id
+  }
+
+  Note: 'Partial unique: UNIQUE (parent_id, listing_id) WHERE revoked_at IS NULL'
+}
+
+Table product_reviews {
+  id uuid [pk, default: `gen_random_uuid()`]
+  listing_id uuid [not null]
+  parent_id uuid [not null]
+  rating int [not null]
+  comment text
+  hidden_at timestamptz [note: 'NULL = dang hien; an thi khong tinh vao diem']
+  hidden_by uuid
+  seller_reply text [note: 'nguoi ban phan hoi mot lan']
+  seller_replied_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (listing_id, parent_id) [unique]
+    (listing_id, hidden_at)
+  }
+
+  Note: 'CHECK rating BETWEEN 1 AND 5. Chi nguoi da mua va con da nghe het moi duoc danh gia'
+}
+
+Table product_review_tags {
+  review_id uuid [not null]
+  tag review_tag [not null]
+
+  indexes {
+    (review_id, tag) [pk]
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// 7. COMMERCE & WALLET
+// ---------------------------------------------------------------------------
+
+Table plans {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(40) [unique, not null]
+  name varchar(100) [not null]
+  duration_months int [not null, note: '1 = goi thang, 12 = goi nam']
+  price_vnd bigint [not null]
+  credits_per_month int [not null, note: 'cap moi thang, ke ca goi nam']
+  max_children int [not null]
+  max_characters int [not null]
+  can_sell boolean [not null, default: false]
+  is_active boolean [not null, default: true]
+}
+
+Table subscriptions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  parent_id uuid [not null]
+  plan_id uuid [not null]
+  order_item_id uuid
+  period_start timestamptz [not null]
+  period_end timestamptz [not null]
+  next_credit_grant_at timestamptz [not null, note: 'cron cap credit thang tiep theo']
+  status subscription_status [not null, default: 'active']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (parent_id, status)
+    (status, period_end)
+  }
+
+  Note: '''
+  Tra truoc, gia han thu cong. Partial unique: UNIQUE (parent_id) WHERE status = active
+  Cron hang ngay: toi next_credit_grant_at -> credit_expire phan con lai, credit_grant thang moi.
+  Nang goi giua ky: ky moi bat dau ngay, cap du credit goi moi, credit con lai giu mot lan.
+  Goi Mien phi cung la mot dong subscriptions.
+  '''
+}
+
+Table vouchers {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar(40) [unique, not null]
+  discount_type voucher_discount_type [not null]
+  value bigint [not null]
+  max_discount_vnd bigint
+  min_order_vnd bigint [not null, default: 0]
+  starts_at timestamptz [not null]
+  ends_at timestamptz [not null]
+  usage_limit int
+  per_user_limit int [not null, default: 1]
+  used_count int [not null, default: 0]
+  is_active boolean [not null, default: true]
+  created_by uuid [not null]
+
+  Note: 'Voucher do nen tang chiu: doanh thu nguoi ban tinh tren gia niem yet'
+}
+
+Table orders {
+  id uuid [pk, default: `gen_random_uuid()`]
+  buyer_id uuid [not null]
+  voucher_id uuid
+  subtotal_vnd bigint [not null]
+  discount_vnd bigint [not null, default: 0]
+  total_vnd bigint [not null]
+  status order_status [not null, default: 'pending']
+  payos_order_code bigint [unique, note: 'NULL voi don 0d (nhan truyen mien phi)']
+  payos_payment_link_id varchar(100)
+  payos_transaction_id varchar(100) [unique]
+  paid_at timestamptz
+  expires_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (buyer_id, created_at)
+    (status, expires_at)
+  }
+
+  Note: '''
+  Webhook: UPDATE ... SET status = paid WHERE id = ? AND status = pending
+  CHECK: total_vnd = 0 OR payos_order_code IS NOT NULL
+  Don 0d: tao xong chuyen paid ngay, khong goi payOS
+  '''
+}
+
+Table order_items {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_id uuid [not null]
+  item_type order_item_type [not null]
+  plan_id uuid
+  listing_id uuid
+  unit_price_vnd bigint [not null, note: 'SNAPSHOT']
+  seller_share_rate numeric(4,3) [note: 'SNAPSHOT, chi listing']
+  seller_amount_vnd bigint [note: 'SNAPSHOT, chi listing']
+  status order_item_status [not null, default: 'active']
+
+  indexes {
+    order_id
+    listing_id
+  }
+
+  Note: '''
+  CHECK exclusive arc: plan -> plan_id; listing -> listing_id + seller_share_rate + seller_amount_vnd
+  Hoan tien chi ap dung khi unit_price_vnd > 0
+  '''
+}
+
+Table voucher_usages {
+  voucher_id uuid [not null]
+  order_id uuid [not null]
+  user_id uuid [not null]
+  used_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (voucher_id, order_id) [pk]
+    (voucher_id, user_id)
+  }
+}
+
+Table refund_requests {
+  id uuid [pk, default: `gen_random_uuid()`]
+  order_item_id uuid [unique, not null]
+  requester_id uuid [not null]
+  reason text [not null]
+  status request_status [not null, default: 'pending']
+  handled_by uuid [note: 'admin']
+  handled_at timestamptz
+  bank_transaction_ref varchar(100)
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'Chi trong 7 ngay ke tu paid_at'
+}
+
+Table webhook_logs {
+  id bigserial [pk]
+  provider varchar(30) [not null, default: 'payos']
+  payos_order_code bigint
+  payload jsonb [not null]
+  signature_valid boolean [not null]
+  processed boolean [not null, default: false]
+  error_message text
+  received_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    payos_order_code
+  }
+}
+
+Table wallets {
+  user_id uuid [pk]
+  credit_balance int [not null, default: 0]
+  earning_pending_vnd bigint [not null, default: 0]
+  earning_available_vnd bigint [not null, default: 0]
+  earning_locked_vnd bigint [not null, default: 0]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: '''
+  CHECK moi cot >= 0. Cap nhat bang SELECT ... FOR UPDATE.
+  Bat bien: moi so du = tong wallet_ledger tuong ung.
+  Credit chi den tu goi, het han cuoi thang, khong doi ra tien, khong chuyen tu doanh thu.
+  '''
+}
+
+Table wallet_ledger {
+  id bigserial [pk]
+  user_id uuid [not null]
+  wallet_type wallet_type [not null]
+  entry_type ledger_entry_type [not null]
+  amount bigint [not null, note: 'co dau']
+  balance_after bigint [not null]
+  available_at timestamptz [note: 'earning_pending: thoi diem duoc chuyen kha dung (+7 ngay)']
+  idempotency_key varchar(120) [unique, not null]
+  ref_type varchar(50) [note: 'subscription | order_item | ai_request | withdrawal']
+  ref_id uuid
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, wallet_type, created_at)
+    (ref_type, ref_id)
+    (entry_type, available_at)
+  }
+
+  Note: 'APPEND-ONLY. REVOKE UPDATE, DELETE'
+}
+
+Table withdrawal_requests {
+  id uuid [pk, default: `gen_random_uuid()`]
+  seller_id uuid [not null]
+  amount_vnd bigint [not null]
+  bank_snapshot jsonb [not null]
+  status withdrawal_status [not null, default: 'requested']
+  handled_by uuid [note: 'admin']
+  handled_at timestamptz
+  bank_transaction_ref varchar(100)
+  reject_reason text
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (status, created_at)
+    seller_id
+  }
+
+  Note: '''
+  CHECK amount_vnd >= muc toi thieu (platform_settings)
+  Partial unique: UNIQUE (seller_id) WHERE status = requested
+  '''
+}
+
+Table platform_settings {
+  key varchar(60) [pk, note: 'commission_rate | holding_days | min_withdrawal | report_threshold | ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*']
+  value jsonb [not null]
+  updated_by uuid [not null]
+  updated_at timestamptz [not null, default: `now()`]
+}
+
+
+// ---------------------------------------------------------------------------
+// 8. MODERATION & MONITORING
+// ---------------------------------------------------------------------------
+
+Table moderation_reviews {
+  id uuid [pk, default: `gen_random_uuid()`]
+  listing_id uuid [not null]
+  review_type moderation_review_type [not null]
+  moderator_id uuid
+  claimed_at timestamptz
+  claim_expires_at timestamptz
+  decision moderation_decision
+  comment text
+  decided_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (decided_at, created_at)
+    listing_id
+  }
+
+  Note: 'Chi quyet dinh approved khi da xem 100% trang va tick du checklist'
+}
+
+Table review_checklist_results {
+  review_id uuid [not null]
+  checklist_item_id uuid [not null]
+  passed boolean [not null]
+
+  indexes {
+    (review_id, checklist_item_id) [pk]
+  }
+}
+
+Table review_page_views {
+  review_id uuid [not null]
+  page_id uuid [not null]
+  viewed_at timestamptz [not null, default: `now()`]
+  comment text [note: 'nhan xet gan vao trang (bao gom diem dung ngay sau trang)']
+
+  indexes {
+    (review_id, page_id) [pk]
+  }
+}
+
+Table content_reports {
+  id uuid [pk, default: `gen_random_uuid()`]
+  reporter_id uuid [not null]
+  listing_id uuid
+  page_id uuid
+  product_review_id uuid
+  category report_category [not null]
+  description text
+  status report_status [not null, default: 'open']
+  handled_by uuid
+  handled_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (status, created_at)
+    (listing_id, created_at)
+  }
+
+  Note: '''
+  CHECK: dung mot trong listing_id / product_review_id
+  Partial unique: UNIQUE (reporter_id, listing_id) WHERE listing_id IS NOT NULL
+  Tu tam go: >= N nguoi bao cao khac nhau trong 24 gio -> listing suspended
+  '''
+}
+
+Table creator_strikes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  seller_id uuid [not null]
+  source strike_source [not null]
+  source_id uuid
+  reason text [not null]
+  issued_by uuid [not null]
+  issued_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz [not null, note: '+90 ngay']
+  revoked_at timestamptz
+
+  indexes {
+    (seller_id, expires_at)
+  }
+
+  Note: '3 canh cao con hieu luc -> seller_profiles.status = suspended'
+}
+
+Table strike_appeals {
+  id uuid [pk, default: `gen_random_uuid()`]
+  strike_id uuid [unique, not null]
+  reason text [not null]
+  status request_status [not null, default: 'pending']
+  decided_by uuid [note: 'admin, khac nguoi ra canh cao']
+  decided_at timestamptz
+  decision_note text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table admin_audit_logs {
+  id bigserial [pk]
+  actor_id uuid [not null]
+  action varchar(100) [not null]
+  target_type varchar(50)
+  target_id uuid
+  before_state jsonb
+  after_state jsonb
+  ip_address inet
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (actor_id, created_at)
+    (target_type, target_id)
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// FOREIGN KEYS
+// ---------------------------------------------------------------------------
+
+Ref: auth_tokens.user_id > users.id [delete: cascade]
+Ref: auth_tokens.replaced_by_id > auth_tokens.id [delete: set null]
+Ref: auth_tokens.child_id > child_profiles.id [delete: cascade]
+Ref: child_profiles.parent_id > users.id [delete: restrict]
+Ref: characters.parent_id > users.id [delete: restrict]
+Ref: child_usage_sessions.child_id > child_profiles.id [delete: cascade]
+
+Ref: backgrounds.created_by > users.id [delete: restrict]
+Ref: blocked_keywords.created_by > users.id [delete: restrict]
+
+Ref: stories.owner_id > users.id [delete: restrict]
+Ref: stories.source_story_id > stories.id [delete: set null]
+Ref: characters.child_id - child_profiles.id [delete: set null]
+Ref: topics.skill_id > eq_skills.id [delete: restrict]
+Ref: topics.created_by > users.id [delete: restrict]
+Ref: stories.topic_id > topics.id [delete: restrict]
+Ref: story_characters.story_id > stories.id [delete: cascade]
+Ref: story_characters.character_id > characters.id [delete: set null]
+Ref: story_scenes.story_id > stories.id [delete: cascade]
+Ref: story_scenes.background_id > backgrounds.id [delete: restrict]
+Ref: story_pages.story_id > stories.id [delete: cascade]
+Ref: story_pages.scene_id > story_scenes.id [delete: restrict]
+Ref: story_checkpoints.story_id > stories.id [delete: cascade]
+Ref: story_checkpoints.after_page_id - story_pages.id [delete: cascade]
+Ref: checkpoint_options.checkpoint_id > story_checkpoints.id [delete: cascade]
+Ref: checkpoint_answers.session_id > play_sessions.id [delete: cascade]
+Ref: checkpoint_answers.checkpoint_id > story_checkpoints.id [delete: restrict]
+Ref: checkpoint_answers.first_option_id > checkpoint_options.id [delete: restrict]
+Ref: checkpoint_answers.final_option_id > checkpoint_options.id [delete: restrict]
+Ref: checkpoint_answers.skill_id > eq_skills.id [delete: restrict]
+Ref: eq_competency_stats.child_id > child_profiles.id [delete: cascade]
+Ref: eq_competency_stats.skill_id > eq_skills.id [delete: restrict]
+Ref: ai_requests.checkpoint_id > story_checkpoints.id [delete: set null]
+Ref: ai_requests.scene_id > story_scenes.id [delete: set null]
+Ref: bookshelf_items.child_id > child_profiles.id [delete: cascade]
+Ref: bookshelf_items.story_id > stories.id [delete: cascade]
+
+Ref: play_sessions.child_id > child_profiles.id [delete: restrict]
+Ref: play_sessions.story_id > stories.id [delete: restrict]
+Ref: play_sessions.current_page_id > story_pages.id [delete: set null]
+
+Ref: prompt_templates.created_by > users.id [delete: restrict]
+Ref: ai_requests.user_id > users.id [delete: restrict]
+Ref: ai_requests.story_id > stories.id [delete: set null]
+Ref: ai_requests.page_id > story_pages.id [delete: set null]
+Ref: ai_requests.character_id > characters.id [delete: set null]
+Ref: ai_requests.prompt_template_id > prompt_templates.id [delete: set null]
+
+Ref: seller_profiles.user_id - users.id [delete: restrict]
+Ref: seller_profiles.reviewed_by > users.id [delete: set null]
+Ref: listings.seller_id > seller_profiles.user_id [delete: restrict]
+Ref: listings.published_story_id - stories.id [delete: restrict]
+Ref: listings.previous_listing_id > listings.id [delete: set null]
+Ref: listings.price_tier_id > price_tiers.id [delete: restrict]
+Ref: cart_items.parent_id > users.id [delete: cascade]
+Ref: cart_items.listing_id > listings.id [delete: cascade]
+Ref: entitlements.parent_id > users.id [delete: restrict]
+Ref: entitlements.listing_id > listings.id [delete: restrict]
+Ref: entitlements.order_item_id > order_items.id [delete: set null]
+Ref: product_reviews.listing_id > listings.id [delete: cascade]
+Ref: product_reviews.parent_id > users.id [delete: restrict]
+Ref: product_reviews.hidden_by > users.id [delete: set null]
+Ref: product_review_tags.review_id > product_reviews.id [delete: cascade]
+
+Ref: subscriptions.parent_id > users.id [delete: restrict]
+Ref: subscriptions.plan_id > plans.id [delete: restrict]
+Ref: subscriptions.order_item_id > order_items.id [delete: set null]
+Ref: vouchers.created_by > users.id [delete: restrict]
+Ref: orders.buyer_id > users.id [delete: restrict]
+Ref: orders.voucher_id > vouchers.id [delete: restrict]
+Ref: order_items.order_id > orders.id [delete: cascade]
+Ref: order_items.plan_id > plans.id [delete: restrict]
+Ref: order_items.listing_id > listings.id [delete: restrict]
+Ref: voucher_usages.voucher_id > vouchers.id [delete: restrict]
+Ref: voucher_usages.order_id > orders.id [delete: cascade]
+Ref: voucher_usages.user_id > users.id [delete: restrict]
+Ref: refund_requests.order_item_id - order_items.id [delete: restrict]
+Ref: refund_requests.requester_id > users.id [delete: restrict]
+Ref: refund_requests.handled_by > users.id [delete: set null]
+Ref: wallets.user_id - users.id [delete: restrict]
+Ref: wallet_ledger.user_id > users.id [delete: restrict]
+Ref: withdrawal_requests.seller_id > seller_profiles.user_id [delete: restrict]
+Ref: withdrawal_requests.handled_by > users.id [delete: set null]
+Ref: platform_settings.updated_by > users.id [delete: restrict]
+
+Ref: moderation_reviews.listing_id > listings.id [delete: cascade]
+Ref: moderation_reviews.moderator_id > users.id [delete: set null]
+Ref: review_checklist_results.review_id > moderation_reviews.id [delete: cascade]
+Ref: review_checklist_results.checklist_item_id > checklist_items.id [delete: restrict]
+Ref: review_page_views.review_id > moderation_reviews.id [delete: cascade]
+Ref: review_page_views.page_id > story_pages.id [delete: cascade]
+Ref: content_reports.reporter_id > users.id [delete: restrict]
+Ref: content_reports.listing_id > listings.id [delete: cascade]
+Ref: content_reports.page_id > story_pages.id [delete: set null]
+Ref: content_reports.product_review_id > product_reviews.id [delete: cascade]
+Ref: content_reports.handled_by > users.id [delete: set null]
+Ref: creator_strikes.seller_id > seller_profiles.user_id [delete: restrict]
+Ref: creator_strikes.issued_by > users.id [delete: restrict]
+Ref: strike_appeals.strike_id - creator_strikes.id [delete: cascade]
+Ref: strike_appeals.decided_by > users.id [delete: set null]
+Ref: admin_audit_logs.actor_id > users.id [delete: restrict]
+
+
+// ---------------------------------------------------------------------------
+// TABLE GROUPS
+// ---------------------------------------------------------------------------
+
+TableGroup accounts {
+  users
+  auth_tokens
+  child_profiles
+  characters
+  child_usage_sessions
+}
+
+TableGroup content_library {
+  eq_skills
+  topics
+  backgrounds
+  ui_audio_assets
+  blocked_keywords
+  checklist_items
+}
+
+TableGroup stories_group {
+  stories
+  story_characters
+  story_scenes
+  story_pages
+  story_checkpoints
+  checkpoint_options
+  bookshelf_items
+}
+
+TableGroup learning {
+  play_sessions
+  checkpoint_answers
+  eq_competency_stats
+}
+
+TableGroup ai {
+  prompt_templates
+  ai_requests
+}
+
+TableGroup marketplace {
+  seller_profiles
+  price_tiers
+  listings
+  cart_items
+  entitlements
+  product_reviews
+  product_review_tags
+}
+
+TableGroup commerce {
+  plans
+  subscriptions
+  vouchers
+  orders
+  order_items
+  voucher_usages
+  refund_requests
+  webhook_logs
+  wallets
+  wallet_ledger
+  withdrawal_requests
+  platform_settings
+}
+
+TableGroup moderation {
+  moderation_reviews
+  review_checklist_results
+  review_page_views
+  content_reports
+  creator_strikes
+  strike_appeals
+  admin_audit_logs
+}

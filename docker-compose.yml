@@ -1,0 +1,105 @@
+# =============================================================================
+# StoryWeaver AI — backend (dev/prod-like)
+#
+# Supabase la DB dam may nen KHONG co container Postgres o day. Migration chay
+# tu may dev len Supabase (`npm run db:migrate` trong api).
+#
+# Moi service khai bao TUONG MINH bien moi truong no duoc nhan, thay vi dung
+# `env_file: .env` mot dong. Lam vay thi container `ai` se nhan luon
+# DATABASE_URL va JWT_SECRET — pha bien "Python chi duoc dung Storage". Bang
+# duoi day vua la cau hinh vua la tai lieu kien truc: doc la biet ai duoc lam gi.
+# =============================================================================
+
+name: storyweaver
+
+services:
+  redis:
+    image: redis:7-alpine
+    # appendonly: job dang cho trong queue khong mat khi restart Redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---- HTTP API: khong duoc goi ai truc tiep ----------------------
+  api:
+    build:
+      context: ./api
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL:?can DATABASE_URL trong .env o root}
+      DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
+      JWT_SECRET: ${JWT_SECRET:?can JWT_SECRET trong .env o root}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      REDIS_URL: redis://redis:6379
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-StoryWeaver AI}
+      # CO Y khong co AI_SERVICE_URL: moi yeu cau sinh noi dung phai qua queue.
+    ports:
+      - "3000:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- BullMQ worker: CUNG image voi api, khac command --------------------
+  worker:
+    build:
+      context: ./api
+    command: ["node", "src/worker.js"]
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL:?can DATABASE_URL trong .env o root}
+      DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
+      REDIS_URL: redis://redis:6379
+      AI_SERVICE_URL: http://ai:8000
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-12000}
+      AI_JOB_ATTEMPTS: ${AI_JOB_ATTEMPTS:-3}
+      AI_WORKER_CONCURRENCY: ${AI_WORKER_CONCURRENCY:-3}
+      # CO Y khong co JWT_SECRET / BREVO_*: worker khong xu ly request cua user.
+    healthcheck:
+      # GHI DE healthcheck thua huong tu Dockerfile (curl :3000): worker khong
+      # chay HTTP server nen check do khong bao gio pass. Worker song = ping
+      # duoc Redis.
+      test: ["CMD", "node", "src/healthcheck.worker.js"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      redis:
+        condition: service_healthy
+      ai:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- AI inference: `expose` chu KHONG `ports` ---------------------------
+  ai:
+    build:
+      context: ./ai
+    environment:
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      SUPABASE_BUCKET: ${SUPABASE_BUCKET:-story-assets}
+      # CO Y khong co DATABASE_URL / JWT_SECRET: service nay khong duoc doc DB.
+    expose:
+      # Chi service trong network cua compose goi duoc. Khong ai tu host hay LAN
+      # choc truc tiep vao endpoint sinh noi dung duoc.
+      - "8000"
+    restart: unless-stopped
+
+volumes:
+  redis-data:

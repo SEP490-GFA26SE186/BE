@@ -1,0 +1,38 @@
+# =============================================================================
+# Cau hinh DEV — bind mount + hot reload + mo cong 8000 cua service ai.
+#
+# File nay KHONG duoc Compose tu doc (co y: chi `docker-compose.override.yml`
+# moi duoc auto-merge). Phai truyen tuong minh:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Nho vay `docker compose up` mac dinh chay GIONG PRODUCTION, khong the vo tinh
+# deploy kem hot reload hay kem cong 8000 mo ra ngoai.
+#
+# Luat gop: `command` bi THAY THE, con `volumes` va `ports` duoc NOI THEM.
+# =============================================================================
+
+services:
+  api:
+    command: ["npm", "run", "dev"]
+    volumes:
+      # Chi mount source, KHONG mount ca thu muc: mount ./api:/app se
+      # che mat node_modules da cai trong image.
+      - ./api/src:/app/src
+      - ./api/prisma:/app/prisma
+      - ./api/scripts:/app/scripts
+
+  worker:
+    command: ["npm", "run", "worker:dev"]
+    volumes:
+      - ./api/src:/app/src
+      - ./api/prisma:/app/prisma
+      - ./api/scripts:/app/scripts
+
+  ai:
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./ai/app:/app/app
+    ports:
+      # Mo ra host CHI trong dev, de goi thang bang curl khi debug.
+      - "8000:8000"
