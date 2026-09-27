@@ -5,14 +5,16 @@ __pycache__/
 *.py[cod]
 
 # ---- prisma generated client ----
-services/api/src/generated/
+api/src/generated/
 
 # ---- environment (KHONG commit secrets) ----
 .env
 .env.local
 .env.production
-services/*/.env
-services/*/.env.local
+api/.env
+api/.env.local
+ai/.env
+ai/.env.local
 
 # ---- build output ----
 dist/

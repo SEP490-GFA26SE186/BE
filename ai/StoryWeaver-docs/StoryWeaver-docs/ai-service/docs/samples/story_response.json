@@ -1,0 +1,95 @@
+{
+  "request_id": "0f6c2d1e-demo",
+  "pages": {
+    "p1": {
+      "scene": "s1",
+      "text": "Chiều thứ Bảy, nắng vàng chiếu qua cửa sổ phòng khách. {NV1} ngồi trên tấm thảm xanh. Chiếc xe ô tô đỏ là món đồ chơi {NV1} thích nhất. {NV1} cho xe chạy vòng vòng, miệng kêu brừm brừm."
+    },
+    "p2": {
+      "scene": "s1",
+      "text": "{NV2} lon ton chạy tới. {NV2} chìa tay giật lấy chiếc xe đỏ. Mặt {NV1} nóng bừng lên. Hai tay {NV1} nắm chặt, miệng mím lại. {NV1} nhìn chiếc xe trong tay em, không nói được lời nào."
+    },
+    "p3": {
+      "scene": "s1",
+      "text": "{NV1} chạy tới, giật mạnh chiếc xe lại. {NV2} mất thăng bằng, ngã ngồi xuống thảm. Một bánh xe nhỏ văng ra, lăn vào gầm ghế. {NV1} đứng im, hai tay vẫn ôm chặt chiếc xe. Chiếc xe bây giờ chỉ còn ba bánh."
+    },
+    "p4": {
+      "scene": "s1",
+      "text": "{NV2} oà khóc thật to. Nước mắt chảy dài trên má em. {NV1} ôm chiếc xe, tim đập thình thịch. Cả phòng chỉ còn tiếng khóc của {NV2}. {NV2} chỉ tay về phía chiếc xe, rồi nhìn xuống đầu gối đang đỏ lên."
+    },
+    "p5": {
+      "scene": "s2",
+      "text": "{NV3} nghe tiếng khóc, bước ra từ bếp. {NV3} nhìn {NV2}, rồi nhìn {NV1}. {NV1} vẫn còn thấy nóng trong người. {NV1} muốn làm gì đó ngay bây giờ. {NV3} không nói gì, chỉ ngồi xuống chờ. Cả nhà đều đang chờ xem {NV1} sẽ làm gì."
+    },
+    "p6": {
+      "scene": "s2",
+      "text": "{NV3} ngồi xuống cạnh hai anh em. {NV3} ôm {NV1} vào lòng. {NV1} nói nhỏ: con giận vì em lấy xe của con. {NV3} gật đầu và xoa lưng {NV1}. {NV1} thấy trong lòng nhẹ đi một chút. {NV2} cũng thôi khóc to."
+    },
+    "p7": {
+      "scene": "s3",
+      "text": "{NV1} nhặt bánh xe nhỏ dưới gầm ghế. {NV1} lắp bánh xe vào lại. Rồi {NV1} quay sang em: mình cùng chơi nhé, em lái trước một vòng. {NV2} lau nước mắt, rụt rè đưa tay ra. {NV1} đặt chiếc xe vào tay em."
+    },
+    "p8": {
+      "scene": "s3",
+      "text": "{NV2} ngừng khóc, cười toe. Chiếc xe đỏ chạy vòng vòng, lúc em lái, lúc anh lái. Tối đó, {NV1} kể với {NV3}: hôm nay con giận nhiều lắm. Nhưng rồi cơn giận cũng qua."
+    }
+  },
+  "scenes": {
+    "s1": "cozy Vietnamese living room, afternoon sunlight, blue rug, red toy car",
+    "s2": "same living room, mother kneeling beside two young brothers",
+    "s3": "two young brothers happily playing with a red toy car on a blue rug"
+  },
+  "checkpoints": {
+    "k1": {
+      "type": "emotion_self",
+      "question": "Con nghĩ {NV1} đang cảm thấy thế nào?",
+      "answer": "angry",
+      "hint": "Mặt {NV1} nóng bừng, hai tay nắm chặt kìa."
+    },
+    "k2": {
+      "type": "perspective",
+      "question": "Vì sao {NV2} khóc?",
+      "options": {
+        "o1": "Vì {NV2} bị mất xe và bị ngã",
+        "o2": "Vì {NV2} buồn ngủ",
+        "o3": "Vì {NV2} muốn ăn kẹo"
+      },
+      "answer": "o1",
+      "hint": "Nhớ lại lúc {NV1} giật xe nhé."
+    },
+    "k3": {
+      "type": "problem_solving",
+      "question": "Nếu là {NV1}, con sẽ làm gì?",
+      "options": {
+        "constructive": {
+          "text": "Hít thật sâu rồi nói với em là mình đang giận",
+          "feedback": "{NV1} hít một hơi thật sâu. Cơn nóng trong người dịu dần."
+        },
+        "avoidant": {
+          "text": "Chạy vào phòng và đóng cửa lại",
+          "feedback": "Trong phòng yên tĩnh. {NV1} bớt nóng, nhưng em vẫn khóc ngoài kia."
+        },
+        "impulsive": {
+          "text": "Hét lên bảo em im đi",
+          "feedback": "{NV2} khóc to hơn. {NV1} vẫn thấy khó chịu trong lòng."
+        }
+      }
+    },
+    "k4": {
+      "type": "reflection",
+      "question": "Con đã bao giờ thấy giận như {NV1} chưa?"
+    }
+  },
+  "warnings": [],
+  "prompt_version": "story.v1",
+  "usage": {
+    "provider": "gemini",
+    "model": "<GEMINI_TEXT_MODEL>",
+    "input_tokens": 1650,
+    "output_tokens": 1320,
+    "units": 0,
+    "estimated_cost_micros": 0,
+    "latency_ms": 8400,
+    "attempts": 1
+  }
+}

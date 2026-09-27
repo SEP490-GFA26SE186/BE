@@ -1,5 +1,8 @@
 import app from './app.js';
-import { env, prisma } from './config/index.js';
+import { env, prisma, requireEnv } from './config/index.js';
+
+// Bien chi HTTP server can (worker khong duoc cap JWT_SECRET).
+requireEnv(['JWT_SECRET']);
 
 const startServer = async () => {
   try {

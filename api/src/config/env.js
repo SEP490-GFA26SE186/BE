@@ -14,6 +14,19 @@ const env = {
     origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
   },
   appUrl: process.env.APP_URL || 'http://localhost:3000',
+  redis: {
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  },
+  ai: {
+    // URL noi bo cua ai/. CHI worker duoc dat bien nay — container
+    // `api` khong nhan no, de moi request AI buoc phai di qua queue.
+    serviceUrl: process.env.AI_SERVICE_URL,
+    internalToken: process.env.INTERNAL_TOKEN,
+    // Node cat o 12s de con cho ghi DB + day WebSocket ma van trong NFR 15s.
+    timeoutMs: parseInt(process.env.AI_TIMEOUT_MS, 10) || 12000,
+    attempts: parseInt(process.env.AI_JOB_ATTEMPTS, 10) || 3,
+    concurrency: parseInt(process.env.AI_WORKER_CONCURRENCY, 10) || 3,
+  },
   brevo: {
     apiKey: process.env.BREVO_API_KEY,
     senderEmail: process.env.BREVO_SENDER_EMAIL || 'no-reply@storyweaver.ai',
@@ -32,12 +45,24 @@ const env = {
   },
 };
 
-// Validate required env vars
-const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
-for (const varName of requiredEnvVars) {
-  if (!process.env[varName]) {
-    throw new Error(`Missing required environment variable: ${varName}`);
+/**
+ * Kiem tra cac bien moi truong bat buoc.
+ *
+ * Moi entrypoint tu khai bao bien no can, thay vi validate tap trung: container
+ * `api` va container `worker` dung chung image nhung duoc cap env KHAC nhau
+ * (xem bang trong README). Neu validate tap trung thi worker se crash vi thieu
+ * JWT_SECRET — bien ma no khong duoc phep co.
+ *
+ * @param {string[]} names
+ */
+export const requireEnv = (names) => {
+  const missing = names.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variable(s): ${missing.join(', ')}`);
   }
-}
+};
+
+// DATABASE_URL la bien duy nhat moi entrypoint deu can.
+requireEnv(['DATABASE_URL']);
 
 export default env;
