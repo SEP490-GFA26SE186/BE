@@ -1,6 +1,15 @@
 // =============================================================================
 // StoryWeaver AI – Prisma Schema (PostgreSQL)
-// SEP490 / SE186 – 54 models, 35 enums
+// SEP490 / SE186 – revision 8 – 49 models, 32 enums
+//
+// Nguon su that: ai/StoryWeaver-docs/StoryWeaver-docs/db/schema_rev8.dbml
+// Sai khac co y so voi DBML:
+//   - users.username: DBML rev8 thieu cot nay, nhung auth dung de login -> giu lai.
+//   - entitlements.order_item_id: DBML ghi [not null] + [delete: set null] (mau thuan).
+//     Giu NOT NULL, doi sang Restrict. Xem @note tren model Entitlement.
+//
+// Nhung rang buoc Prisma KHONG dien ta duoc (CHECK, partial unique, generated
+// column) duoc viet tay o cuoi file migration. Moi cai deu co /// @note o day.
 // =============================================================================
 
 generator client {
@@ -12,7 +21,9 @@ datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   directUrl  = env("DIRECT_URL")
-  extensions = [citext]
+  // plpgsql co san trong moi Postgres; khai bao o day de `migrate diff` khong
+  // bao drift gia. citext dung cho users.email (so sanh khong phan biet hoa/thuong).
+  extensions = [citext, plpgsql]
 }
 
 // =============================================================================
@@ -36,17 +47,6 @@ enum AuthTokenType {
   @@map("auth_token_type")
 }
 
-enum CharacterRole {
-  self
-  sibling
-  parent
-  relative
-  pet
-  toy
-
-  @@map("character_role")
-}
-
 enum GenerationStatus {
   none
   queued
@@ -57,12 +57,41 @@ enum GenerationStatus {
   @@map("generation_status")
 }
 
-enum TemplateStatus {
-  draft
-  active
-  retired
+enum StoryLength {
+  short
+  medium
+  long
+  custom
 
-  @@map("template_status")
+  @@map("story_length")
+}
+
+enum CheckpointType {
+  emotion_self
+  emotion_other
+  perspective
+  problem_solving
+  reflection
+
+  @@map("checkpoint_type")
+}
+
+enum Emotion {
+  happy
+  sad
+  angry
+  scared
+  neutral
+
+  @@map("emotion")
+}
+
+enum OptionRole {
+  constructive
+  avoidant
+  impulsive
+
+  @@map("option_role")
 }
 
 enum StoryKind {
@@ -78,15 +107,6 @@ enum StoryStatus {
   ready
 
   @@map("story_status")
-}
-
-enum PageKind {
-  lead_in
-  situation
-  consequence
-  ending
-
-  @@map("page_kind")
 }
 
 enum ContentOrigin {
@@ -107,9 +127,8 @@ enum PlayStatus {
 
 enum AiRequestType {
   story_text
-  page_rewrite
   character_portrait
-  story_image
+  scene_image
   narration
 
   @@map("ai_request_type")
@@ -123,13 +142,6 @@ enum AiRequestStatus {
   blocked
 
   @@map("ai_request_status")
-}
-
-enum QuotaSource {
-  plan
-  credit
-
-  @@map("quota_source")
 }
 
 enum SellerStatus {
@@ -153,21 +165,6 @@ enum ListingStatus {
   @@map("listing_status")
 }
 
-enum EntitlementSource {
-  purchase
-  free_claim
-  admin_grant
-
-  @@map("entitlement_source")
-}
-
-enum ReviewVisibility {
-  visible
-  hidden
-
-  @@map("review_visibility")
-}
-
 enum ReviewTag {
   child_liked
   age_appropriate
@@ -176,13 +173,6 @@ enum ReviewTag {
   good_narration
 
   @@map("review_tag")
-}
-
-enum PlanPeriod {
-  month
-  year
-
-  @@map("plan_period")
 }
 
 enum SubscriptionStatus {
@@ -205,7 +195,6 @@ enum OrderStatus {
 
 enum OrderItemType {
   plan
-  credit_pack
   listing
 
   @@map("order_item_type")
@@ -251,16 +240,14 @@ enum WalletType {
 }
 
 enum LedgerEntryType {
-  credit_topup
-  credit_bonus
-  credit_admin_grant
+  credit_grant
+  credit_expire
   credit_hold
   credit_release
   credit_consume
   earning_pending
   earning_release
   earning_reversal
-  earning_to_credit
   withdrawal_hold
   withdrawal_paid
   withdrawal_release
@@ -333,7 +320,6 @@ enum CaselCompetency {
 // 1. ACCOUNTS
 // =============================================================================
 
-/// @note kid_exit_pin_hash: NULL = chua dat PIN -> chan vao Kid Mode
 model User {
   id              String    @id @default(uuid()) @db.Uuid
   role            UserRole  @default(parent)
@@ -354,44 +340,43 @@ model User {
   authTokens                AuthToken[]
   childProfiles             ChildProfile[]
   characters                Character[]
-  notifications             Notification[]
-  templatesCreated          Template[]          @relation("TemplateCreator")
+  topicsCreated             Topic[]             @relation("TopicCreator")
   backgroundsCreated        Background[]        @relation("BackgroundCreator")
-  blockedKeywordsCreated    BlockedKeyword[]     @relation("KeywordCreator")
+  blockedKeywordsCreated    BlockedKeyword[]    @relation("KeywordCreator")
   stories                   Story[]
-  sellerProfile             SellerProfile?       @relation("SellerUser")
-  sellerProfilesReviewed    SellerProfile[]      @relation("SellerReviewer")
-  promptTemplatesCreated    PromptTemplate[]     @relation("PromptTemplateCreator")
+  promptTemplatesCreated    PromptTemplate[]    @relation("PromptTemplateCreator")
   aiRequests                AiRequest[]
+  sellerProfile             SellerProfile?      @relation("SellerUser")
+  sellerProfilesReviewed    SellerProfile[]     @relation("SellerReviewer")
   cartItems                 CartItem[]
   entitlements              Entitlement[]
-  productReviews            ProductReview[]      @relation("ReviewAuthor")
-  hiddenReviews             ProductReview[]      @relation("ReviewHiddenBy")
+  productReviews            ProductReview[]     @relation("ReviewAuthor")
+  hiddenReviews             ProductReview[]     @relation("ReviewHiddenBy")
   subscriptions             Subscription[]
-  vouchersCreated           Voucher[]            @relation("VoucherCreator")
+  vouchersCreated           Voucher[]           @relation("VoucherCreator")
   orders                    Order[]
   voucherUsages             VoucherUsage[]
-  refundRequestsMade        RefundRequest[]      @relation("RefundRequester")
-  refundRequestsHandled     RefundRequest[]      @relation("RefundHandler")
+  refundRequestsMade        RefundRequest[]     @relation("RefundRequester")
+  refundRequestsHandled     RefundRequest[]     @relation("RefundHandler")
   wallet                    Wallet?
   walletLedgerEntries       WalletLedger[]
-  moderationReviews         ModerationReview[]   @relation("ModReviewModerator")
-  contentReportsFiled       ContentReport[]      @relation("ReportReporter")
-  contentReportsHandled     ContentReport[]      @relation("ReportHandler")
-  creatorStrikesIssued      CreatorStrike[]      @relation("StrikeIssuer")
-  strikeAppealsDecided      StrikeAppeal[]       @relation("AppealDecider")
+  withdrawalRequestsHandled WithdrawalRequest[] @relation("WithdrawalHandler")
+  platformSettingsUpdated   PlatformSetting[]   @relation("SettingUpdater")
+  moderationReviews         ModerationReview[]  @relation("ModReviewModerator")
+  contentReportsFiled       ContentReport[]     @relation("ReportReporter")
+  contentReportsHandled     ContentReport[]     @relation("ReportHandler")
+  creatorStrikesIssued      CreatorStrike[]     @relation("StrikeIssuer")
+  strikeAppealsDecided      StrikeAppeal[]      @relation("AppealDecider")
   auditLogs                 AdminAuditLog[]
-  platformSettingsUpdated   PlatformSetting[]    @relation("SettingUpdater")
-  withdrawalRequestsHandled WithdrawalRequest[]  @relation("WithdrawalHandler")
 
   @@index([role])
   @@index([deletedAt])
   @@map("users")
 }
 
-/// @note CHECK: (type = kid_session) = (child_id IS NOT NULL)
-/// @note CHECK: replaced_by_id IS NULL OR type = refresh
-/// @note Partial unique: UNIQUE (child_id) WHERE type = kid_session AND consumed_at IS NULL
+/// @note CHECK: (type = 'kid_session') = (child_id IS NOT NULL)
+/// @note CHECK: replaced_by_id IS NULL OR type = 'refresh'
+/// @note Partial unique: UNIQUE (child_id) WHERE type = 'kid_session' AND consumed_at IS NULL
 model AuthToken {
   id           String        @id @default(uuid()) @db.Uuid
   userId       String        @map("user_id") @db.Uuid
@@ -407,7 +392,6 @@ model AuthToken {
   replacedBy AuthToken?    @relation("TokenReplacement", fields: [replacedById], references: [id], onDelete: SetNull)
   child      ChildProfile? @relation(fields: [childId], references: [id], onDelete: Cascade)
 
-  // -- self back-reference --
   previousTokens AuthToken[] @relation("TokenReplacement")
 
   @@index([userId, type])
@@ -422,8 +406,6 @@ model ChildProfile {
   name                   String    @db.VarChar(100)
   birthDate              DateTime? @map("birth_date") @db.Date
   dailyScreenTimeMinutes Int       @default(30) @map("daily_screen_time_minutes")
-  bedtimeStart           DateTime? @map("bedtime_start") @db.Time()
-  bedtimeEnd             DateTime? @map("bedtime_end") @db.Time()
   preferredVoice         String?   @map("preferred_voice") @db.VarChar(50)
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
@@ -433,25 +415,25 @@ model ChildProfile {
 
   // -- back-references --
   authTokens        AuthToken[]
-  characters        Character[]
+  character         Character?
   usageSessions     ChildUsageSession[]
   bookshelfItems    BookshelfItem[]
   playSessions      PlaySession[]
+  eqCompetencyStats EqCompetencyStat[]
 
   @@index([parentId])
   @@map("child_profiles")
 }
 
-/// @note CHECK: role <> 'self' OR child_id IS NOT NULL
-/// @note portrait_image_key: chan dung AI da duoc phu huynh chon, dung lam anh tham chieu
+/// @note child_id: moi con toi da 1 nhan vat dai dien (unique)
+/// @note portrait_image_key: chan dung AI phu huynh da chon, dung lam anh tham chieu
 model Character {
   id               String           @id @default(uuid()) @db.Uuid
   parentId         String           @map("parent_id") @db.Uuid
-  childId          String?          @map("child_id") @db.Uuid
+  childId          String?          @unique @map("child_id") @db.Uuid
   name             String           @db.VarChar(100)
-  role             CharacterRole
   appearance       String
-  portraitImageKey  String?          @map("portrait_image_key") @db.VarChar(300)
+  portraitImageKey String?          @map("portrait_image_key") @db.VarChar(300)
   genPrompt        String?          @map("gen_prompt")
   genSeed          BigInt?          @map("gen_seed")
   portraitStatus   GenerationStatus @default(none) @map("portrait_status")
@@ -467,19 +449,19 @@ model Character {
   aiRequests      AiRequest[]
 
   @@index([parentId])
-  @@index([childId])
   @@map("characters")
 }
 
 /// @note duration_seconds: GENERATED ALWAYS AS (extract(epoch from ended_at - started_at)::int) STORED
 /// @note usage_date: GENERATED ALWAYS AS ((started_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) STORED
+/// @note Ca hai cot generated duoc viet tay trong migration; Prisma khong sinh duoc.
 model ChildUsageSession {
   id              String    @id @default(uuid()) @db.Uuid
   childId         String    @map("child_id") @db.Uuid
   startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz()
   endedAt         DateTime? @map("ended_at") @db.Timestamptz()
-  durationSeconds Int?      @map("duration_seconds")
-  usageDate       DateTime  @map("usage_date") @db.Date
+  durationSeconds Int?      @default(dbgenerated()) @map("duration_seconds")
+  usageDate       DateTime  @default(dbgenerated()) @map("usage_date") @db.Date
 
   child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
 
@@ -487,147 +469,65 @@ model ChildUsageSession {
   @@map("child_usage_sessions")
 }
 
-model Notification {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
-  type      String    @db.VarChar(60)
-  title     String    @db.VarChar(200)
-  body      String?
-  refType   String?   @map("ref_type") @db.VarChar(50)
-  refId     String?   @map("ref_id") @db.Uuid
-  readAt    DateTime? @map("read_at") @db.Timestamptz()
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, readAt])
-  @@map("notifications")
-}
-
 // =============================================================================
 // 2. CONTENT LIBRARY (Moderator quan ly)
 // =============================================================================
 
 model EqSkill {
-  id           String           @id @default(uuid()) @db.Uuid
-  caselCode    CaselCompetency  @unique @map("casel_code")
-  nameVi       String           @map("name_vi") @db.VarChar(100)
-  nameEn       String           @map("name_en") @db.VarChar(100)
+  id           String          @id @default(uuid()) @db.Uuid
+  caselCode    CaselCompetency @unique @map("casel_code")
+  nameVi       String          @map("name_vi") @db.VarChar(100)
+  nameEn       String          @map("name_en") @db.VarChar(100)
   description  String
-  displayOrder Int              @default(0) @map("display_order")
+  displayOrder Int             @default(0) @map("display_order")
 
   // -- back-references --
-  templates             Template[]
-  templateChoiceSignals TemplateChoiceSignal[]
-  eqScores              EqScore[]
+  topics            Topic[]
+  checkpointAnswers CheckpointAnswer[]
+  eqCompetencyStats EqCompetencyStat[]
 
   @@map("eq_skills")
 }
 
-/// @note Khuon su pham: bo xuong truyen, chua co chu. CHECK age_min <= age_max
-model Template {
-  id             String         @id @default(uuid()) @db.Uuid
-  title          String         @db.VarChar(200)
-  description    String?
-  primarySkillId String         @map("primary_skill_id") @db.Uuid
-  ageMin         Int            @default(5) @map("age_min")
-  ageMax         Int            @default(8) @map("age_max")
-  status         TemplateStatus @default(draft)
-  createdById    String         @map("created_by") @db.Uuid
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+/// @note Danh sach bai hoc do Moderator quan ly
+/// @note CHECK: age_min <= age_max
+model Topic {
+  id           String   @id @default(uuid()) @db.Uuid
+  title        String   @db.VarChar(200)
+  skillId      String   @map("skill_id") @db.Uuid
+  guidance     String
+  ageMin       Int      @default(5) @map("age_min")
+  ageMax       Int      @default(8) @map("age_max")
+  displayOrder Int      @default(0) @map("display_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdBy    String   @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  primarySkill EqSkill @relation(fields: [primarySkillId], references: [id], onDelete: Restrict)
-  createdBy    User    @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  skill   EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  creator User    @relation("TopicCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  stages  TemplateStage[]
-  slots   TemplateSlot[]
   stories Story[]
 
-  @@index([status, primarySkillId])
-  @@map("templates")
+  @@index([isActive, skillId])
+  @@map("topics")
 }
 
-model TemplateStage {
-  id                String  @id @default(uuid()) @db.Uuid
-  templateId        String  @map("template_id") @db.Uuid
-  stageOrder        Int     @map("stage_order")
-  learningObjective String  @map("learning_objective")
-  emotionToName     String? @map("emotion_to_name") @db.VarChar(50)
-  leadInPages       Int     @default(1) @map("lead_in_pages")
-  isClimax          Boolean @default(false) @map("is_climax")
-
-  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  // -- back-references --
-  choiceTypes TemplateChoiceType[]
-  storyPages  StoryPage[]
-
-  @@unique([templateId, stageOrder])
-  @@map("template_stages")
-}
-
-/// @note choice_order: 1=A, 2=B, 3=C
-/// @note type_code: BUNG_NO | DUNG_LAI | BO_DI ...
-model TemplateChoiceType {
-  id          String  @id @default(uuid()) @db.Uuid
-  stageId     String  @map("stage_id") @db.Uuid
-  choiceOrder Int     @map("choice_order")
-  typeCode    String  @map("type_code") @db.VarChar(40)
-  description String
-  isProsocial Boolean @default(false) @map("is_prosocial")
-
-  stage TemplateStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
-
-  // -- back-references --
-  choiceSignals TemplateChoiceSignal[]
-  storyChoices  StoryChoice[]
-
-  @@unique([stageId, choiceOrder])
-  @@map("template_choice_types")
-}
-
-/// @note Tin hieu ky nang do Moderator gan -> bao cao EQ khong dua vao nhan AI
-model TemplateChoiceSignal {
-  choiceTypeId String @map("choice_type_id") @db.Uuid
-  skillId      String @map("skill_id") @db.Uuid
-  delta        Int
-
-  choiceType TemplateChoiceType @relation(fields: [choiceTypeId], references: [id], onDelete: Cascade)
-  skill      EqSkill            @relation(fields: [skillId], references: [id], onDelete: Restrict)
-
-  @@id([choiceTypeId, skillId])
-  @@map("template_choice_signals")
-}
-
-/// @note slot_key: {CON} | {EM} | {ME} | {THU_CUNG} ...
-model TemplateSlot {
-  templateId    String        @map("template_id") @db.Uuid
-  slotKey       String        @map("slot_key") @db.VarChar(30)
-  characterRole CharacterRole @map("character_role")
-  defaultName   String        @map("default_name") @db.VarChar(100)
-
-  template Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@id([templateId, slotKey])
-  @@map("template_slots")
-}
-
-/// @note Thu vien nen mac dinh, dung khi use_ai_image = false
+/// @note Thu vien nen mac dinh, dung khi stories.use_ai_image = false
 model Background {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @db.VarChar(120)
-  imageKey    String   @map("image_key") @db.VarChar(300)
-  tags        String?  @db.VarChar(200)
-  isActive    Boolean  @default(true) @map("is_active")
-  createdById String   @map("created_by") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(120)
+  imageKey  String   @map("image_key") @db.VarChar(300)
+  tags      String?  @db.VarChar(200)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdBy User @relation("BackgroundCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  creator User @relation("BackgroundCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  storyPages StoryPage[]
+  storyScenes StoryScene[]
 
   @@map("backgrounds")
 }
@@ -644,19 +544,19 @@ model UiAudioAsset {
 }
 
 model BlockedKeyword {
-  id          String          @id @default(uuid()) @db.Uuid
-  keyword     String          @unique @db.VarChar(100)
-  severity    KeywordSeverity @default(block)
-  isActive    Boolean         @default(true) @map("is_active")
-  createdById String          @map("created_by") @db.Uuid
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  id        String          @id @default(uuid()) @db.Uuid
+  keyword   String          @unique @db.VarChar(100)
+  severity  KeywordSeverity @default(block)
+  isActive  Boolean         @default(true) @map("is_active")
+  createdBy String          @map("created_by") @db.Uuid
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdBy User @relation("KeywordCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  creator User @relation("KeywordCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@map("blocked_keywords")
 }
 
-/// @note 7 nguyen tac su pham
+/// @note description: 7 nguyen tac su pham
 model ChecklistItem {
   id           String  @id @default(uuid()) @db.Uuid
   code         String  @unique @db.VarChar(40)
@@ -674,17 +574,21 @@ model ChecklistItem {
 // 3. STORIES
 // =============================================================================
 
-/// @note private: truyen phu huynh tao cho con minh, sua tu do
+/// @note private  : truyen phu huynh tao cho con minh, sua tu do
 /// @note published: ban sao da go ca nhan hoa de ban; dong bang sau khi duyet
 /// @note CHECK: kind <> 'published' OR source_story_id IS NOT NULL
+/// @note Chi dua vao gia sach khi reviewed_at IS NOT NULL (validator tang service)
+/// @note Truyen custom (validator khi luu): 4-20 trang, 0-6 diem dung co cham,
+///       khong dat sau trang 1, reflection chi o cuoi
 model Story {
   id            String      @id @default(uuid()) @db.Uuid
   ownerId       String      @map("owner_id") @db.Uuid
   kind          StoryKind   @default(private)
-  templateId    String      @map("template_id") @db.Uuid
   sourceStoryId String?     @map("source_story_id") @db.Uuid
+  topicId       String      @map("topic_id") @db.Uuid
+  length        StoryLength @default(medium)
   title         String      @db.VarChar(200)
-  coverImageKey String?     @map("cover_image_key") @db.VarChar(300)
+  situation     String?
   useAiImage    Boolean     @default(false) @map("use_ai_image")
   useTts        Boolean     @default(true) @map("use_tts")
   status        StoryStatus @default(draft)
@@ -693,90 +597,147 @@ model Story {
   updatedAt     DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt     DateTime?   @map("deleted_at") @db.Timestamptz()
 
-  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  template    Template  @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  sourceStory Story?    @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: SetNull)
+  owner       User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: SetNull)
+  topic       Topic  @relation(fields: [topicId], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  derivedStories  Story[]          @relation("StorySource")
+  copies          Story[]           @relation("StorySource")
   storyCharacters StoryCharacter[]
+  scenes          StoryScene[]
   pages           StoryPage[]
+  checkpoints     StoryCheckpoint[]
   bookshelfItems  BookshelfItem[]
   playSessions    PlaySession[]
   aiRequests      AiRequest[]
-  listing         Listing?         @relation("ListingStory")
+  listing         Listing?
 
   @@index([ownerId, kind])
+  @@index([topicId])
   @@map("stories")
 }
 
-/// @note character_id: chi dung cho truyen private; truyen published dung default_name cua khuon
+/// @note token: {NV1}, {NV2}...
+/// @note CHECK: (character_id IS NOT NULL) <> (alias_name IS NOT NULL)
+/// @note Partial unique: UNIQUE (story_id) WHERE is_main
 model StoryCharacter {
   storyId     String  @map("story_id") @db.Uuid
-  slotKey     String  @map("slot_key") @db.VarChar(30)
+  token       String  @db.VarChar(10)
   characterId String? @map("character_id") @db.Uuid
+  aliasName   String? @map("alias_name") @db.VarChar(100)
+  isMain      Boolean @default(false) @map("is_main")
 
   story     Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
   character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
 
-  @@id([storyId, slotKey])
+  @@id([storyId, token])
   @@index([characterId])
   @@map("story_characters")
 }
 
+/// @note Toi da 4 canh moi truyen; cac trang cung canh dung chung mot tranh
+/// @note description: mo ta canh tieng Anh, khong ten rieng
+model StoryScene {
+  id           String           @id @default(uuid()) @db.Uuid
+  storyId      String           @map("story_id") @db.Uuid
+  sceneOrder   Int              @map("scene_order")
+  description  String
+  imageKey     String?          @map("image_key") @db.VarChar(300)
+  backgroundId String?          @map("background_id") @db.Uuid
+  imageStatus  GenerationStatus @default(none) @map("image_status")
+
+  story      Story       @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  background Background? @relation(fields: [backgroundId], references: [id], onDelete: Restrict)
+
+  // -- back-references --
+  pages      StoryPage[]
+  aiRequests AiRequest[]
+
+  @@unique([storyId, sceneOrder])
+  @@map("story_scenes")
+}
+
+/// @note content_text / ai_original_text: luu dang token {NVx}
 model StoryPage {
   id             String           @id @default(uuid()) @db.Uuid
   storyId        String           @map("story_id") @db.Uuid
-  stageId        String           @map("stage_id") @db.Uuid
-  pageKind       PageKind         @map("page_kind")
   pageOrder      Int              @map("page_order")
-  fromChoiceId   String?          @unique @map("from_choice_id") @db.Uuid
+  sceneId        String           @map("scene_id") @db.Uuid
   contentText    String?          @map("content_text")
   aiOriginalText String?          @map("ai_original_text")
   origin         ContentOrigin    @default(human)
-  backgroundId   String?          @map("background_id") @db.Uuid
-  imageKey       String?          @map("image_key") @db.VarChar(300)
   audioKey       String?          @map("audio_key") @db.VarChar(300)
-  imageStatus    GenerationStatus @default(none) @map("image_status")
   audioStatus    GenerationStatus @default(none) @map("audio_status")
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  story      Story          @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  stage      TemplateStage  @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  fromChoice StoryChoice?   @relation("ChoiceConsequence", fields: [fromChoiceId], references: [id], onDelete: Cascade)
-  background Background?    @relation(fields: [backgroundId], references: [id], onDelete: Restrict)
+  story Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  scene StoryScene @relation(fields: [sceneId], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  choices             StoryChoice[]     @relation("PageChoices")
-  playDecisions       PlayDecision[]
-  aiRequests          AiRequest[]
-  currentPlaySessions PlaySession[]     @relation("CurrentPage")
-  reviewPageViews     ReviewPageView[]
-  contentReports      ContentReport[]
+  checkpoint         StoryCheckpoint?
+  playSessionsOnPage PlaySession[]
+  aiRequests         AiRequest[]
+  reviewPageViews    ReviewPageView[]
+  contentReports     ContentReport[]
 
   @@unique([storyId, pageOrder])
-  @@index([stageId])
+  @@index([sceneId])
   @@map("story_pages")
 }
 
-model StoryChoice {
-  id           String @id @default(uuid()) @db.Uuid
-  pageId       String @map("page_id") @db.Uuid
-  choiceOrder  Int    @map("choice_order")
-  choiceText   String @map("choice_text")
-  choiceTypeId String @map("choice_type_id") @db.Uuid
-  audioKey     String? @map("audio_key") @db.VarChar(300)
+/// @note short/medium/long: kieu va vi tri do he thong dat; custom: nguoi viet tu dat
+/// @note after_page_id unique: moi trang toi da 1 diem dung ngay sau no
+/// @note CHECK: (type IN ('emotion_self','emotion_other')) = (answer_emotion IS NOT NULL)
+/// @note CHECK: (type IN ('emotion_other','perspective')) = (target_token IS NOT NULL)
+model StoryCheckpoint {
+  id               String         @id @default(uuid()) @db.Uuid
+  storyId          String         @map("story_id") @db.Uuid
+  afterPageId      String         @unique @map("after_page_id") @db.Uuid
+  type             CheckpointType
+  targetToken      String?        @map("target_token") @db.VarChar(10)
+  question         String?
+  answerEmotion    Emotion?       @map("answer_emotion")
+  hint             String?
+  origin           ContentOrigin  @default(human)
+  questionAudioKey String?        @map("question_audio_key") @db.VarChar(300)
+  hintAudioKey     String?        @map("hint_audio_key") @db.VarChar(300)
 
-  page       StoryPage          @relation("PageChoices", fields: [pageId], references: [id], onDelete: Cascade)
-  choiceType TemplateChoiceType @relation(fields: [choiceTypeId], references: [id], onDelete: Restrict)
+  story     Story     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  afterPage StoryPage @relation(fields: [afterPageId], references: [id], onDelete: Cascade)
 
   // -- back-references --
-  consequencePage StoryPage?    @relation("ChoiceConsequence")
-  playDecisions   PlayDecision[]
+  options    CheckpointOption[]
+  answers    CheckpointAnswer[]
+  aiRequests AiRequest[]
 
-  @@unique([pageId, choiceOrder])
-  @@map("story_choices")
+  @@index([storyId])
+  @@map("story_checkpoints")
+}
+
+/// @note perspective    : dung 3 phuong an, dung 1 phuong an is_correct = true
+/// @note problem_solving: dung 3 phuong an, du 3 role, moi role mot lan
+/// @note Ca hai luat tren la validator tang service (CHECK khong lam duoc)
+/// @note Thu tu hien thi xao ngau nhien o frontend, option_order chi de luu tru
+model CheckpointOption {
+  id               String      @id @default(uuid()) @db.Uuid
+  checkpointId     String      @map("checkpoint_id") @db.Uuid
+  optionOrder      Int         @map("option_order")
+  text             String?
+  role             OptionRole?
+  isCorrect        Boolean?    @map("is_correct")
+  feedback         String?
+  textAudioKey     String?     @map("text_audio_key") @db.VarChar(300)
+  feedbackAudioKey String?     @map("feedback_audio_key") @db.VarChar(300)
+
+  checkpoint StoryCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Cascade)
+
+  // -- back-references --
+  firstAnswers CheckpointAnswer[] @relation("AnswerFirstOption")
+  finalAnswers CheckpointAnswer[] @relation("AnswerFinalOption")
+
+  @@unique([checkpointId, optionOrder])
+  @@map("checkpoint_options")
 }
 
 model BookshelfItem {
@@ -795,12 +756,14 @@ model BookshelfItem {
 // 4. LEARNING
 // =============================================================================
 
+/// @note is_first_play: chi lan choi dau duoc tinh diem EQ
+/// @note Partial unique: UNIQUE (child_id, story_id) WHERE is_first_play
 model PlaySession {
   id             String     @id @default(uuid()) @db.Uuid
   childId        String     @map("child_id") @db.Uuid
   storyId        String     @map("story_id") @db.Uuid
+  isFirstPlay    Boolean    @map("is_first_play")
   status         PlayStatus @default(in_progress)
-  isReplay       Boolean    @default(false) @map("is_replay")
   currentPageId  String?    @map("current_page_id") @db.Uuid
   startedAt      DateTime   @default(now()) @map("started_at") @db.Timestamptz()
   lastActivityAt DateTime   @default(now()) @map("last_activity_at") @db.Timestamptz()
@@ -808,62 +771,64 @@ model PlaySession {
 
   child       ChildProfile @relation(fields: [childId], references: [id], onDelete: Restrict)
   story       Story        @relation(fields: [storyId], references: [id], onDelete: Restrict)
-  currentPage StoryPage?   @relation("CurrentPage", fields: [currentPageId], references: [id], onDelete: SetNull)
+  currentPage StoryPage?   @relation(fields: [currentPageId], references: [id], onDelete: SetNull)
 
   // -- back-references --
-  decisions    PlayDecision[]
-  eqAssessment EqAssessment?
+  answers CheckpointAnswer[]
 
   @@index([childId, status])
   @@index([storyId, status])
   @@map("play_sessions")
 }
 
-model PlayDecision {
-  id             BigInt   @id @default(autoincrement())
-  sessionId      String   @map("session_id") @db.Uuid
-  pageId         String   @map("page_id") @db.Uuid
-  choiceId       String   @map("choice_id") @db.Uuid
-  timeToDecideMs Int?     @map("time_to_decide_ms")
-  replayCount    Int      @default(0) @map("replay_count")
-  decidedAt      DateTime @default(now()) @map("decided_at") @db.Timestamptz()
+/// @note skill_id / score tinh ngay luc tra loi va dong bang (SNAPSHOT):
+///       emotion_self -> Tu nhan thuc; emotion_other, perspective -> Nhan thuc xa hoi;
+///       problem_solving -> nang luc cua topic (constructive 1, avoidant 0.5, impulsive 0)
+/// @note Doi topic hay doi cach cham ve sau khong lam thay doi lich su
+/// @note CHECK: attempts BETWEEN 1 AND 2
+model CheckpointAnswer {
+  id              BigInt   @id @default(autoincrement())
+  sessionId       String   @map("session_id") @db.Uuid
+  checkpointId    String   @map("checkpoint_id") @db.Uuid
+  firstEmotion    Emotion? @map("first_emotion")
+  firstOptionId   String?  @map("first_option_id") @db.Uuid
+  finalEmotion    Emotion? @map("final_emotion")
+  finalOptionId   String?  @map("final_option_id") @db.Uuid
+  attempts        Int      @default(1)
+  skipped         Boolean  @default(false)
+  timeToFirstMs   Int?     @map("time_to_first_ms")
+  questionReplays Int      @default(0) @map("question_replays")
+  skillId         String?  @map("skill_id") @db.Uuid
+  score           Decimal? @db.Decimal(3, 2)
+  answeredAt      DateTime @default(now()) @map("answered_at") @db.Timestamptz()
 
-  session PlaySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  page    StoryPage   @relation(fields: [pageId], references: [id], onDelete: Restrict)
-  choice  StoryChoice @relation(fields: [choiceId], references: [id], onDelete: Restrict)
+  session     PlaySession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  checkpoint  StoryCheckpoint   @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  firstOption CheckpointOption? @relation("AnswerFirstOption", fields: [firstOptionId], references: [id], onDelete: Restrict)
+  finalOption CheckpointOption? @relation("AnswerFinalOption", fields: [finalOptionId], references: [id], onDelete: Restrict)
+  skill       EqSkill?          @relation(fields: [skillId], references: [id], onDelete: Restrict)
 
-  @@unique([sessionId, pageId])
-  @@map("play_decisions")
+  @@unique([sessionId, checkpointId])
+  @@index([skillId, answeredAt])
+  @@map("checkpoint_answers")
 }
 
-model EqAssessment {
-  id         String   @id @default(uuid()) @db.Uuid
-  sessionId  String   @unique @map("session_id") @db.Uuid
-  summaryVi  String?  @map("summary_vi")
-  computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz()
+/// @note CACHE toan bo lich su, chi tinh tu checkpoint_answers cua lan choi dau, khong skipped
+/// @note Diem = score_sum / items * 100; hien "chua du du lieu" khi items < 5
+/// @note Bieu do theo thang: truy van truc tiep checkpoint_answers theo answered_at
+/// @note Cron doi soat hang dem tinh lai tu du lieu goc
+model EqCompetencyStat {
+  childId   String   @map("child_id") @db.Uuid
+  skillId   String   @map("skill_id") @db.Uuid
+  items     Int      @default(0)
+  scoreSum  Decimal  @default(0) @map("score_sum") @db.Decimal(8, 2)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz()
 
-  session PlaySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
+  skill EqSkill      @relation(fields: [skillId], references: [id], onDelete: Restrict)
 
-  // -- back-references --
-  scores EqScore[]
-
-  @@map("eq_assessments")
-}
-
-/// @note CHECK: prosocial_choices <= occurrences; score BETWEEN 0 AND 100
-model EqScore {
-  id              BigInt @id @default(autoincrement())
-  assessmentId    String @map("assessment_id") @db.Uuid
-  skillId         String @map("skill_id") @db.Uuid
-  occurrences     Int    @default(0)
-  prosocialChoices Int   @default(0) @map("prosocial_choices")
-  score           Int?
-
-  assessment EqAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  skill      EqSkill      @relation(fields: [skillId], references: [id], onDelete: Restrict)
-
-  @@unique([assessmentId, skillId])
-  @@map("eq_scores")
+  @@id([childId, skillId])
+  @@map("eq_competency_stats")
 }
 
 // =============================================================================
@@ -872,17 +837,17 @@ model EqScore {
 
 /// @note Partial unique: UNIQUE (request_type) WHERE is_active
 model PromptTemplate {
-  id          String        @id @default(uuid()) @db.Uuid
-  requestType AiRequestType @map("request_type")
-  version     String        @db.VarChar(30)
-  templateText String       @map("template_text")
-  modelName   String        @map("model_name") @db.VarChar(100)
-  isActive    Boolean       @default(false) @map("is_active")
-  activatedAt DateTime?     @map("activated_at") @db.Timestamptz()
-  createdById String        @map("created_by") @db.Uuid
-  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  id           String        @id @default(uuid()) @db.Uuid
+  requestType  AiRequestType @map("request_type")
+  version      String        @db.VarChar(30)
+  templateText String        @map("template_text")
+  modelName    String        @map("model_name") @db.VarChar(100)
+  isActive     Boolean       @default(false) @map("is_active")
+  activatedAt  DateTime?     @map("activated_at") @db.Timestamptz()
+  createdBy    String        @map("created_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz()
 
-  createdBy User @relation("PromptTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  creator User @relation("PromptTemplateCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
   aiRequests AiRequest[]
@@ -891,37 +856,42 @@ model PromptTemplate {
   @@map("prompt_templates")
 }
 
-/// @note Han muc goi = COUNT(*) WHERE quota_source = plan trong ky subscription
+/// @note credits_charged = don gia trong platform_settings (ai_cost.<type>) luc giu credit
+/// @note That bai -> hoan credit (credit_release)
 /// @note CHECK: attempts <= 3
+/// @note locked_at: bang nay kiem luon hang doi tac vu nen
 model AiRequest {
-  id               String          @id @default(uuid()) @db.Uuid
-  userId           String          @map("user_id") @db.Uuid
-  requestType      AiRequestType   @map("request_type")
-  storyId          String?         @map("story_id") @db.Uuid
-  pageId           String?         @map("page_id") @db.Uuid
-  characterId      String?         @map("character_id") @db.Uuid
-  promptTemplateId String?         @map("prompt_template_id") @db.Uuid
-  provider         String          @default("mock") @db.VarChar(40)
-  modelName        String?         @map("model_name") @db.VarChar(100)
-  status           AiRequestStatus @default(queued)
-  quotaSource      QuotaSource     @map("quota_source")
-  creditsCharged   Int             @default(0) @map("credits_charged")
-  inputTokens      Int?            @map("input_tokens")
-  outputTokens     Int?            @map("output_tokens")
-  outputUnits      Int?            @map("output_units")
-  providerCostMicros BigInt        @default(0) @map("provider_cost_micros")
-  attempts         Int             @default(0)
-  lockedAt         DateTime?       @map("locked_at") @db.Timestamptz()
-  errorMessage     String?         @map("error_message")
-  idempotencyKey   String          @unique @map("idempotency_key") @db.VarChar(120)
-  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz()
-  finishedAt       DateTime?       @map("finished_at") @db.Timestamptz()
+  id                 String          @id @default(uuid()) @db.Uuid
+  userId             String          @map("user_id") @db.Uuid
+  requestType        AiRequestType   @map("request_type")
+  storyId            String?         @map("story_id") @db.Uuid
+  pageId             String?         @map("page_id") @db.Uuid
+  checkpointId       String?         @map("checkpoint_id") @db.Uuid
+  sceneId            String?         @map("scene_id") @db.Uuid
+  characterId        String?         @map("character_id") @db.Uuid
+  promptTemplateId   String?         @map("prompt_template_id") @db.Uuid
+  provider           String          @default("mock") @db.VarChar(40)
+  modelName          String?         @map("model_name") @db.VarChar(100)
+  status             AiRequestStatus @default(queued)
+  creditsCharged     Int             @default(0) @map("credits_charged")
+  inputTokens        Int?            @map("input_tokens")
+  outputTokens       Int?            @map("output_tokens")
+  outputUnits        Int?            @map("output_units")
+  providerCostMicros BigInt          @default(0) @map("provider_cost_micros")
+  attempts           Int             @default(0)
+  lockedAt           DateTime?       @map("locked_at") @db.Timestamptz()
+  errorMessage       String?         @map("error_message")
+  idempotencyKey     String          @unique @map("idempotency_key") @db.VarChar(120)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  finishedAt         DateTime?       @map("finished_at") @db.Timestamptz()
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  story          Story?          @relation(fields: [storyId], references: [id], onDelete: SetNull)
-  page           StoryPage?      @relation(fields: [pageId], references: [id], onDelete: SetNull)
-  character      Character?      @relation(fields: [characterId], references: [id], onDelete: SetNull)
-  promptTemplate PromptTemplate? @relation(fields: [promptTemplateId], references: [id], onDelete: SetNull)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  story          Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  page           StoryPage?       @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  checkpoint     StoryCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+  scene          StoryScene?      @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  character      Character?       @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  promptTemplate PromptTemplate?  @relation(fields: [promptTemplateId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([userId, createdAt])
@@ -933,29 +903,31 @@ model AiRequest {
 // 6. MARKETPLACE
 // =============================================================================
 
+/// @note bank_account_number: ma hoa khi luu
+/// @note bank_updated_at: chan rut tien 24 gio sau khi doi
 model SellerProfile {
-  userId              String       @id @map("user_id") @db.Uuid
-  displayName         String       @map("display_name") @db.VarChar(100)
-  bio                 String?
-  expertise           String?
-  status              SellerStatus @default(pending)
-  reviewedById        String?      @map("reviewed_by") @db.Uuid
-  reviewedAt          DateTime?    @map("reviewed_at") @db.Timestamptz()
-  bankName            String?      @map("bank_name") @db.VarChar(100)
-  bankAccountNumber   String?      @map("bank_account_number") @db.VarChar(255)
-  bankAccountHolder   String?      @map("bank_account_holder") @db.VarChar(150)
-  bankUpdatedAt       DateTime?    @map("bank_updated_at") @db.Timestamptz()
-  totalSales          Int          @default(0) @map("total_sales")
-  ratingAvg           Decimal?     @map("rating_avg") @db.Decimal(3, 2)
-  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  userId            String       @id @map("user_id") @db.Uuid
+  displayName       String       @map("display_name") @db.VarChar(100)
+  bio               String?
+  expertise         String?
+  status            SellerStatus @default(pending)
+  reviewedBy        String?      @map("reviewed_by") @db.Uuid
+  reviewedAt        DateTime?    @map("reviewed_at") @db.Timestamptz()
+  bankName          String?      @map("bank_name") @db.VarChar(100)
+  bankAccountNumber String?      @map("bank_account_number") @db.VarChar(255)
+  bankAccountHolder String?      @map("bank_account_holder") @db.VarChar(150)
+  bankUpdatedAt     DateTime?    @map("bank_updated_at") @db.Timestamptz()
+  totalSales        Int          @default(0) @map("total_sales")
+  ratingAvg         Decimal?     @map("rating_avg") @db.Decimal(3, 2)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz()
 
-  user       User  @relation("SellerUser", fields: [userId], references: [id], onDelete: Restrict)
-  reviewedBy User? @relation("SellerReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  user     User  @relation("SellerUser", fields: [userId], references: [id], onDelete: Restrict)
+  reviewer User? @relation("SellerReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
 
   // -- back-references --
   listings           Listing[]
-  creatorStrikes     CreatorStrike[]
   withdrawalRequests WithdrawalRequest[]
+  strikes            CreatorStrike[]
 
   @@map("seller_profiles")
 }
@@ -972,7 +944,8 @@ model PriceTier {
   @@map("price_tiers")
 }
 
-/// @note Bo dem cap nhat trong cung transaction + cron doi soat hang dem
+/// @note published_story_id: stories.kind = 'published'
+/// @note Bo dem (purchase_count, rating_*) cap nhat trong cung transaction + cron doi soat hang dem
 model Listing {
   id                String        @id @default(uuid()) @db.Uuid
   sellerId          String        @map("seller_id") @db.Uuid
@@ -993,7 +966,7 @@ model Listing {
   updatedAt         DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   seller          SellerProfile @relation(fields: [sellerId], references: [userId], onDelete: Restrict)
-  publishedStory  Story         @relation("ListingStory", fields: [publishedStoryId], references: [id], onDelete: Restrict)
+  publishedStory  Story         @relation(fields: [publishedStoryId], references: [id], onDelete: Restrict)
   previousListing Listing?      @relation("ListingVersion", fields: [previousListingId], references: [id], onDelete: SetNull)
   priceTier       PriceTier     @relation(fields: [priceTierId], references: [id], onDelete: Restrict)
 
@@ -1002,9 +975,9 @@ model Listing {
   cartItems         CartItem[]
   entitlements      Entitlement[]
   productReviews    ProductReview[]
+  orderItems        OrderItem[]
   moderationReviews ModerationReview[]
   contentReports    ContentReport[]
-  orderItems        OrderItem[]
 
   @@index([status, publishedAt])
   @@index([sellerId])
@@ -1023,49 +996,51 @@ model CartItem {
   @@map("cart_items")
 }
 
+/// @note order_item_id: moi quyen deu den tu mot don; truyen mien phi = don 0d
 /// @note Partial unique: UNIQUE (parent_id, listing_id) WHERE revoked_at IS NULL
+/// @note DBML ghi [not null] + [delete: set null] (mau thuan). Giu NOT NULL -> Restrict.
 model Entitlement {
-  id          String            @id @default(uuid()) @db.Uuid
-  parentId    String            @map("parent_id") @db.Uuid
-  listingId   String            @map("listing_id") @db.Uuid
-  source      EntitlementSource
-  orderItemId String?           @map("order_item_id") @db.Uuid
-  grantedAt   DateTime          @default(now()) @map("granted_at") @db.Timestamptz()
-  revokedAt   DateTime?         @map("revoked_at") @db.Timestamptz()
+  id          String    @id @default(uuid()) @db.Uuid
+  parentId    String    @map("parent_id") @db.Uuid
+  listingId   String    @map("listing_id") @db.Uuid
+  orderItemId String    @map("order_item_id") @db.Uuid
+  grantedAt   DateTime  @default(now()) @map("granted_at") @db.Timestamptz()
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz()
 
-  parent    User       @relation(fields: [parentId], references: [id], onDelete: Restrict)
-  listing   Listing    @relation(fields: [listingId], references: [id], onDelete: Restrict)
-  orderItem OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  parent    User      @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  listing   Listing   @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
 
   @@index([parentId])
   @@map("entitlements")
 }
 
-/// @note CHECK rating BETWEEN 1 AND 5
-/// @note Chi nguoi da mua va con da nghe het moi duoc danh gia
+/// @note CHECK: rating BETWEEN 1 AND 5
+/// @note hidden_at: NULL = dang hien; an thi khong tinh vao diem
+/// @note Chi nguoi da mua va con da nghe het moi duoc danh gia (validator tang service)
 model ProductReview {
-  id              String           @id @default(uuid()) @db.Uuid
-  listingId       String           @map("listing_id") @db.Uuid
-  parentId        String           @map("parent_id") @db.Uuid
+  id              String    @id @default(uuid()) @db.Uuid
+  listingId       String    @map("listing_id") @db.Uuid
+  parentId        String    @map("parent_id") @db.Uuid
   rating          Int
   comment         String?
-  visibility      ReviewVisibility @default(visible)
-  hiddenById      String?          @map("hidden_by") @db.Uuid
-  sellerReply     String?          @map("seller_reply")
-  sellerRepliedAt DateTime?        @map("seller_replied_at") @db.Timestamptz()
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  hiddenAt        DateTime? @map("hidden_at") @db.Timestamptz()
+  hiddenBy        String?   @map("hidden_by") @db.Uuid
+  sellerReply     String?   @map("seller_reply")
+  sellerRepliedAt DateTime? @map("seller_replied_at") @db.Timestamptz()
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  listing  Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  parent   User    @relation("ReviewAuthor", fields: [parentId], references: [id], onDelete: Restrict)
-  hiddenBy User?   @relation("ReviewHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
+  listing      Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  author       User    @relation("ReviewAuthor", fields: [parentId], references: [id], onDelete: Restrict)
+  hiddenByUser User?   @relation("ReviewHiddenBy", fields: [hiddenBy], references: [id], onDelete: SetNull)
 
   // -- back-references --
   tags           ProductReviewTag[]
   contentReports ContentReport[]
 
   @@unique([listingId, parentId])
-  @@index([listingId, visibility])
+  @@index([listingId, hiddenAt])
   @@map("product_reviews")
 }
 
@@ -1083,18 +1058,19 @@ model ProductReviewTag {
 // 7. COMMERCE & WALLET
 // =============================================================================
 
+/// @note duration_months: 1 = goi thang, 12 = goi nam
+/// @note credits_per_month: cap moi thang, ke ca goi nam
 model Plan {
-  id             String     @id @default(uuid()) @db.Uuid
-  code           String     @unique @db.VarChar(40)
-  name           String     @db.VarChar(100)
-  period         PlanPeriod
-  priceVnd       BigInt     @map("price_vnd")
-  aiStoryQuota   Int        @map("ai_story_quota")
-  aiImageQuota   Int        @map("ai_image_quota")
-  maxChildren    Int        @map("max_children")
-  maxCharacters  Int        @map("max_characters")
-  canSell        Boolean    @default(false) @map("can_sell")
-  isActive       Boolean    @default(true) @map("is_active")
+  id              String  @id @default(uuid()) @db.Uuid
+  code            String  @unique @db.VarChar(40)
+  name            String  @db.VarChar(100)
+  durationMonths  Int     @map("duration_months")
+  priceVnd        BigInt  @map("price_vnd")
+  creditsPerMonth Int     @map("credits_per_month")
+  maxChildren     Int     @map("max_children")
+  maxCharacters   Int     @map("max_characters")
+  canSell         Boolean @default(false) @map("can_sell")
+  isActive        Boolean @default(true) @map("is_active")
 
   // -- back-references --
   subscriptions Subscription[]
@@ -1103,16 +1079,21 @@ model Plan {
   @@map("plans")
 }
 
-/// @note Tra truoc, gia han thu cong. Partial unique: UNIQUE (parent_id) WHERE status = 'active'
+/// @note Tra truoc, gia han thu cong
+/// @note Partial unique: UNIQUE (parent_id) WHERE status = 'active'
+/// @note Cron hang ngay: toi next_credit_grant_at -> credit_expire phan con lai, credit_grant thang moi
+/// @note Nang goi giua ky: ky moi bat dau ngay, cap du credit goi moi, credit con lai giu mot lan
+/// @note Goi Mien phi cung la mot dong subscriptions
 model Subscription {
-  id          String             @id @default(uuid()) @db.Uuid
-  parentId    String             @map("parent_id") @db.Uuid
-  planId      String             @map("plan_id") @db.Uuid
-  orderItemId String?            @map("order_item_id") @db.Uuid
-  periodStart DateTime           @map("period_start") @db.Timestamptz()
-  periodEnd   DateTime           @map("period_end") @db.Timestamptz()
-  status      SubscriptionStatus @default(active)
-  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  id                String             @id @default(uuid()) @db.Uuid
+  parentId          String             @map("parent_id") @db.Uuid
+  planId            String             @map("plan_id") @db.Uuid
+  orderItemId       String?            @map("order_item_id") @db.Uuid
+  periodStart       DateTime           @map("period_start") @db.Timestamptz()
+  periodEnd         DateTime           @map("period_end") @db.Timestamptz()
+  nextCreditGrantAt DateTime           @map("next_credit_grant_at") @db.Timestamptz()
+  status            SubscriptionStatus @default(active)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz()
 
   parent    User       @relation(fields: [parentId], references: [id], onDelete: Restrict)
   plan      Plan       @relation(fields: [planId], references: [id], onDelete: Restrict)
@@ -1123,60 +1104,48 @@ model Subscription {
   @@map("subscriptions")
 }
 
-model CreditPack {
-  id           String  @id @default(uuid()) @db.Uuid
-  name         String  @db.VarChar(120)
-  credits      Int
-  bonusCredits Int     @default(0) @map("bonus_credits")
-  priceVnd     BigInt  @map("price_vnd")
-  isActive     Boolean @default(true) @map("is_active")
-
-  // -- back-references --
-  orderItems OrderItem[]
-
-  @@map("credit_packs")
-}
-
 /// @note Voucher do nen tang chiu: doanh thu nguoi ban tinh tren gia niem yet
 model Voucher {
-  id            String              @id @default(uuid()) @db.Uuid
-  code          String              @unique @db.VarChar(40)
-  discountType  VoucherDiscountType @map("discount_type")
-  value         BigInt
-  maxDiscountVnd BigInt?            @map("max_discount_vnd")
-  minOrderVnd   BigInt              @default(0) @map("min_order_vnd")
-  startsAt      DateTime            @map("starts_at") @db.Timestamptz()
-  endsAt        DateTime            @map("ends_at") @db.Timestamptz()
-  usageLimit    Int?                @map("usage_limit")
-  perUserLimit  Int                 @default(1) @map("per_user_limit")
-  usedCount     Int                 @default(0) @map("used_count")
-  isActive      Boolean             @default(true) @map("is_active")
-  createdById   String              @map("created_by") @db.Uuid
+  id             String              @id @default(uuid()) @db.Uuid
+  code           String              @unique @db.VarChar(40)
+  discountType   VoucherDiscountType @map("discount_type")
+  value          BigInt
+  maxDiscountVnd BigInt?             @map("max_discount_vnd")
+  minOrderVnd    BigInt              @default(0) @map("min_order_vnd")
+  startsAt       DateTime            @map("starts_at") @db.Timestamptz()
+  endsAt         DateTime            @map("ends_at") @db.Timestamptz()
+  usageLimit     Int?                @map("usage_limit")
+  perUserLimit   Int                 @default(1) @map("per_user_limit")
+  usedCount      Int                 @default(0) @map("used_count")
+  isActive       Boolean             @default(true) @map("is_active")
+  createdBy      String              @map("created_by") @db.Uuid
 
-  createdBy User @relation("VoucherCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  creator User @relation("VoucherCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  orders        Order[]
-  voucherUsages VoucherUsage[]
+  orders Order[]
+  usages VoucherUsage[]
 
   @@map("vouchers")
 }
 
-/// @note Webhook: UPDATE ... SET status = paid WHERE id = ? AND status = pending
+/// @note Webhook: UPDATE ... SET status = 'paid' WHERE id = ? AND status = 'pending'
+/// @note CHECK: total_vnd = 0 OR payos_order_code IS NOT NULL
+/// @note Don 0d: tao xong chuyen paid ngay, khong goi payOS
 model Order {
-  id                   String      @id @default(uuid()) @db.Uuid
-  buyerId              String      @map("buyer_id") @db.Uuid
-  voucherId            String?     @map("voucher_id") @db.Uuid
-  subtotalVnd          BigInt      @map("subtotal_vnd")
-  discountVnd          BigInt      @default(0) @map("discount_vnd")
-  totalVnd             BigInt      @map("total_vnd")
-  status               OrderStatus @default(pending)
-  payosOrderCode       BigInt      @unique @map("payos_order_code")
-  payosPaymentLinkId   String?     @map("payos_payment_link_id") @db.VarChar(100)
-  payosTransactionId   String?     @unique @map("payos_transaction_id") @db.VarChar(100)
-  paidAt               DateTime?   @map("paid_at") @db.Timestamptz()
-  expiresAt            DateTime    @map("expires_at") @db.Timestamptz()
-  createdAt            DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  id                 String      @id @default(uuid()) @db.Uuid
+  buyerId            String      @map("buyer_id") @db.Uuid
+  voucherId          String?     @map("voucher_id") @db.Uuid
+  subtotalVnd        BigInt      @map("subtotal_vnd")
+  discountVnd        BigInt      @default(0) @map("discount_vnd")
+  totalVnd           BigInt      @map("total_vnd")
+  status             OrderStatus @default(pending)
+  payosOrderCode     BigInt?     @unique @map("payos_order_code")
+  payosPaymentLinkId String?     @map("payos_payment_link_id") @db.VarChar(100)
+  payosTransactionId String?     @unique @map("payos_transaction_id") @db.VarChar(100)
+  paidAt             DateTime?   @map("paid_at") @db.Timestamptz()
+  expiresAt          DateTime?   @map("expires_at") @db.Timestamptz()
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz()
 
   buyer   User     @relation(fields: [buyerId], references: [id], onDelete: Restrict)
   voucher Voucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
@@ -1190,29 +1159,27 @@ model Order {
   @@map("orders")
 }
 
-/// @note CHECK exclusive arc: plan -> plan_id; credit_pack -> credit_pack_id; listing -> listing_id
+/// @note CHECK exclusive arc: 'plan' -> plan_id; 'listing' -> listing_id + seller_share_rate + seller_amount_vnd
+/// @note Hoan tien chi ap dung khi unit_price_vnd > 0
+/// @note unit_price_vnd, seller_share_rate, seller_amount_vnd la SNAPSHOT
 model OrderItem {
   id              String          @id @default(uuid()) @db.Uuid
   orderId         String          @map("order_id") @db.Uuid
   itemType        OrderItemType   @map("item_type")
   planId          String?         @map("plan_id") @db.Uuid
-  creditPackId    String?         @map("credit_pack_id") @db.Uuid
   listingId       String?         @map("listing_id") @db.Uuid
   unitPriceVnd    BigInt          @map("unit_price_vnd")
-  creditsGranted  Int?            @map("credits_granted")
-  bonusGranted    Int?            @map("bonus_granted")
   sellerShareRate Decimal?        @map("seller_share_rate") @db.Decimal(4, 3)
   sellerAmountVnd BigInt?         @map("seller_amount_vnd")
   status          OrderItemStatus @default(active)
 
-  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  plan       Plan?       @relation(fields: [planId], references: [id], onDelete: Restrict)
-  creditPack CreditPack? @relation(fields: [creditPackId], references: [id], onDelete: Restrict)
-  listing    Listing?    @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  plan    Plan?    @relation(fields: [planId], references: [id], onDelete: Restrict)
+  listing Listing? @relation(fields: [listingId], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  subscriptions Subscription[]
   entitlements  Entitlement[]
+  subscriptions Subscription[]
   refundRequest RefundRequest?
 
   @@index([orderId])
@@ -1235,21 +1202,21 @@ model VoucherUsage {
   @@map("voucher_usages")
 }
 
-/// @note Chi trong 7 ngay ke tu paid_at
+/// @note Chi trong 7 ngay ke tu orders.paid_at (validator tang service)
 model RefundRequest {
   id                 String        @id @default(uuid()) @db.Uuid
   orderItemId        String        @unique @map("order_item_id") @db.Uuid
   requesterId        String        @map("requester_id") @db.Uuid
   reason             String
   status             RequestStatus @default(pending)
-  handledById        String?       @map("handled_by") @db.Uuid
+  handledBy          String?       @map("handled_by") @db.Uuid
   handledAt          DateTime?     @map("handled_at") @db.Timestamptz()
   bankTransactionRef String?       @map("bank_transaction_ref") @db.VarChar(100)
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz()
 
   orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
   requester User      @relation("RefundRequester", fields: [requesterId], references: [id], onDelete: Restrict)
-  handledBy User?     @relation("RefundHandler", fields: [handledById], references: [id], onDelete: SetNull)
+  handler   User?     @relation("RefundHandler", fields: [handledBy], references: [id], onDelete: SetNull)
 
   @@map("refund_requests")
 }
@@ -1268,22 +1235,27 @@ model WebhookLog {
   @@map("webhook_logs")
 }
 
-/// @note CHECK moi cot >= 0. Cap nhat bang SELECT ... FOR UPDATE.
-/// @note Bat bien: moi so du = tong wallet_ledger tuong ung. Credit khong bao gio doi ra tien.
+/// @note CHECK: moi cot so du >= 0
+/// @note Cap nhat bang SELECT ... FOR UPDATE
+/// @note Bat bien: moi so du = tong wallet_ledger tuong ung
+/// @note Credit chi den tu goi, het han cuoi thang, khong doi ra tien, khong chuyen tu doanh thu
 model Wallet {
-  userId            String   @id @map("user_id") @db.Uuid
-  creditBalance     Int      @default(0) @map("credit_balance")
-  earningPendingVnd BigInt   @default(0) @map("earning_pending_vnd")
-  earningAvailableVnd BigInt @default(0) @map("earning_available_vnd")
-  earningLockedVnd  BigInt   @default(0) @map("earning_locked_vnd")
-  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  userId              String   @id @map("user_id") @db.Uuid
+  creditBalance       Int      @default(0) @map("credit_balance")
+  earningPendingVnd   BigInt   @default(0) @map("earning_pending_vnd")
+  earningAvailableVnd BigInt   @default(0) @map("earning_available_vnd")
+  earningLockedVnd    BigInt   @default(0) @map("earning_locked_vnd")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@map("wallets")
 }
 
-/// @note APPEND-ONLY. REVOKE UPDATE, DELETE
+/// @note APPEND-ONLY. Migration REVOKE UPDATE, DELETE tren bang nay
+/// @note amount: co dau
+/// @note available_at: earning_pending -> thoi diem duoc chuyen kha dung (+7 ngay)
+/// @note ref_type: subscription | order_item | ai_request | withdrawal
 model WalletLedger {
   id             BigInt          @id @default(autoincrement())
   userId         String          @map("user_id") @db.Uuid
@@ -1305,7 +1277,7 @@ model WalletLedger {
   @@map("wallet_ledger")
 }
 
-/// @note CHECK amount_vnd >= muc toi thieu (platform_settings)
+/// @note CHECK: amount_vnd >= muc toi thieu (platform_settings.min_withdrawal)
 /// @note Partial unique: UNIQUE (seller_id) WHERE status = 'requested'
 model WithdrawalRequest {
   id                 String           @id @default(uuid()) @db.Uuid
@@ -1313,28 +1285,29 @@ model WithdrawalRequest {
   amountVnd          BigInt           @map("amount_vnd")
   bankSnapshot       Json             @map("bank_snapshot") @db.JsonB
   status             WithdrawalStatus @default(requested)
-  handledById        String?          @map("handled_by") @db.Uuid
+  handledBy          String?          @map("handled_by") @db.Uuid
   handledAt          DateTime?        @map("handled_at") @db.Timestamptz()
   bankTransactionRef String?          @map("bank_transaction_ref") @db.VarChar(100)
   rejectReason       String?          @map("reject_reason")
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz()
 
-  seller    SellerProfile @relation(fields: [sellerId], references: [userId], onDelete: Restrict)
-  handledBy User?         @relation("WithdrawalHandler", fields: [handledById], references: [id], onDelete: SetNull)
+  seller  SellerProfile @relation(fields: [sellerId], references: [userId], onDelete: Restrict)
+  handler User?         @relation("WithdrawalHandler", fields: [handledBy], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([sellerId])
   @@map("withdrawal_requests")
 }
 
-/// @note key: commission_rate | holding_days | min_withdrawal | report_threshold | ai_cost.<type>
+/// @note key: commission_rate | holding_days | min_withdrawal | report_threshold |
+///       ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*
 model PlatformSetting {
   key       String   @id @db.VarChar(60)
   value     Json     @db.JsonB
-  updatedById String @map("updated_by") @db.Uuid
+  updatedBy String   @map("updated_by") @db.Uuid
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  updatedBy User @relation("SettingUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  updater User @relation("SettingUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
 
   @@map("platform_settings")
 }
@@ -1343,18 +1316,18 @@ model PlatformSetting {
 // 8. MODERATION & MONITORING
 // =============================================================================
 
-/// @note Chi quyet dinh approved khi da xem 100% trang va tick du checklist
+/// @note Chi quyet dinh 'approved' khi da xem 100% trang va tick du checklist
 model ModerationReview {
-  id             String                @id @default(uuid()) @db.Uuid
-  listingId      String                @map("listing_id") @db.Uuid
-  reviewType     ModerationReviewType  @map("review_type")
-  moderatorId    String?               @map("moderator_id") @db.Uuid
-  claimedAt      DateTime?             @map("claimed_at") @db.Timestamptz()
-  claimExpiresAt DateTime?             @map("claim_expires_at") @db.Timestamptz()
+  id             String               @id @default(uuid()) @db.Uuid
+  listingId      String               @map("listing_id") @db.Uuid
+  reviewType     ModerationReviewType @map("review_type")
+  moderatorId    String?              @map("moderator_id") @db.Uuid
+  claimedAt      DateTime?            @map("claimed_at") @db.Timestamptz()
+  claimExpiresAt DateTime?            @map("claim_expires_at") @db.Timestamptz()
   decision       ModerationDecision?
   comment        String?
-  decidedAt      DateTime?             @map("decided_at") @db.Timestamptz()
-  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  decidedAt      DateTime?            @map("decided_at") @db.Timestamptz()
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz()
 
   listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   moderator User?   @relation("ModReviewModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
@@ -1369,8 +1342,8 @@ model ModerationReview {
 }
 
 model ReviewChecklistResult {
-  reviewId        String @map("review_id") @db.Uuid
-  checklistItemId String @map("checklist_item_id") @db.Uuid
+  reviewId        String  @map("review_id") @db.Uuid
+  checklistItemId String  @map("checklist_item_id") @db.Uuid
   passed          Boolean
 
   review        ModerationReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
@@ -1380,6 +1353,7 @@ model ReviewChecklistResult {
   @@map("review_checklist_results")
 }
 
+/// @note comment: nhan xet gan vao trang (bao gom diem dung ngay sau trang)
 model ReviewPageView {
   reviewId String   @map("review_id") @db.Uuid
   pageId   String   @map("page_id") @db.Uuid
@@ -1405,7 +1379,7 @@ model ContentReport {
   category        ReportCategory
   description     String?
   status          ReportStatus   @default(open)
-  handledById     String?        @map("handled_by") @db.Uuid
+  handledBy       String?        @map("handled_by") @db.Uuid
   handledAt       DateTime?      @map("handled_at") @db.Timestamptz()
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz()
 
@@ -1413,27 +1387,28 @@ model ContentReport {
   listing       Listing?       @relation(fields: [listingId], references: [id], onDelete: Cascade)
   page          StoryPage?     @relation(fields: [pageId], references: [id], onDelete: SetNull)
   productReview ProductReview? @relation(fields: [productReviewId], references: [id], onDelete: Cascade)
-  handledBy     User?          @relation("ReportHandler", fields: [handledById], references: [id], onDelete: SetNull)
+  handler       User?          @relation("ReportHandler", fields: [handledBy], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([listingId, createdAt])
   @@map("content_reports")
 }
 
-/// @note 3 canh cao con hieu luc -> seller_profiles.status = suspended
+/// @note expires_at: +90 ngay
+/// @note 3 canh cao con hieu luc -> seller_profiles.status = 'suspended'
 model CreatorStrike {
   id        String       @id @default(uuid()) @db.Uuid
   sellerId  String       @map("seller_id") @db.Uuid
   source    StrikeSource
   sourceId  String?      @map("source_id") @db.Uuid
   reason    String
-  issuedById String      @map("issued_by") @db.Uuid
+  issuedBy  String       @map("issued_by") @db.Uuid
   issuedAt  DateTime     @default(now()) @map("issued_at") @db.Timestamptz()
   expiresAt DateTime     @map("expires_at") @db.Timestamptz()
   revokedAt DateTime?    @map("revoked_at") @db.Timestamptz()
 
-  seller   SellerProfile @relation(fields: [sellerId], references: [userId], onDelete: Restrict)
-  issuedBy User          @relation("StrikeIssuer", fields: [issuedById], references: [id], onDelete: Restrict)
+  seller SellerProfile @relation(fields: [sellerId], references: [userId], onDelete: Restrict)
+  issuer User          @relation("StrikeIssuer", fields: [issuedBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
   appeal StrikeAppeal?
@@ -1442,18 +1417,19 @@ model CreatorStrike {
   @@map("creator_strikes")
 }
 
+/// @note decided_by: admin, khac nguoi ra canh cao
 model StrikeAppeal {
   id           String        @id @default(uuid()) @db.Uuid
   strikeId     String        @unique @map("strike_id") @db.Uuid
   reason       String
   status       RequestStatus @default(pending)
-  decidedById  String?       @map("decided_by") @db.Uuid
+  decidedBy    String?       @map("decided_by") @db.Uuid
   decidedAt    DateTime?     @map("decided_at") @db.Timestamptz()
   decisionNote String?       @map("decision_note")
   createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz()
 
-  strike    CreatorStrike @relation(fields: [strikeId], references: [id], onDelete: Cascade)
-  decidedBy User?         @relation("AppealDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  strike  CreatorStrike @relation(fields: [strikeId], references: [id], onDelete: Cascade)
+  decider User?         @relation("AppealDecider", fields: [decidedBy], references: [id], onDelete: SetNull)
 
   @@map("strike_appeals")
 }
@@ -1466,7 +1442,7 @@ model AdminAuditLog {
   targetId    String?  @map("target_id") @db.Uuid
   beforeState Json?    @map("before_state") @db.JsonB
   afterState  Json?    @map("after_state") @db.JsonB
-  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  ipAddress   String?  @map("ip_address") @db.Inet
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)

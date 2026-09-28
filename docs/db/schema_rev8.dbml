@@ -11,6 +11,7 @@
 //  - Truyen mien phi di qua don 0d; bo entitlement_source
 //  - review_visibility -> hidden_at; plan_period -> duration_months
 //  - Bo bedtime, bo notifications
+//  - users.username: them lai (auth dung de dang nhap), full_name thanh nullable
 // =============================================================================
 
 
@@ -254,9 +255,10 @@ Enum casel_competency {
 Table users {
   id uuid [pk, default: `gen_random_uuid()`]
   role user_role [not null, default: 'parent']
+  username varchar(50) [unique, not null, note: 'dung de dang nhap cung voi email']
   email citext [unique, not null]
   password_hash varchar(255) [not null]
-  full_name varchar(150) [not null]
+  full_name varchar(150)
   phone varchar(20)
   kid_exit_pin_hash varchar(255) [note: 'NULL = chua dat PIN -> chan vao Kid Mode']
   email_verified_at timestamptz

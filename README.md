@@ -63,7 +63,46 @@ Chạy ngay trong container, không cần Node trên máy:
 ```bash
 docker compose exec api npx prisma migrate deploy
 docker compose exec api npx prisma migrate status    # kiểm tra lại
+docker compose exec api npx prisma db seed           # eq_skills + topics
 ```
+
+Migration **phải** đi qua `DIRECT_URL` (port **5432**). Port 6543 là pgbouncer ở
+chế độ transaction, nó không giữ session nên Prisma migrate sẽ lỗi.
+
+#### Ba điều cần biết khi làm việc với Supabase
+
+**1. Đừng dùng `prisma migrate reset` trên Supabase.** Nó cố xoá mọi thứ nó thấy
+và sẽ vướng quyền với các schema hệ thống (`auth`, `storage`, `realtime`). Muốn
+dựng lại DB từ đầu thì chạy đoạn này trong Supabase SQL Editor rồi
+`migrate deploy` lại:
+
+```sql
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL   ON SCHEMA public TO postgres, service_role;
+```
+
+**2. Cảnh báo "RLS disabled in public" là đúng thiết kế — đừng bật RLS.**
+Supabase Advisor sẽ báo đỏ cả 49 bảng. Chúng ta không dùng Supabase Auth: API tự
+xác thực bằng JWT riêng và kết nối bằng role `postgres`. Bật RLS lên sẽ không
+chặn được gì (role `postgres` bypass) nhưng sẽ làm vỡ mọi truy vấn nếu ai đó
+đồng thời đổi sang role `anon`/`authenticated`.
+
+**3. `child_usage_sessions` có 2 generated column mà Prisma không hiểu.**
+`duration_seconds` và `usage_date` là `GENERATED ALWAYS ... STORED`, viết tay ở
+cuối `migration.sql`. Prisma không diễn tả được nên `prisma migrate diff` sẽ
+**luôn** báo drift ở hai cột này — đó là drift giả, bỏ qua:
+
+```
+[*] Altered column `duration_seconds` (default changed from DbGenerated(None) to ...)
+[*] Altered column `usage_date`       (default changed from DbGenerated(None) to ...)
+```
+
+⚠️ Hệ quả: khi chạy `prisma migrate dev` lần sau, Prisma sẽ sinh ra migration
+`ALTER COLUMN` xoá mất mệnh đề `GENERATED`. **Phải xoá hai dòng đó khỏi migration
+mới trước khi apply**, nếu không `usage_date` thành cột thường và số liệu giờ xem
+theo ngày Việt Nam sẽ sai.
 
 ### Kiểm tra đã chạy đúng
 
@@ -232,10 +271,14 @@ BE/
 ├── docker-compose.yml           # base, giống production
 ├── docker-compose.dev.yml       # dev: bind mount + hot reload (phải truyền -f)
 ├── .env.example
-├── docs/contracts/ai-service.md # HỢP ĐỒNG Node <-> Python
+├── docs/
+│   ├── contracts/ai-service.md  # HỢP ĐỒNG Node <-> Python
+│   └── db/                      # NGUỒN SỰ THẬT của schema
+│       ├── schema_rev8.dbml     #   dán vào dbdiagram.io để xem ERD
+│       └── schema-guide.md      #   cách đọc, máy trạng thái, ràng buộc, cron
 ├── api/                         # service Node — build thành image
 │   ├── Dockerfile
-│   ├── prisma/                  # schema + migrations (nguồn sự thật của DB)
+│   ├── prisma/                  # bản DẪN XUẤT từ docs/db/ + migrations
 │   ├── scripts/                 # enqueue-ai-job.js — đẩy job thử bằng tay
 │   ├── tests/                   # node:test
 │   └── src/
@@ -247,6 +290,8 @@ BE/
 │       ├── workers/             # ai.processor.js
 │       └── modules/             # 18 module nghiệp vụ
 └── ai/                          # service Python — build thành image
+    ├── CLAUDE.md                # ngữ cảnh + quy ước của service ai
+    ├── docs/                    # 00-product-overview … 09-roadmap, samples/
     ├── Dockerfile
     ├── pyproject.toml  uv.lock
     ├── tests/                   # pytest
