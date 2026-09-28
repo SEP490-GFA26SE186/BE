@@ -8,6 +8,9 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // seed.js dieu phoi tung module theo thu tu phu thuoc. Khong dung "&&" o day:
+    // Prisma khong chay lenh seed qua shell nen phan sau && bi bo qua im lang.
+    seed: "node prisma/seed.js",
   },
   engine: "classic",
   datasource: {
