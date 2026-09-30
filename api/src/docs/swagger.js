@@ -325,7 +325,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           201: {
-            description: 'Đăng ký thành công, trả về user và tokens',
+            description: 'Đăng ký thành công, tài khoản ở trạng thái chờ kích hoạt (isActive = false), mã token xác thực được gửi qua email',
             content: {
               'application/json': {
                 schema: {
@@ -337,7 +337,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                           type: 'object',
                           properties: {
                             user: { $ref: '#/components/schemas/User' },
-                            tokens: { $ref: '#/components/schemas/Tokens' },
                           },
                         },
                       },

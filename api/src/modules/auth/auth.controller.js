@@ -5,7 +5,7 @@ const register = catchAsync(async (req, res) => {
   const result = await authService.register(req.body);
 
   return ApiResponse.created(res, {
-    message: 'User registered successfully. A verification email has been sent.',
+    message: 'User registered successfully. A verification token has been sent to your email to activate your account.',
     data: result,
   });
 });
