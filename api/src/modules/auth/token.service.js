@@ -244,7 +244,7 @@ export const verifyEmailToken = async (rawToken) => {
     throw ApiError.badRequest('Email verification token has expired. Please request a new one.');
   }
 
-  // Atomically mark token consumed and verify user email
+  // Atomically mark token consumed and activate user account
   const updatedUser = await prisma.$transaction(async (tx) => {
     await tx.authToken.update({
       where: { id: tokenRecord.id },
@@ -253,11 +253,15 @@ export const verifyEmailToken = async (rawToken) => {
 
     return await tx.user.update({
       where: { id: tokenRecord.userId },
-      data: { emailVerifiedAt: new Date() },
+      data: {
+        emailVerifiedAt: new Date(),
+        isActive: true,
+      },
       select: {
         id: true,
         username: true,
         email: true,
+        isActive: true,
         emailVerifiedAt: true,
       },
     });

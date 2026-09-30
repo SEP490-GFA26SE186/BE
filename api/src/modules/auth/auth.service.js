@@ -47,6 +47,7 @@ const register = async ({ username, email, password, fullName, phone }) => {
         fullName: fullName?.trim() || normalizedUsername,
         phone: phone?.trim() || null,
         role: 'parent',
+        isActive: false, // Inactive until email is verified
       },
       select: {
         id: true,
@@ -74,9 +75,6 @@ const register = async ({ username, email, password, fullName, phone }) => {
     return user;
   });
 
-  // Generate initial auth tokens
-  const tokens = await tokenService.generateAuthTokens(newUser);
-
   // Send email verification asynchronously without blocking registration
   tokenService
     .generateEmailVerificationToken(newUser.id)
@@ -89,7 +87,6 @@ const register = async ({ username, email, password, fullName, phone }) => {
 
   return {
     user: newUser,
-    tokens,
   };
 };
 
@@ -112,14 +109,17 @@ const login = async ({ emailOrUsername, email, username, password }) => {
     throw ApiError.unauthorized('Invalid email/username or password');
   }
 
-  if (!user.isActive) {
-    throw ApiError.forbidden('Your account has been deactivated. Please contact support.');
-  }
-
   // Verify password
   const isPasswordMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isPasswordMatch) {
     throw ApiError.unauthorized('Invalid email/username or password');
+  }
+
+  if (!user.isActive) {
+    if (!user.emailVerifiedAt) {
+      throw ApiError.forbidden('Account has not been activated. Please check your email for the verification token to activate your account.');
+    }
+    throw ApiError.forbidden('Your account has been deactivated. Please contact support.');
   }
 
   // Update last login timestamp asynchronously

@@ -95,22 +95,22 @@ export const sendEmail = async ({ to, toName, subject, text, html }) => {
  * @param {string} [username]
  */
 export const sendVerificationEmail = async (to, token, username = 'bạn') => {
-  const verificationUrl = `${env.appUrl}/api/v1/auth/verify-email?token=${token}`;
-  const subject = 'StoryWeaver AI - Xác thực địa chỉ email';
-  const text = `Xin chào ${username},\n\nVui lòng nhấn vào đường link dưới đây để xác thực địa chỉ email của bạn:\n${verificationUrl}\n\nLiên kết này có hiệu lực trong vòng 24 giờ.\n\nTrân trọng,\nĐội ngũ StoryWeaver AI`;
+  const subject = 'StoryWeaver AI - Mã xác thực kích hoạt tài khoản';
+  const text = `Xin chào ${username},\n\nCảm ơn bạn đã đăng ký tài khoản trên nền tảng StoryWeaver AI.\n\nMã xác thực kích hoạt tài khoản của bạn là:\n${token}\n\nVui lòng sao chép mã token trên và dán vào form xác thực trên hệ thống để kích hoạt tài khoản.\nMã xác thực này có hiệu lực trong vòng 24 giờ.\n\nTrân trọng,\nĐội ngũ StoryWeaver AI`;
   const html = `
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
       <h2 style="color: #4F46E5; text-align: center;">StoryWeaver AI</h2>
       <p>Xin chào <strong>${username}</strong>,</p>
       <p>Cảm ơn bạn đã đăng ký tài khoản trên nền tảng giáo dục cảm xúc và sáng tác truyện tương tác <strong>StoryWeaver AI</strong>.</p>
-      <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác thực địa chỉ email:</p>
-      <div style="text-align: center; margin: 30px 0;">
-        <a href="${verificationUrl}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Xác thực Email ngay</a>
+      <p>Dưới đây là mã xác thực (token) để kích hoạt tài khoản của bạn:</p>
+      <div style="text-align: center; margin: 25px 0;">
+        <div style="background-color: #f3f4f6; color: #1e1b4b; padding: 14px 20px; border-radius: 6px; font-family: Consolas, Monaco, monospace; font-size: 15px; font-weight: bold; letter-spacing: 0.5px; word-break: break-all; border: 1px dashed #6366f1; display: inline-block;">
+          ${token}
+        </div>
       </div>
-      <p style="font-size: 13px; color: #666;">Nếu nút trên không hoạt động, bạn có thể sao chép và dán liên kết sau vào trình duyệt:</p>
-      <p style="font-size: 12px; word-break: break-all; color: #4F46E5;"><a href="${verificationUrl}">${verificationUrl}</a></p>
+      <p style="font-size: 13px; color: #555;">Vui lòng sao chép mã trên và nhập vào form xác thực trên ứng dụng để hoàn tất kích hoạt tài khoản.</p>
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-      <p style="font-size: 12px; color: #999; text-align: center;">Liên kết này có hiệu lực trong 24 giờ. Nếu bạn không yêu cầu đăng ký này, vui lòng bỏ qua email.</p>
+      <p style="font-size: 12px; color: #999; text-align: center;">Mã xác thực này có hiệu lực trong 24 giờ. Nếu bạn không yêu cầu đăng ký này, vui lòng bỏ qua email.</p>
     </div>
   `;
 
