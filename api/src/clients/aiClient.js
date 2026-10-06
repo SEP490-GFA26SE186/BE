@@ -5,30 +5,47 @@ import env from '../config/env.js';
 import { AI_JOB } from '../queues/ai.jobs.js';
 
 /**
- * Cac errorKind KHONG duoc retry. Day la NGUON SU THAT DUY NHAT cho bang loi
- * trong docs/contracts/ai-service.md — worker doc co `retryable` tu day chu
- * khong tu quyet dinh.
+ * Cac ma loi KHONG duoc retry. Phai KHOP voi NON_RETRYABLE trong spec AI
+ * (§4.3) — bang loi duoc thuc thi bang code o hai noi.
  *
- * - blocked_content: bo loc noi dung da chan. Retry 3 lan chi ton quota va van
- *   bi chan. App cho tre nho nen truong hop nay xay ra thuong xuyen.
- * - invalid_input:   payload sai. Retry khong the lam no dung len.
+ * - INVALID_INPUT:          payload sai. Retry khong the lam no dung len.
+ * - FORBIDDEN_TERM_DETECTED, SAFETY_BLOCKED: bo loc noi dung da chan. Retry 3
+ *   lan chi ton quota va van bi chan. App cho tre nho nen truong hop nay xay
+ *   ra thuong xuyen.
+ * - OUTPUT_INVALID:         model tra sai dinh dang sau khi ai/ da tu thu lai.
  */
-export const NON_RETRYABLE_ERROR_KINDS = new Set(['blocked_content', 'invalid_input']);
+export const NON_RETRYABLE_ERROR_CODES = new Set([
+  'INVALID_INPUT',
+  'FORBIDDEN_TERM_DETECTED',
+  'SAFETY_BLOCKED',
+  'OUTPUT_INVALID',
+]);
 
-/** Map ten job -> endpoint tren ai/. */
-const ENDPOINT_BY_JOB = {
-  [AI_JOB.STORY_PAGE]: '/v1/generate/story-page',
-  [AI_JOB.NARRATION]: '/v1/generate/narration',
+/** Endpoint + timeout mac dinh theo job (ms). env co the ghi de timeout. */
+const JOB_CONFIG = {
+  [AI_JOB.STORY_TEXT]: { endpoint: '/v1/story/generate', timeoutMs: 120_000 },
+  [AI_JOB.CHARACTER_PORTRAIT]: { endpoint: '/v1/images/portrait', timeoutMs: 90_000 },
+  [AI_JOB.SCENE_IMAGE]: { endpoint: '/v1/images/scene', timeoutMs: 90_000 },
+  [AI_JOB.NARRATION]: { endpoint: '/v1/tts/synthesize', timeoutMs: 30_000 },
 };
 
 export class AiServiceError extends Error {
-  constructor(errorKind, message, { status = null, detail = null } = {}) {
+  /**
+   * @param {string} code    ma loi (INVALID_INPUT, TIMEOUT, PROVIDER_ERROR, ...)
+   * @param {string} message
+   * @param {object} [options]
+   * @param {number|null} [options.status]
+   * @param {*} [options.detail]
+   * @param {boolean} [options.serviceRetryable] co `retryable` service tra ve
+   */
+  constructor(code, message, { status = null, detail = null, serviceRetryable = true } = {}) {
     super(message);
     this.name = 'AiServiceError';
-    this.errorKind = errorKind;
+    this.code = code;
     this.status = status;
     this.detail = detail;
-    this.retryable = !NON_RETRYABLE_ERROR_KINDS.has(errorKind);
+    // Tin service khi no noi khong retry; tap ma cua Node luon thang khi no noi retry.
+    this.retryable = serviceRetryable !== false && !NON_RETRYABLE_ERROR_CODES.has(code);
   }
 }
 
@@ -38,58 +55,74 @@ export class AiServiceError extends Error {
  * Luon throw AiServiceError khi that bai, de worker chi can doc `.retryable`.
  *
  * @param {string} jobName mot gia tri trong AI_JOB
- * @param {{ jobId: string, idempotencyKey: string, storagePrefix: string, input: object }} payload
+ * @param {object} payload body JSON gui ai/ (snake_case theo contract)
  * @returns {Promise<object>} response body cua ai/
  */
 export const callAi = async (jobName, payload) => {
-  const endpoint = ENDPOINT_BY_JOB[jobName];
-  if (!endpoint) {
-    throw new AiServiceError('invalid_input', `Unknown AI job name: ${jobName}`);
+  const config = JOB_CONFIG[jobName];
+  if (!config) {
+    throw new AiServiceError('INVALID_INPUT', `Unknown AI job name: ${jobName}`);
   }
   if (!env.ai.serviceUrl || !env.ai.internalToken) {
     // Khong retryable: thieu cau hinh thi thu lai 3 lan cung vay.
     throw new AiServiceError(
-      'invalid_input',
+      'INVALID_INPUT',
       'Missing AI_SERVICE_URL or INTERNAL_TOKEN — container nay khong duoc cau hinh de goi ai/',
     );
   }
+  const timeoutMs = env.ai.timeoutMsByJob[jobName] ?? config.timeoutMs;
 
   let response;
   try {
-    response = await fetch(`${env.ai.serviceUrl}${endpoint}`, {
+    response = await fetch(`${env.ai.serviceUrl}${config.endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Internal-Token': env.ai.internalToken,
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(env.ai.timeoutMs),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     // AbortSignal.timeout() nem TimeoutError; moi loi mang khac deu retryable.
     const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError';
     throw new AiServiceError(
-      isTimeout ? 'timeout' : 'provider_error',
+      isTimeout ? 'TIMEOUT' : 'PROVIDER_ERROR',
       isTimeout
-        ? `ai/ khong tra loi trong ${env.ai.timeoutMs}ms`
+        ? `ai/ khong tra loi trong ${timeoutMs}ms`
         : `Khong goi duoc ai/: ${error.message}`,
     );
   }
 
-  const body = await response.json().catch(() => null);
+  // Doc body cung co the that bai (mang dut, AbortSignal.timeout het gio giua luc doc) -> null.
+  let bodyError = null;
+  const body = await response.json().catch((error) => {
+    bodyError = error;
+    return null;
+  });
 
   if (!response.ok) {
-    // ai/ luon tra { status: 'failed', errorKind, message }.
-    // Neu thieu errorKind (vd. crash truoc khi vao handler) thi coi la
-    // provider_error -> retryable, vi day co the la loi tam thoi.
+    // ai/ tra { error: { code, message, retryable } }. Thieu than loi (vd.
+    // crash truoc khi vao handler) thi coi la PROVIDER_ERROR -> retryable, vi
+    // day co the la loi tam thoi.
+    const err = body?.error;
     throw new AiServiceError(
-      body?.errorKind ?? 'provider_error',
-      body?.message ?? `ai/ tra ve HTTP ${response.status}`,
-      { status: response.status, detail: body },
+      err?.code ?? 'PROVIDER_ERROR',
+      err?.message ?? `ai/ tra ve HTTP ${response.status}`,
+      { status: response.status, detail: body, serviceRetryable: err?.retryable },
     );
+  }
+
+  if (body == null) {
+    // 2xx ma khong doc/parse duoc body la loi tam thoi, khong phai model tra sai -> retryable.
+    // De `null` di tiep thi planPersist nem OUTPUT_INVALID (khong retry) va ket thuc request.
+    const reason = bodyError ? `: ${bodyError.name ?? 'Error'} ${bodyError.message ?? ''}`.trimEnd() : '';
+    throw new AiServiceError('PROVIDER_ERROR', `ai/ tra HTTP ${response.status} nhung body rong/khong doc duoc${reason}`, {
+      status: response.status,
+    });
   }
 
   return body;
 };
 
-export default { callAi, AiServiceError, NON_RETRYABLE_ERROR_KINDS };
+export default { callAi, AiServiceError, NON_RETRYABLE_ERROR_CODES };

@@ -2,13 +2,16 @@
 
 ## Nguyên tắc
 
-- `pytest` không bao giờ gọi mạng: dùng provider `mock` hoặc respx.
+- `pytest` không bao giờ gọi mạng: dùng provider `mock`; test `GeminiLLMProvider` bằng client giả tiêm vào (không phải
+  `respx`, xem README); `respx` chỉ cho HTTP thô như `SupabaseStorage`. Một fixture `autouse` chặn mọi
+  kết nối ngoài loopback.
 - Script thử thật nằm trong `scripts/`, bắt buộc cờ `--confirm`, in chi phí ước tính trước khi chạy.
 
 ## Chữ
 
-- Unit test: `text_utils` (đếm tiếng, bỏ dấu), `guards` (tên trùng từ thường: "An" / "an toàn",
-  hoa thường, có dấu / không dấu), `validator` (mỗi dòng trong bảng docs 04 có ít nhất một test
+- Unit test: `text_utils` (đếm tiếng; tách câu không cắt ở dấu hai chấm), `guards` (một tầng: "An" khớp
+  "An", không khớp "an toàn" / "Ân" / "Anh"; phân biệt hoa thường và dấu; NFD khớp NFC; không quét
+  `topic.guidance`; output chứa tên vẫn thành công), `validator` (mỗi dòng trong bảng docs 04 có ít nhất một test
   đạt và một test trượt; biên độ dài 9% / 11%).
 - Test vòng thử lại: LLM giả trả output sai lần đầu, đúng lần hai; và sai cả hai lần.
 - Test cho từng kiểu điểm dừng: thiếu vai, thừa phương án, `answer` ngoài bộ 5 cảm xúc, `answer`

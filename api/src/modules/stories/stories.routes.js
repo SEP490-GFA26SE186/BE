@@ -5,60 +5,42 @@ import { auth, validate } from '../../middlewares/index.js';
 
 const router = Router();
 
-// All story routes require authenticated user (parent, moderator, admin)
+// Moi route can dang nhap. Quyen theo truyen (chu truyen / moderator / admin) kiem trong
+// stories.access.js.
 router.use(auth);
 
-// Story collection endpoints
+// ---- Truyen (spec §4.1) ----
 router
   .route('/')
   .post(validate(storiesValidation.createStory), storiesController.createStory)
   .get(validate(storiesValidation.getStories), storiesController.getStories);
 
-// Story detail endpoints
 router
   .route('/:id')
   .get(validate(storiesValidation.getStory), storiesController.getStoryById)
   .put(validate(storiesValidation.updateStory), storiesController.updateStory)
   .delete(validate(storiesValidation.deleteStory), storiesController.deleteStory);
 
-// Character slot bindings
-router.put(
-  '/:id/characters',
-  validate(storiesValidation.bindCharacters),
-  storiesController.bindCharacters
-);
+router.put('/:id/characters', validate(storiesValidation.bindCharacters), storiesController.bindCharacters);
 
-// Story Editor: Pages management
-router.post(
-  '/:id/pages',
-  validate(storiesValidation.createPage),
-  storiesController.createPage
-);
-
+// ---- Editor (spec §4.2) ----
+router.post('/:id/pages', validate(storiesValidation.createPage), storiesController.createPage);
 router
   .route('/:id/pages/:pageId')
   .put(validate(storiesValidation.updatePage), storiesController.updatePage)
   .delete(validate(storiesValidation.deletePage), storiesController.deletePage);
 
-// Story Editor: Choice / Branching management
-router.put(
-  '/:id/pages/:pageId/choices/:choiceId',
-  validate(storiesValidation.updateChoice),
-  storiesController.updateChoice
-);
+router.post('/:id/checkpoints', validate(storiesValidation.createCheckpoint), storiesController.createCheckpoint);
+router
+  .route('/:id/checkpoints/:cpId')
+  .put(validate(storiesValidation.updateCheckpoint), storiesController.updateCheckpoint)
+  .delete(validate(storiesValidation.deleteCheckpoint), storiesController.deleteCheckpoint);
 
-// Story Review Mode: Parent verifies 100% pages to mark ready
-router.post(
-  '/:id/review',
-  validate(storiesValidation.reviewStory),
-  storiesController.reviewStory
-);
+router.post('/:id/review', validate(storiesValidation.reviewStory), storiesController.reviewStory);
+router.post('/:id/publish-version', validate(storiesValidation.storyOnly), storiesController.publishStoryVersion);
 
-// Story Publishing: Clone to published version with de-personalization
-router.post(
-  '/:id/publish-version',
-  validate(storiesValidation.publishStoryVersion),
-  storiesController.publishStoryVersion
-);
+// ---- Sinh chu (spec §4.3) — Task 9 ----
+router.post('/:id/generate', validate(storiesValidation.storyOnly), storiesController.generateStory);
+router.get('/:id/generation', validate(storiesValidation.storyOnly), storiesController.getGeneration);
 
 export default router;

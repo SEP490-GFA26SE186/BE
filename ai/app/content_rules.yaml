@@ -1,0 +1,22 @@
+# Content rules read by the validator (spec 7.3, docs/07). Edited often as the team reads real
+# stories - hence YAML, not env. Vietnamese on purpose: this is story content.
+# Matching is by whole word/phrase (Task 11), so keep entries as natural words.
+
+emotion_lexicon:
+  happy: [vui, vui vẻ, vui sướng, thích, sung sướng, hạnh phúc, mừng, hớn hở, phấn khởi, cười tươi]
+  sad: [buồn, buồn bã, tủi, tủi thân, khóc, rơm rớm, thất vọng, đau lòng, ủ rũ]
+  angry: [giận, tức, bực, cáu, nổi giận, giận dữ, tức giận, bực bội, cáu kỉnh, nổi cáu]
+  scared: [sợ, sợ hãi, hoảng, hoảng sợ, lo sợ, run sợ, rùng mình, khiếp]
+  neutral: [bình thường, bình tĩnh, không sao, yên tâm]
+
+preachy_phrases:
+  - bài học
+  - con phải nhớ
+  - phải biết
+  - ngoan hơn
+  - con nên
+  - các con nên
+  - đừng bao giờ
+  - câu chuyện này dạy
+  - điều quan trọng là
+  - hãy luôn

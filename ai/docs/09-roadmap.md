@@ -9,10 +9,11 @@ mọi endpoint (theo docs 05), ba mock provider. Mọi endpoint chạy được 
 docs 08.
 
 **M3 — Sinh truyện thật.** `prompts/story.v1.md` theo docs 07, `GeminiLLMProvider` với JSON có
-schema, trần token đầu ra, vòng thử lại. `scripts/try_story.py`.
+schema, trần token đầu ra (cộng budget thinking), vòng thử lại. `scripts/try_story.py`.
+*Spike Gemini (docs 01) tạm dừng, mới xong một phần; còn thiếu số đo cho sample xung đột mạnh và
+truyện `custom` 20 trang.*
 
-**M4a — Lớp ảnh và Gemini.** Port, registry, `MockAdapter`, `GeminiAdapter`, bốn decorator, chuẩn
-hoá WebP, chân dung 2 phương án, ảnh cảnh có tham chiếu. Tầng mock + ghi/phát lại +
+**M4a — Lớp ảnh.** Port, registry, `MockAdapter`, bốn decorator, chuẩn hoá WebP, chân dung 2 phương án, ảnh cảnh có tham chiếu. Tầng mock + ghi/phát lại +
 `try_images.py`.
 
 **M4b — Model mã nguồn mở.** `ComfyUIAdapter`, `HFInferenceAdapter`, khung
@@ -27,29 +28,49 @@ Dockerfile, README chạy local.
 
 ## Biến môi trường
 
+Danh sách dưới đây là bản **M1–M3** (khớp `app/config.py` và `.env.example`). Biến của M4b / M5
+(ghi ở phần cuối) chỉ khai khi có code đọc chúng.
+
 ```
 INTERNAL_TOKEN=
-LLM_PROVIDER=mock            # mock | gemini
-TTS_PROVIDER=mock            # mock | vieneu
+LLM_PROVIDER=mock                  # mock | gemini
+TTS_PROVIDER=mock                  # mock (vieneu: M5)
 GEMINI_API_KEY=
-GEMINI_TEXT_MODEL=
-IMAGE_PROFILE_PORTRAIT=gemini-flash-image   # tên profile trong image_models.yaml
-IMAGE_PROFILE_SCENE=gemini-flash-image
-# .env.dev: dùng gemini-flash-lite-image hoặc profile mã nguồn mở khi thử
-IMAGE_DEV_MAX_CALLS=10       # trần số ảnh mỗi lần chạy script thử thật
+GEMINI_TEXT_MODEL=                 # bắt buộc khi LLM_PROVIDER=gemini; kiểm lúc khởi động
+LLM_TIMEOUT_SECONDS=45             # 2 x 45 + overhead < AI_TIMEOUT_MS_STORY_TEXT của Node (docs 01, README)
+LLM_TEMPERATURE=                   # trống = mặc định SDK / model
+LLM_RETRY_TEMPERATURE=             # trống = không gửi (mặc định, xem docs 01)
+LLM_THINKING_BUDGET=0              # 0 = tắt thinking; > 0 = budget cố định CỘNG THÊM vào trần token
+LLM_TRUNCATION_RETRY_FACTOR=1.5    # lần thử lại sau OUTPUT_TRUNCATED nhân trần chữ với hệ số này
+TOKENS_PER_WORD=2.8
+SCENE_DESCRIPTION_MAX_WORDS=30     # hằng của service, không phải trường limits backend gửi
+IMAGE_PROFILE_PORTRAIT=mock        # chỉ để /health báo; profile thật chọn ở M4b
+IMAGE_PROFILE_SCENE=mock
+SUPABASE_URL=                      # trống -> LocalStorage
+SUPABASE_SERVICE_KEY=
+SUPABASE_BUCKET=story-assets
+PRICE_TEXT_INPUT_PER_MTOK_MICROS=0
+PRICE_TEXT_OUTPUT_PER_MTOK_MICROS=0
+LOG_LEVEL=INFO
+```
+
+Không có `DATABASE_URL`, không có `REDIS_URL` (bất biến: service stateless). Đã xoá `AI_PROVIDER`
+(tách thành `LLM_PROVIDER` / `TTS_PROVIDER`) và `PROVIDER_TIMEOUT_SECONDS`.
+
+Biến sẽ thêm ở mốc sau (chưa khai):
+
+```
+# M4b — ảnh
 COMFYUI_URL=                 # server ComfyUI có GPU, nằm ngoài repo
 HF_API_TOKEN=
 ALLOW_NONCOMMERCIAL_MODELS=false
-LLM_TIMEOUT_SECONDS=60
+IMAGE_DEV_MAX_CALLS=10       # trần số ảnh mỗi lần chạy script thử thật
 IMAGE_TIMEOUT_SECONDS=90
-TOKENS_PER_WORD=2.0
 IMAGE_OUTPUT_WIDTH=1024
+PRICE_IMAGE_PER_UNIT_MICROS=0
+# M5 — giọng đọc
 VIENEU_MODEL_PATH=
 TTS_BITRATE=48k
-PRICE_TEXT_INPUT_PER_MTOK_MICROS=0
-PRICE_TEXT_OUTPUT_PER_MTOK_MICROS=0
-PRICE_IMAGE_PER_UNIT_MICROS=0
-LOG_LEVEL=INFO
 ```
 
 Bảng giá để ước tính `estimated_cost_micros` nằm trong env, không viết cứng — giá nhà cung

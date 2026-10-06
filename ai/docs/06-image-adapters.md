@@ -2,22 +2,17 @@
 
 ## Model
 
-Họ Nano Banana của Gemini, gọi qua cùng SDK với phần chữ.
+**Sinh ảnh không dùng Gemini.** Gemini chỉ dùng cho chữ (`docs/01-decisions.md`). Hướng là **model
+mã nguồn mở, miễn phí**, chạy qua ComfyUI hoặc HF Inference (adapter bên dưới).
 
-| Dùng cho | Model | Lý do |
-|---|---|---|
-| Chân dung nhân vật | `gemini-3.1-flash-image` (Nano Banana 2) | Sinh một lần, dùng lại mãi — chất lượng quan trọng hơn giá; mạnh về xử lý nhiều ảnh tham chiếu và giữ nhân vật nhất quán |
-| Tranh cảnh truyện | `gemini-3.1-flash-image` | Cần giữ nhân vật khớp chân dung qua 4 ảnh |
-| Dev / test tích hợp | `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite) | Nhanh và rẻ nhất; chỉ ra ảnh 1K; vẫn giữ nhân vật khá tốt — đủ để kiểm tra luồng và prompt |
+**Model cụ thể để ngỏ tới spec M4** — chưa chọn model chính cho chân dung và cho cảnh. Ứng viên
+(ví dụ `flux2-klein-4b`, `z-image-turbo`, `qwen-image-edit`, `sdxl-ipadapter` trong ví dụ profile
+bên dưới) chỉ là để minh hoạ cấu trúc; chọn bằng `scripts/compare_images.py` + checklist chấm tay
+(`docs/08-testing.md`), đọc giấy phép và model card chính thức của từng model.
 
-- **Không dùng `gemini-2.5-flash-image`** — là model đời cũ, Google khuyến nghị chuyển đi.
 - Chân dung và cảnh chọn profile riêng (`IMAGE_PROFILE_PORTRAIT`, `IMAGE_PROFILE_SCENE`, mục
-  docs 06) để đổi độc lập — kể cả dùng Gemini cho chân dung và model mã nguồn mở cho cảnh.
-- Tên model có thể mang hậu tố `-preview` tuỳ thời điểm. Khi khởi động với provider `gemini`,
-  gọi API liệt kê model và **báo lỗi rõ ràng** nếu model cấu hình không tồn tại, thay vì để
-  request đầu tiên mới lỗi.
-- Mọi ảnh do các model này sinh ra đều có watermark SynthID. Không cần xử lý gì, nhưng ghi vào
-  README.
+  docs 06) để đổi độc lập — chân dung và cảnh có thể dùng hai model khác nhau.
+- Ảnh sinh ra có thể cần ghi nguồn gốc / watermark tuỳ giấy phép từng model — kiểm khi chọn.
 
 ## Quy tắc chung
 
@@ -28,7 +23,7 @@ Họ Nano Banana của Gemini, gọi qua cùng SDK với phần chữ.
 
 ## Kiến trúc adapter
 
-Mục tiêu: **thử được nhiều model sinh ảnh** — Gemini và các model mã nguồn mở — trên cùng một
+Mục tiêu: **thử được nhiều model sinh ảnh** — các model mã nguồn mở — trên cùng một
 luồng, đổi model bằng cấu hình, không sửa code nghiệp vụ.
 
 ### Ba lớp tách biệt
@@ -43,7 +38,7 @@ ImageGenerator  (port / interface)        ← generate(), capabilities()
         │     ReplayDecorator · BudgetGuard · SafetyCheck · UsageTimer
         ▼
 Adapters theo RUNTIME, không theo model:
-   MockAdapter · GeminiAdapter · ComfyUIAdapter · HFInferenceAdapter · DiffusersLocalAdapter
+   MockAdapter · ComfyUIAdapter · HFInferenceAdapter · DiffusersLocalAdapter
         │
         ▼
 Model profiles (image_models.yaml)        ← model nào chạy trên adapter nào, với tham số gì
@@ -92,24 +87,12 @@ Adapter đọc `capabilities` của profile rồi quyết định:
 - `num_images` vượt `max_images_per_call` → gọi nhiều lần.
 - Aspect ratio không có trong danh sách → chọn tỉ lệ gần nhất, ghi vào log.
 
-Mỗi profile có **prompt dialect** riêng (câu mô tả tự nhiên cho Gemini/FLUX/Qwen, dạng từ
+Mỗi profile có **prompt dialect** riêng (câu mô tả tự nhiên cho FLUX/Qwen, dạng từ
 khoá cho SDXL). `image_prompts.py` dựng prompt theo dialect của profile đang dùng.
 
 ### Model profiles — `app/image_models.yaml`
 
 ```yaml
-gemini-flash-image:
-  adapter: gemini
-  remote_model: gemini-3.1-flash-image
-  dialect: natural
-  capabilities: { supports_reference_images: true, max_reference_images: 3,
-                  has_builtin_safety_filter: true, commercial_use: true, ... }
-
-gemini-flash-lite-image:
-  adapter: gemini
-  remote_model: gemini-3.1-flash-lite-image
-  ...
-
 flux2-klein-4b:
   adapter: comfyui                  # hoặc hf_inference, tuỳ runtime có sẵn
   workflow: workflows/flux2_klein_4b_ref.json
@@ -141,14 +124,14 @@ Khả năng và giấy phép trong ví dụ là **để minh hoạ cấu trúc**
 card chính thức để điền cho đúng, không dựa vào file này.
 
 Chọn model bằng biến môi trường trỏ tới **tên profile**:
-`IMAGE_PROFILE_PORTRAIT=gemini-flash-image`, `IMAGE_PROFILE_SCENE=flux2-klein-4b`.
+`IMAGE_PROFILE_PORTRAIT=flux2-klein-4b`, `IMAGE_PROFILE_SCENE=z-image-turbo` (ví dụ minh hoạ,
+chưa phải lựa chọn). Hiện tại (M1–M3) cả hai là `mock`.
 
 ### Adapters
 
 | Adapter | Chạy ở đâu | Ghi chú |
 |---|---|---|
-| `mock` | trong process | Mặc định; PNG có vẽ chữ mô tả cảnh |
-| `gemini` | Gemini API | Model trong phần Model ở trên |
+| `mock` | trong process | Mặc định; PNG đơn sắc đúng kích thước, đi qua đường upload Storage thật |
 | `comfyui` | Server ComfyUI qua HTTP (`COMFYUI_URL`) | Cách chính để chạy model mã nguồn mở. Mỗi model một workflow JSON có placeholder cho prompt, seed, ảnh tham chiếu; adapter upload ảnh, gửi workflow, poll kết quả |
 | `hf_inference` | Hugging Face Inference API | Cho model có sẵn endpoint; kiểm tra hạn mức tài khoản trước |
 | `diffusers_local` | `diffusers` trong process | **Chỉ bật khi máy có GPU.** Máy dev hiện tại không có — viết adapter nhưng không bắt buộc chạy được |
@@ -166,7 +149,7 @@ dựng server đó **nằm ngoài repo này**; ghi hướng dẫn ngắn trong R
 
 ### An toàn ảnh với model mã nguồn mở — bắt buộc
 
-Gemini có bộ lọc an toàn sẵn; **model mã nguồn mở thì không.** Khi profile có
+Nhiều API thương mại có bộ lọc an toàn sẵn; **model mã nguồn mở thì không.** Khi profile có
 `has_builtin_safety_filter: false`, `SafetyCheck` phải chạy trên **mọi ảnh sinh ra** trước khi
 trả về:
 

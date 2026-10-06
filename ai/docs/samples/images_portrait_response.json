@@ -1,0 +1,17 @@
+{
+  "request_id": "3b1f5c7e-portrait-demo",
+  "portrait_keys": [
+    "stories/demo/portraits/3b1f5c7e-portrait-demo-1.png",
+    "stories/demo/portraits/3b1f5c7e-portrait-demo-2.png"
+  ],
+  "usage": {
+    "provider": "mock",
+    "model": "mock-image-v1",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "units": 2,
+    "estimated_cost_micros": 0,
+    "latency_ms": 12,
+    "attempts": 1
+  }
+}

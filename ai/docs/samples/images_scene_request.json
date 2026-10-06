@@ -1,0 +1,17 @@
+{
+  "request_id": "9a4d2e60-scene-demo",
+  "storage_prefix": "stories/demo/scenes",
+  "scene_description": "A cozy living room on a sunny Saturday afternoon, a boy sits on a green rug playing with a red toy car while his younger brother watches.",
+  "characters": [
+    {
+      "description": "bé trai 6 tuổi, tóc ngắn, áo xanh",
+      "portrait_key": "stories/demo/portraits/3b1f5c7e-portrait-demo-1.png"
+    },
+    {
+      "description": "em trai 4 tuổi, hay cười"
+    }
+  ],
+  "forbidden_terms": [
+    "Minh"
+  ]
+}

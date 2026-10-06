@@ -21,6 +21,9 @@ dist/
 build/
 *.egg-info/
 
+# ---- output cua script thu Gemini that (chua noi dung truyen) ----
+ai/out/
+
 # ---- test / cache ----
 coverage/
 .pytest_cache/

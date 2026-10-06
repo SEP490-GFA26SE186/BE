@@ -1,0 +1,8 @@
+{
+  "request_id": "3b1f5c7e-portrait-demo",
+  "storage_prefix": "stories/demo/portraits",
+  "description": "bé trai 6 tuổi, tóc ngắn, áo xanh",
+  "forbidden_terms": [
+    "Minh"
+  ]
+}

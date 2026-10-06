@@ -22,8 +22,14 @@ const env = {
     // `api` khong nhan no, de moi request AI buoc phai di qua queue.
     serviceUrl: process.env.AI_SERVICE_URL,
     internalToken: process.env.INTERNAL_TOKEN,
-    // Node cat o 12s de con cho ghi DB + day WebSocket ma van trong NFR 15s.
-    timeoutMs: parseInt(process.env.AI_TIMEOUT_MS, 10) || 12000,
+    // Ghi de timeout theo job; khong dat thi aiClient.js dung mac dinh trong
+    // JOB_CONFIG (undefined).
+    timeoutMsByJob: {
+      story_text: parseInt(process.env.AI_TIMEOUT_MS_STORY_TEXT, 10) || undefined,
+      character_portrait: parseInt(process.env.AI_TIMEOUT_MS_CHARACTER_PORTRAIT, 10) || undefined,
+      scene_image: parseInt(process.env.AI_TIMEOUT_MS_SCENE_IMAGE, 10) || undefined,
+      narration: parseInt(process.env.AI_TIMEOUT_MS_NARRATION, 10) || undefined,
+    },
     attempts: parseInt(process.env.AI_JOB_ATTEMPTS, 10) || 3,
     concurrency: parseInt(process.env.AI_WORKER_CONCURRENCY, 10) || 3,
   },

@@ -63,7 +63,12 @@ services:
       REDIS_URL: redis://redis:6379
       AI_SERVICE_URL: http://ai:8000
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-12000}
+      # Timeout goi ai/ theo job (ms). De trong = mac dinh JOB_CONFIG trong api/src/clients/aiClient.js
+      # (120s story_text, 90s anh, 30s narration). Xem docs/contracts/ai-service.md §6.
+      AI_TIMEOUT_MS_STORY_TEXT: ${AI_TIMEOUT_MS_STORY_TEXT:-}
+      AI_TIMEOUT_MS_CHARACTER_PORTRAIT: ${AI_TIMEOUT_MS_CHARACTER_PORTRAIT:-}
+      AI_TIMEOUT_MS_SCENE_IMAGE: ${AI_TIMEOUT_MS_SCENE_IMAGE:-}
+      AI_TIMEOUT_MS_NARRATION: ${AI_TIMEOUT_MS_NARRATION:-}
       AI_JOB_ATTEMPTS: ${AI_JOB_ATTEMPTS:-3}
       AI_WORKER_CONCURRENCY: ${AI_WORKER_CONCURRENCY:-3}
       # CO Y khong co JWT_SECRET / BREVO_*: worker khong xu ly request cua user.
@@ -89,12 +94,30 @@ services:
       context: ./ai
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      # Chu (mock | gemini) va giong doc (mock; vieneu o M5) chon rieng. Anh chi co mock toi M4b.
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      TTS_PROVIDER: ${TTS_PROVIDER:-mock}
+      # Chi can khi LLM_PROVIDER=gemini; model phai ton tai (kiem luc khoi dong).
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-}
+      # Tuy chon. De trong = mac dinh trong ai/app/config.py (Settings bo qua bien rong).
+      # Bat bien: AI_TIMEOUT_MS_STORY_TEXT (worker) > 2 x LLM_TIMEOUT_SECONDS + overhead.
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-}
+      LLM_RETRY_TEMPERATURE: ${LLM_RETRY_TEMPERATURE:-}
+      LLM_THINKING_BUDGET: ${LLM_THINKING_BUDGET:-}
+      LLM_TRUNCATION_RETRY_FACTOR: ${LLM_TRUNCATION_RETRY_FACTOR:-}
+      TOKENS_PER_WORD: ${TOKENS_PER_WORD:-}
+      SCENE_DESCRIPTION_MAX_WORDS: ${SCENE_DESCRIPTION_MAX_WORDS:-}
+      IMAGE_PROFILE_PORTRAIT: ${IMAGE_PROFILE_PORTRAIT:-}
+      IMAGE_PROFILE_SCENE: ${IMAGE_PROFILE_SCENE:-}
+      PRICE_TEXT_INPUT_PER_MTOK_MICROS: ${PRICE_TEXT_INPUT_PER_MTOK_MICROS:-}
+      PRICE_TEXT_OUTPUT_PER_MTOK_MICROS: ${PRICE_TEXT_OUTPUT_PER_MTOK_MICROS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-story-assets}
-      # CO Y khong co DATABASE_URL / JWT_SECRET: service nay khong duoc doc DB.
+      # CO Y khong co DATABASE_URL / REDIS_URL / JWT_SECRET: service nay khong duoc doc DB.
     expose:
       # Chi service trong network cua compose goi duoc. Khong ai tu host hay LAN
       # choc truc tiep vao endpoint sinh noi dung duoc.

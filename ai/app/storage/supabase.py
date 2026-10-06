@@ -43,3 +43,28 @@ class SupabaseStorage:
                 f"Supabase Storage tra ve {response.status_code}: {response.text[:200]}"
             )
         return key
+
+    async def download(self, key: str) -> bytes:
+        """Doc lai object qua REST API (bucket private -> endpoint co xac thuc)."""
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.get(
+                    f"{self._base}/{self._bucket}/{key}",
+                    headers={"Authorization": f"Bearer {self._key}"},
+                )
+        except httpx.HTTPError as error:
+            raise AiError.provider_error(f"Khong tai duoc tu Supabase: {error}") from error
+
+        # Supabase Storage may report a missing object as HTTP 404, or as HTTP 400 with
+        # "not_found" / statusCode 404 in the body. Not verified against the live service.
+        missing = response.status_code == 404 or (
+            response.status_code == 400 and "not_found" in response.text.lower().replace(" ", "_")
+        )
+        if missing:
+            # Wrong key from the caller, not transient: do not let BullMQ retry it.
+            raise AiError.invalid_input("Không tìm thấy file theo key đã cho.")
+        if response.status_code >= 400:
+            raise AiError.provider_error(
+                f"Supabase Storage tra ve {response.status_code}: {response.text[:200]}"
+            )
+        return response.content

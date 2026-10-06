@@ -1,0 +1,15 @@
+{
+  "request_id": "c7e81b24-tts-demo",
+  "audio_key": "stories/demo/audio/c7e81b24-tts-demo-1.wav",
+  "duration_seconds": 7.2,
+  "usage": {
+    "provider": "mock",
+    "model": "mock-tts-v1",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "units": 8,
+    "estimated_cost_micros": 0,
+    "latency_ms": 3,
+    "attempts": 1
+  }
+}

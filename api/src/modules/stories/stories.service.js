@@ -1,958 +1,335 @@
+import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
+import { loadStorySettings } from './lib/storySettings.js';
+import { buildNameContext, tokenizeNames, findLeftoverNames, findDroppedTokens } from './lib/names.js';
+import { assignTokens, defaultTarget, buildSkeleton } from './lib/skeleton.js';
+import {
+  STORY_DETAIL_INCLUDE,
+  STORY_SUMMARY_INCLUDE,
+  formatStoryDetail,
+  formatStorySummary,
+} from './lib/storyFormat.js';
+import { loadStoryForRead, loadOwnedStory, lockForWrite } from './stories.access.js';
+
+export { formatStoryDetail };
+
+// Tao truyen ~15-30 cau lenh qua mang toi Supabase; mac dinh 5s cua Prisma khong du.
+export const TX_OPTIONS = { timeout: 20000 };
+const NEEDS_TARGET = ['emotion_other', 'perspective'];
+
+// ---------------------------------------------------------------------------
+// Ten -> token
+// ---------------------------------------------------------------------------
+
+const loadChildren = (db, parentId) =>
+  db.childProfile.findMany({ where: { parentId, deletedAt: null }, select: { id: true, name: true } });
 
 /**
- * Helper to check story ownership or elevated privileges and active listing lock
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @param {boolean} requireOwner - Require current user to be owner
- * @param {boolean} checkMutationLock - Check if story is locked by an active marketplace listing
- * @returns {Promise<Object>} Story record
+ * Nap nhan vat cua phu huynh theo thu tu gui len, gan token. Nhan vat khong thuoc phu huynh hoac
+ * da xoa -> 404. Tra ve [{ characterId, token, isMain, name, childId }].
  */
-const verifyStoryAccess = async (user, storyId, requireOwner = false, checkMutationLock = false) => {
-  const story = await prisma.story.findFirst({
-    where: {
-      id: storyId,
-      deletedAt: null,
-    },
-    include: {
-      template: {
-        include: {
-          slots: true,
-          primarySkill: true,
-        },
+async function resolveStoryCharacters(db, parentId, input) {
+  const ids = input.map((c) => c.characterId);
+  const rows = await db.character.findMany({
+    where: { id: { in: ids }, parentId, deletedAt: null },
+    select: { id: true, name: true, childId: true },
+  });
+  if (rows.length !== new Set(ids).size) {
+    throw ApiError.notFound('Không tìm thấy nhân vật đã chọn trong gia đình của bạn.');
+  }
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return assignTokens(input).map((sc) => ({
+    ...sc,
+    name: byId.get(sc.characterId).name,
+    childId: byId.get(sc.characterId).childId,
+  }));
+}
+
+/**
+ * Thay ten bang token; con sot ten (ten con khong la nhan vat) -> 422 truoc khi luu,
+ * thay vi de AI tra FORBIDDEN_TERM_DETECTED sau khi da giu credit (spec §6).
+ * `path` la ten truong ghi vao `errors[]` (editor dung cho chu trang / diem dung).
+ */
+export function tokenizeOrReject(text, { nameMap, forbiddenTerms }, path = 'situation') {
+  if (text == null) return null;
+  const tokenized = tokenizeNames(text, nameMap);
+  const leftovers = findLeftoverNames(tokenized, forbiddenTerms);
+  if (leftovers.length > 0) {
+    throw new ApiError(
+      StatusCodes.UNPROCESSABLE_ENTITY,
+      'Nội dung chứa tên của con chưa có trong truyện. Hãy thêm bé làm nhân vật hoặc bỏ tên khỏi nội dung.',
+      leftovers.map((name) => ({ path, message: `Tên "${name}" chưa có trong truyện` })),
+    );
+  }
+  return tokenized;
+}
+
+/** Ngu canh ten cua mot truyen da luu (Task 6 va 8 dung). `db` la prisma hoac tx. */
+export async function loadNameContextForStory(db, storyId) {
+  const story = await db.story.findUniqueOrThrow({
+    where: { id: storyId },
+    select: {
+      ownerId: true,
+      storyCharacters: {
+        select: { token: true, aliasName: true, character: { select: { name: true, childId: true } } },
       },
     },
   });
+  const children = await loadChildren(db, story.ownerId);
+  return buildNameContext({
+    storyCharacters: story.storyCharacters.map((sc) => ({
+      token: sc.token,
+      name: sc.character?.name ?? sc.aliasName,
+      childId: sc.character?.childId ?? null,
+    })),
+    children,
+  });
+}
 
-  if (!story) {
-    throw ApiError.notFound('Story not found');
-  }
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-  const isOwner = story.ownerId === user.id;
-  const isElevated = ['admin', 'moderator'].includes(user.role);
+export const getDetail = async (db, storyId) =>
+  formatStoryDetail(await db.story.findUniqueOrThrow({ where: { id: storyId }, include: STORY_DETAIL_INCLUDE }));
 
-  if (requireOwner && !isOwner && user.role !== 'admin') {
-    throw ApiError.forbidden('You do not have permission to modify this story');
-  }
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
 
-  if (!isOwner && story.kind !== 'published' && !isElevated) {
-    throw ApiError.forbidden('Access denied to private story');
-  }
-
-  // If modifying a story, verify it's not currently locked by an active or pending marketplace listing
-  if (checkMutationLock) {
-    const activeListing = await prisma.listing.findFirst({
-      where: {
-        publishedStoryId: storyId,
-        status: { in: ['submitted', 'in_review', 'published'] },
-      },
-      select: {
-        id: true,
-        status: true,
-      },
-    });
-
-    if (activeListing) {
-      const statusMap = {
-        submitted: 'đang chờ kiểm duyệt',
-        in_review: 'đang được thẩm định bởi kiểm duyệt viên',
-        published: 'đã được xuất bản trên Marketplace',
-      };
-      const statusLabel = statusMap[activeListing.status] || activeListing.status;
-      throw ApiError.badRequest(
-        `Không thể chỉnh sửa hoặc xóa câu chuyện vì tác phẩm ${statusLabel}. Vui lòng tạo phiên bản mới hoặc xử lý bài đăng hiện tại.`
-      );
-    }
-  }
-
-  return story;
-};
-
-/**
- * Create a new story draft based on a pedagogical template
- * @param {Object} user - Authenticated parent
- * @param {Object} data - Story creation payload
- * @returns {Promise<Object>} Created story
- */
 const createStory = async (user, data) => {
-  const {
-    templateId,
-    title,
-    coverImageKey,
-    useAiImage = false,
-    useTts = true,
-    autoInitializePages = true,
-    characters = [],
-  } = data;
+  const { topicId, length, title, situation, characters, useAiImage = false, useTts = true } = data;
 
-  // 1. Verify template exists and is active
-  const template = await prisma.template.findUnique({
-    where: { id: templateId },
-    include: {
-      slots: true,
-      stages: {
-        orderBy: { stageOrder: 'asc' },
-        include: {
-          choices: {
-            orderBy: { choiceOrder: 'asc' },
-          },
-        },
-      },
-    },
+  const settings = await loadStorySettings(prisma);
+
+  const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: { isActive: true } });
+  if (!topic) throw ApiError.notFound('Không tìm thấy chủ đề.');
+  if (!topic.isActive) throw ApiError.badRequest('Chủ đề này đã ngừng sử dụng, vui lòng chọn chủ đề khác.');
+
+  const storyCharacters = await resolveStoryCharacters(prisma, user.id, characters);
+  const children = await loadChildren(prisma, user.id);
+  const nameContext = buildNameContext({ storyCharacters, children });
+  const tokenizedSituation = tokenizeOrReject(situation?.trim() ? situation : null, nameContext);
+
+  const skeleton = buildSkeleton({
+    length,
+    layouts: settings.layouts,
+    customLimits: settings.customLimits,
+    storyCharacters,
   });
 
-  if (!template) {
-    throw ApiError.notFound('Pedagogical template not found');
-  }
-
-  if (template.status === 'retired') {
-    throw ApiError.badRequest('Cannot create stories from a retired template');
-  }
-
-  // 2. Validate family characters if provided
-  if (characters.length > 0) {
-    const characterIds = characters.map((c) => c.characterId).filter(Boolean);
-    if (characterIds.length > 0) {
-      const familyCharacters = await prisma.character.findMany({
-        where: {
-          id: { in: characterIds },
-          parentId: user.id,
-          deletedAt: null,
-        },
-      });
-
-      if (familyCharacters.length !== characterIds.length) {
-        throw ApiError.badRequest('One or more selected family characters do not exist or belong to another account');
-      }
-    }
-  }
-
-  // 3. Create Story and structure in a database transaction
-  const result = await prisma.$transaction(async (tx) => {
-    // 3.1 Create story header
-    const newStory = await tx.story.create({
+  const storyId = await prisma.$transaction(async (tx) => {
+    const story = await tx.story.create({
       data: {
         ownerId: user.id,
         kind: 'private',
-        templateId,
+        topicId,
+        length,
         title,
-        coverImageKey: coverImageKey || null,
+        situation: tokenizedSituation,
         useAiImage,
         useTts,
         status: 'draft',
       },
+      select: { id: true },
     });
 
-    // 3.2 Bind character slots
-    const slotMap = new Map(characters.map((c) => [c.slotKey, c.characterId]));
-    for (const slot of template.slots) {
-      await tx.storyCharacter.create({
-        data: {
-          storyId: newStory.id,
-          slotKey: slot.slotKey,
-          characterId: slotMap.get(slot.slotKey) || null,
-        },
+    await tx.storyCharacter.createMany({
+      data: storyCharacters.map((sc) => ({
+        storyId: story.id,
+        token: sc.token,
+        characterId: sc.characterId,
+        isMain: sc.isMain,
+      })),
+    });
+
+    // Canh tam: story_pages.scene_id NOT NULL; AI thay bang canh that khi sinh (spec §3.1).
+    const scene = await tx.storyScene.create({
+      data: { storyId: story.id, sceneOrder: 1, description: '' },
+      select: { id: true },
+    });
+
+    await tx.storyPage.createMany({
+      data: Array.from({ length: skeleton.pageCount }, (_, i) => ({
+        storyId: story.id,
+        pageOrder: i + 1,
+        sceneId: scene.id,
+        origin: 'human',
+      })),
+    });
+
+    if (skeleton.checkpoints.length > 0) {
+      const pages = await tx.storyPage.findMany({
+        where: { storyId: story.id },
+        select: { id: true, pageOrder: true },
+      });
+      const pageIdByOrder = new Map(pages.map((p) => [p.pageOrder, p.id]));
+      await tx.storyCheckpoint.createMany({
+        data: skeleton.checkpoints.map((cp) => ({
+          storyId: story.id,
+          afterPageId: pageIdByOrder.get(cp.afterPageOrder),
+          type: cp.type,
+          targetToken: cp.targetToken,
+          answerEmotion: cp.answerEmotion,
+          origin: 'human',
+        })),
       });
     }
 
-    // 3.3 Auto-initialize story skeleton pages from template stages if requested
-    if (autoInitializePages && template.stages.length > 0) {
-      let pageOrder = 1;
+    return story.id;
+  }, TX_OPTIONS);
 
-      for (const stage of template.stages) {
-        // A. Situation / Decision point page
-        const situationPage = await tx.storyPage.create({
-          data: {
-            storyId: newStory.id,
-            stageId: stage.id,
-            pageKind: pageOrder === 1 ? 'lead_in' : 'situation',
-            pageOrder: pageOrder++,
-            contentText: `[${stage.learningObjective}] - Mô tả tình huống...`,
-            origin: 'human',
-          },
-        });
-
-        // B. Choices for this stage
-        if (stage.choices && stage.choices.length > 0) {
-          for (const choiceType of stage.choices) {
-            const createdChoice = await tx.storyChoice.create({
-              data: {
-                pageId: situationPage.id,
-                choiceOrder: choiceType.choiceOrder,
-                choiceText: choiceType.description,
-                choiceTypeId: choiceType.id,
-              },
-            });
-
-            // C. Consequence page branching from this choice
-            await tx.storyPage.create({
-              data: {
-                storyId: newStory.id,
-                stageId: stage.id,
-                pageKind: 'consequence',
-                pageOrder: pageOrder++,
-                fromChoiceId: createdChoice.id,
-                contentText: `Kết quả diễn biến cho lựa chọn "${choiceType.description}"...`,
-                origin: 'human',
-              },
-            });
-          }
-        }
-
-        // D. Ending page if this is the climax or the last stage
-        if (stage.isClimax || stage.stageOrder === template.stages.length) {
-          await tx.storyPage.create({
-            data: {
-              storyId: newStory.id,
-              stageId: stage.id,
-              pageKind: 'ending',
-              pageOrder: pageOrder++,
-              contentText: 'Bài học cảm xúc và kết thúc câu chuyện...',
-              origin: 'human',
-            },
-          });
-        }
-      }
-    }
-
-    return newStory;
-  });
-
-  return getStoryById(user, result.id);
+  return getDetail(prisma, storyId);
 };
 
-/**
- * Get stories created by user or accessible to user
- * @param {Object} user - Authenticated user
- * @param {Object} filter - Query parameters
- * @returns {Promise<Object>} Paginated stories list
- */
-const getStories = async (user, filter = {}) => {
-  const { kind, status, templateId, search, page = 1, limit = 10 } = filter;
-  const pageNum = Math.max(1, Number(page) || 1);
-  const limitNum = Math.max(1, Number(limit) || 10);
-  const skip = (pageNum - 1) * limitNum;
-
-  const where = {
-    ownerId: user.id,
-    deletedAt: null,
-  };
-
-  if (kind) where.kind = kind;
+const getStories = async (user, { status, page = 1, limit = 10 } = {}) => {
+  const where = { ownerId: user.id, kind: 'private', deletedAt: null };
   if (status) where.status = status;
-  if (templateId) where.templateId = templateId;
-  if (search) {
-    where.title = { contains: search, mode: 'insensitive' };
-  }
 
   const [total, stories] = await Promise.all([
     prisma.story.count({ where }),
     prisma.story.findMany({
       where,
-      skip,
-      take: limitNum,
+      skip: (page - 1) * limit,
+      take: limit,
       orderBy: { updatedAt: 'desc' },
-      include: {
-        template: {
-          select: {
-            id: true,
-            title: true,
-            ageMin: true,
-            ageMax: true,
-            primarySkill: {
-              select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-            },
-          },
-        },
-        storyCharacters: {
-          include: {
-            character: {
-              select: { id: true, name: true, role: true, portraitImageKey: true },
-            },
-          },
-        },
-        _count: {
-          select: {
-            pages: true,
-            bookshelfItems: true,
-            playSessions: true,
-          },
-        },
-      },
+      include: STORY_SUMMARY_INCLUDE,
     }),
   ]);
 
-  return {
-    total,
-    page: pageNum,
-    limit: limitNum,
-    totalPages: Math.ceil(total / limitNum) || 1,
-    stories: stories.map((s) => ({
-      id: s.id,
-      title: s.title,
-      coverImageKey: s.coverImageKey,
-      kind: s.kind,
-      status: s.status,
-      useAiImage: s.useAiImage,
-      useTts: s.useTts,
-      reviewedAt: s.reviewedAt,
-      isReviewed: s.reviewedAt !== null,
-      template: s.template,
-      characters: s.storyCharacters.map((sc) => ({
-        slotKey: sc.slotKey,
-        character: sc.character,
-      })),
-      totalPages: s._count.pages,
-      bookshelfCount: s._count.bookshelfItems,
-      playCount: s._count.playSessions,
-      createdAt: s.createdAt,
-      updatedAt: s.updatedAt,
-    })),
-  };
+  return { stories: stories.map(formatStorySummary), total, page, limit };
 };
 
-/**
- * Get full story detail including stages, pages, and branching choices
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @returns {Promise<Object>} Story with full pages hierarchy
- */
 const getStoryById = async (user, storyId) => {
-  const story = await prisma.story.findFirst({
-    where: {
-      id: storyId,
-      deletedAt: null,
-    },
-    include: {
-      owner: {
-        select: { id: true, fullName: true },
-      },
-      template: {
-        include: {
-          primarySkill: true,
-          slots: true,
-        },
-      },
-      storyCharacters: {
-        include: {
-          character: true,
-        },
-      },
-      pages: {
-        orderBy: { pageOrder: 'asc' },
-        include: {
-          stage: {
-            select: {
-              id: true,
-              stageOrder: true,
-              learningObjective: true,
-              emotionToName: true,
-              isClimax: true,
-            },
-          },
-          background: {
-            select: { id: true, name: true, imageKey: true },
-          },
-          choices: {
-            orderBy: { choiceOrder: 'asc' },
-            include: {
-              choiceType: {
-                select: {
-                  id: true,
-                  choiceOrder: true,
-                  typeCode: true,
-                  description: true,
-                  isProsocial: true,
-                },
-              },
-            },
-          },
-          fromChoice: {
-            select: {
-              id: true,
-              choiceOrder: true,
-              choiceText: true,
-            },
-          },
-        },
-      },
-      _count: {
-        select: {
-          bookshelfItems: true,
-          playSessions: true,
-        },
-      },
-    },
-  });
+  await loadStoryForRead(user, storyId);
+  return getDetail(prisma, storyId);
+};
 
-  if (!story) {
-    throw ApiError.notFound('Story not found');
-  }
+const updateStory = async (user, storyId, body) => {
+  return prisma.$transaction(async (tx) => {
+    await lockForWrite(tx, user, storyId);
 
-  const isOwner = story.ownerId === user.id;
-  const isElevated = ['admin', 'moderator'].includes(user.role);
+    const data = {};
+    if (body.title !== undefined) data.title = body.title;
+    if (body.useAiImage !== undefined) data.useAiImage = body.useAiImage;
+    if (body.useTts !== undefined) data.useTts = body.useTts;
+    if (body.situation !== undefined) {
+      data.situation = body.situation?.trim()
+        ? tokenizeOrReject(body.situation, await loadNameContextForStory(tx, storyId))
+        : null;
+    }
 
-  if (!isOwner && story.kind !== 'published' && !isElevated) {
-    throw ApiError.forbidden('Access denied to private story');
-  }
-
-  return {
-    id: story.id,
-    title: story.title,
-    coverImageKey: story.coverImageKey,
-    kind: story.kind,
-    status: story.status,
-    useAiImage: story.useAiImage,
-    useTts: story.useTts,
-    reviewedAt: story.reviewedAt,
-    isReviewed: story.reviewedAt !== null,
-    owner: story.owner,
-    template: {
-      id: story.template.id,
-      title: story.template.title,
-      description: story.template.description,
-      primarySkill: story.template.primarySkill,
-      ageMin: story.template.ageMin,
-      ageMax: story.template.ageMax,
-      slots: story.template.slots,
-    },
-    characters: story.storyCharacters.map((sc) => ({
-      slotKey: sc.slotKey,
-      character: sc.character,
-    })),
-    pages: story.pages.map((p) => ({
-      id: p.id,
-      pageOrder: p.pageOrder,
-      pageKind: p.pageKind,
-      stageId: p.stageId,
-      stage: p.stage,
-      fromChoiceId: p.fromChoiceId,
-      fromChoice: p.fromChoice,
-      contentText: p.contentText,
-      aiOriginalText: p.aiOriginalText,
-      origin: p.origin,
-      background: p.background,
-      imageKey: p.imageKey,
-      audioKey: p.audioKey,
-      imageStatus: p.imageStatus,
-      audioStatus: p.audioStatus,
-      choices: p.choices.map((c) => ({
-        id: c.id,
-        choiceOrder: c.choiceOrder,
-        choiceText: c.choiceText,
-        audioKey: c.audioKey,
-        choiceType: c.choiceType,
-      })),
-      updatedAt: p.updatedAt,
-    })),
-    bookshelfCount: story._count.bookshelfItems,
-    playCount: story._count.playSessions,
-    createdAt: story.createdAt,
-    updatedAt: story.updatedAt,
-  };
+    await tx.story.update({ where: { id: storyId }, data });
+    return getDetail(tx, storyId);
+  }, TX_OPTIONS);
 };
 
 /**
- * Update story header details
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @param {Object} data - Update data
- * @returns {Promise<Object>} Updated story
+ * Token -> ten thuc cua bo nhan vat cu, de chuyen `situation` sang bo token moi. Chi goi SAU khi
+ * da chan token cua nhan vat bi bo (findDroppedTokens), nen moi ten dien lai deu co token moi.
  */
-const updateStory = async (user, storyId, data) => {
-  const story = await verifyStoryAccess(user, storyId, true, true);
+const detokenize = (text, storyCharacters) => {
+  if (text == null) return null;
+  const names = new Map(storyCharacters.map((sc) => [sc.token, sc.character?.name ?? sc.aliasName]));
+  return text.replace(/\{NV\d+\}/g, (token) => names.get(token) ?? token);
+};
 
-  const updated = await prisma.story.update({
-    where: { id: story.id },
-    data: {
-      ...(data.title !== undefined && { title: data.title }),
-      ...(data.coverImageKey !== undefined && { coverImageKey: data.coverImageKey }),
-      ...(data.useAiImage !== undefined && { useAiImage: data.useAiImage }),
-      ...(data.useTts !== undefined && { useTts: data.useTts }),
-      ...(data.status !== undefined && { status: data.status }),
-    },
-  });
-
-  return updated;
+const hasWrittenContent = async (tx, storyId) => {
+  const [page, checkpoint] = await Promise.all([
+    tx.storyPage.findFirst({
+      where: { storyId, AND: [{ contentText: { not: null } }, { contentText: { not: '' } }] },
+      select: { id: true },
+    }),
+    tx.storyCheckpoint.findFirst({
+      where: { storyId, OR: [{ question: { not: null } }, { hint: { not: null } }] },
+      select: { id: true },
+    }),
+  ]);
+  return Boolean(page || checkpoint);
 };
 
 /**
- * Soft delete a story
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @returns {Promise<Object>} Deletion result
- */
-const deleteStory = async (user, storyId) => {
-  const story = await verifyStoryAccess(user, storyId, true, true);
-
-  await prisma.story.update({
-    where: { id: story.id },
-    data: { deletedAt: new Date() },
-  });
-
-  return { message: 'Story deleted successfully', storyId: story.id };
-};
-
-/**
- * Bind or rebind family characters to story template slots
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @param {Array} characters - Slot character mappings
- * @returns {Promise<Object>} Updated character bindings
+ * Doi nhan vat — chi khi chua co chu (token trong chu se tro sai nguoi). Thay toan bo
+ * story_characters, dua targetToken cua diem dung ve nhan vat phu dau tien moi, va chuyen
+ * `situation` sang bo token moi.
  */
 const bindCharacters = async (user, storyId, characters) => {
-  const story = await verifyStoryAccess(user, storyId, true, true);
+  return prisma.$transaction(async (tx) => {
+    const story = await lockForWrite(tx, user, storyId);
 
-  const characterIds = characters.map((c) => c.characterId).filter(Boolean);
-  if (characterIds.length > 0) {
-    const familyCharacters = await prisma.character.findMany({
-      where: {
-        id: { in: characterIds },
-        parentId: user.id,
-        deletedAt: null,
-      },
-    });
-
-    if (familyCharacters.length !== characterIds.length) {
-      throw ApiError.badRequest('One or more selected family characters do not exist or belong to another account');
+    if (await hasWrittenContent(tx, storyId)) {
+      throw ApiError.conflict('Truyện đã có nội dung nên không thể đổi nhân vật. Hãy tạo truyện mới để dùng nhân vật khác.');
     }
-  }
 
-  // Update or insert slot bindings in transaction
-  await prisma.$transaction(async (tx) => {
-    for (const item of characters) {
-      await tx.storyCharacter.upsert({
-        where: {
-          storyId_slotKey: {
-            storyId: story.id,
-            slotKey: item.slotKey,
-          },
-        },
-        create: {
-          storyId: story.id,
-          slotKey: item.slotKey,
-          characterId: item.characterId || null,
-        },
-        update: {
-          characterId: item.characterId || null,
-        },
-      });
-    }
-  });
+    const storyCharacters = await resolveStoryCharacters(tx, user.id, characters);
+    const target = defaultTarget(storyCharacters);
 
-  return getStoryById(user, story.id);
-};
-
-/**
- * Update a specific story page (Text, Background, Origin)
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @param {string} pageId - Page ID
- * @param {Object} data - Update data
- * @returns {Promise<Object>} Updated page
- */
-const updatePage = async (user, storyId, pageId, data) => {
-  await verifyStoryAccess(user, storyId, true, true);
-
-  const page = await prisma.storyPage.findFirst({
-    where: {
-      id: pageId,
-      storyId,
-    },
-  });
-
-  if (!page) {
-    throw ApiError.notFound('Story page not found');
-  }
-
-  // Determine origin flag: if editing an AI-generated page, mark as 'ai_edited'
-  let origin = data.origin;
-  if (!origin) {
-    if (page.origin === 'ai' && data.contentText !== undefined && data.contentText !== page.contentText) {
-      origin = 'ai_edited';
-    } else {
-      origin = page.origin;
-    }
-  }
-
-  const updatedPage = await prisma.storyPage.update({
-    where: { id: page.id },
-    data: {
-      ...(data.contentText !== undefined && { contentText: data.contentText }),
-      ...(data.backgroundId !== undefined && { backgroundId: data.backgroundId }),
-      ...(data.imageKey !== undefined && { imageKey: data.imageKey }),
-      ...(data.audioKey !== undefined && { audioKey: data.audioKey }),
-      origin,
-    },
-    include: {
-      background: true,
-      choices: {
-        include: { choiceType: true },
-      },
-    },
-  });
-
-  return updatedPage;
-};
-
-/**
- * Create a new page manually in a story
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @param {Object} data - Page creation data
- * @returns {Promise<Object>} Created page
- */
-const createPage = async (user, storyId, data) => {
-  await verifyStoryAccess(user, storyId, true, true);
-
-  let pageOrder = data.pageOrder;
-  if (!pageOrder) {
-    const lastPage = await prisma.storyPage.findFirst({
-      where: { storyId },
-      orderBy: { pageOrder: 'desc' },
-      select: { pageOrder: true },
-    });
-    pageOrder = (lastPage?.pageOrder || 0) + 1;
-  }
-
-  const newPage = await prisma.storyPage.create({
-    data: {
-      storyId,
-      stageId: data.stageId,
-      pageKind: data.pageKind,
-      pageOrder,
-      fromChoiceId: data.fromChoiceId || null,
-      contentText: data.contentText || '',
-      backgroundId: data.backgroundId || null,
-      origin: data.origin || 'human',
-    },
-  });
-
-  return newPage;
-};
-
-/**
- * Delete a page from story and reorder remaining pages
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @param {string} pageId - Page ID
- * @returns {Promise<Object>} Deletion result
- */
-const deletePage = async (user, storyId, pageId) => {
-  await verifyStoryAccess(user, storyId, true, true);
-
-  const page = await prisma.storyPage.findFirst({
-    where: { id: pageId, storyId },
-  });
-
-  if (!page) {
-    throw ApiError.notFound('Page not found');
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.storyPage.delete({ where: { id: page.id } });
-
-    // Reorder subsequent pages
-    const subsequentPages = await tx.storyPage.findMany({
-      where: {
-        storyId,
-        pageOrder: { gt: page.pageOrder },
-      },
-      orderBy: { pageOrder: 'asc' },
-    });
-
-    for (let i = 0; i < subsequentPages.length; i++) {
-      await tx.storyPage.update({
-        where: { id: subsequentPages[i].id },
-        data: { pageOrder: page.pageOrder + i },
-      });
-    }
-  });
-
-  return { message: 'Page deleted and order recalculated', pageId };
-};
-
-/**
- * Update choice text of a branch point
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @param {string} pageId - Page ID
- * @param {string} choiceId - Choice ID
- * @param {Object} data - Choice update data
- * @returns {Promise<Object>} Updated choice
- */
-const updateChoice = async (user, storyId, pageId, choiceId, data) => {
-  await verifyStoryAccess(user, storyId, true, true);
-
-  const choice = await prisma.storyChoice.findFirst({
-    where: {
-      id: choiceId,
-      pageId,
-      page: { storyId },
-    },
-  });
-
-  if (!choice) {
-    throw ApiError.notFound('Choice not found');
-  }
-
-  const updatedChoice = await prisma.storyChoice.update({
-    where: { id: choice.id },
-    data: {
-      choiceText: data.choiceText,
-      ...(data.audioKey !== undefined && { audioKey: data.audioKey }),
-    },
-    include: { choiceType: true },
-  });
-
-  return updatedChoice;
-};
-
-/**
- * Review Mode: Parent verifies and marks story as reviewed and ready
- * @param {Object} user - Authenticated user
- * @param {string} storyId - Story ID
- * @returns {Promise<Object>} Reviewed story
- */
-const reviewStory = async (user, storyId) => {
-  const story = await verifyStoryAccess(user, storyId, true, true);
-
-  // 1. Check minimum requirements
-  const pages = await prisma.storyPage.findMany({
-    where: { storyId: story.id },
-    include: {
-      choices: true,
-    },
-  });
-
-  if (pages.length === 0) {
-    throw ApiError.badRequest('Cannot review a story with no pages. Please compose the story first.');
-  }
-
-  // 2. Ensure each page has content text
-  const emptyPages = pages.filter((p) => !p.contentText || p.contentText.trim() === '');
-  if (emptyPages.length > 0) {
-    throw ApiError.badRequest(
-      `Pages ${emptyPages.map((p) => p.pageOrder).join(', ')} do not have content text yet. Please complete all pages before review.`
-    );
-  }
-
-  // 3. Ensure choices have text
-  for (const page of pages) {
-    for (const choice of page.choices) {
-      if (!choice.choiceText || choice.choiceText.trim() === '') {
-        throw ApiError.badRequest(`Choice order ${choice.choiceOrder} on page ${page.pageOrder} has empty text`);
-      }
-    }
-  }
-
-  // 4. Update story status to ready and mark reviewedAt
-  const updatedStory = await prisma.story.update({
-    where: { id: story.id },
-    data: {
-      reviewedAt: new Date(),
-      status: 'ready',
-    },
-  });
-
-  return {
-    message: 'Story successfully reviewed and marked ready for child bookshelf',
-    story: {
-      id: updatedStory.id,
-      title: updatedStory.title,
-      status: updatedStory.status,
-      reviewedAt: updatedStory.reviewedAt,
-    },
-  };
-};
-
-/**
- * Create a published clone of a private story with de-personalization
- * @param {Object} user - Authenticated parent/seller
- * @param {string} storyId - Source private story ID
- * @param {Object} options - Publish options (optional title, cover)
- * @returns {Promise<Object>} De-personalized published story ready for marketplace listing
- */
-const publishStoryVersion = async (user, storyId, options = {}) => {
-  const sourceStory = await verifyStoryAccess(user, storyId, true);
-
-  if (sourceStory.kind !== 'private') {
-    throw ApiError.badRequest('Only private stories can be cloned into a published version');
-  }
-
-  if (!sourceStory.reviewedAt) {
-    throw ApiError.badRequest('You must review the private story before publishing it');
-  }
-
-  const template = sourceStory.template;
-
-  // Fetch full pages and choices to clone
-  const pages = await prisma.storyPage.findMany({
-    where: { storyId: sourceStory.id },
-    orderBy: { pageOrder: 'asc' },
-    include: {
-      choices: {
-        orderBy: { choiceOrder: 'asc' },
-      },
-    },
-  });
-
-  // Prepare de-personalization: Map character names to slot default names or parent custom names
-  const slotDefaultNames = new Map(template.slots.map((s) => [s.slotKey, s.defaultName]));
-
-  // Also replace any private character name occurrences
-  const storyCharacters = await prisma.storyCharacter.findMany({
-    where: { storyId: sourceStory.id },
-    include: { character: true },
-  });
-
-  // Map custom replacement names if provided by parent in options.nameReplacements
-  const customBySlot = new Map();
-  const customByName = new Map();
-
-  if (Array.isArray(options.nameReplacements)) {
-    for (const item of options.nameReplacements) {
-      const target = item?.customName?.trim();
-      if (!target) continue;
-      if (item.slotKey?.trim()) {
-        customBySlot.set(item.slotKey.trim(), target);
-      }
-      if (item.fromName?.trim()) {
-        customByName.set(item.fromName.trim().toLowerCase(), target);
-      }
-    }
-  }
-
-  const nameReplacements = [];
-  for (const sc of storyCharacters) {
-    if (sc.character) {
-      const charName = sc.character.name;
-      const targetName =
-        customBySlot.get(sc.slotKey) ||
-        customByName.get(charName.toLowerCase()) ||
-        slotDefaultNames.get(sc.slotKey) ||
-        'Nhân vật';
-
-      nameReplacements.push({
-        from: charName,
-        to: targetName,
-      });
-    }
-  }
-
-  // Also support ad-hoc custom name replacements for nicknames not directly bound to characters
-  if (Array.isArray(options.nameReplacements)) {
-    for (const item of options.nameReplacements) {
-      const from = item?.fromName?.trim();
-      const to = item?.customName?.trim();
-      if (from && to && !nameReplacements.some((r) => r.from.toLowerCase() === from.toLowerCase())) {
-        nameReplacements.push({ from, to });
-      }
-    }
-  }
-
-  const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-  const depersonalizeText = (text) => {
-    if (!text) return text;
-    let result = text;
-    for (const rep of nameReplacements) {
-      if (!rep.from) continue;
-      // Unicode word boundary lookaround supporting Vietnamese diacritics
-      const regex = new RegExp(
-        `(?<=^|[^\\p{L}\\p{N}])${escapeRegex(rep.from)}(?=$|[^\\p{L}\\p{N}])`,
-        'gui'
+    const needsTarget = await tx.storyCheckpoint.count({ where: { storyId, type: { in: NEEDS_TARGET } } });
+    if (needsTarget > 0 && !target) {
+      throw new ApiError(
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        'Truyện độ dài này có câu hỏi về nhân vật khác, cần thêm ít nhất một nhân vật phụ.',
       );
-      result = result.replace(regex, rep.to);
     }
-    return result;
-  };
 
-  // Perform cloning inside a database transaction
-  const publishedStory = await prisma.$transaction(async (tx) => {
-    // 1. Create published story
-    const clonedStory = await tx.story.create({
-      data: {
-        ownerId: user.id,
-        kind: 'published',
-        templateId: sourceStory.templateId,
-        sourceStoryId: sourceStory.id,
-        title: options.title || sourceStory.title,
-        coverImageKey: options.coverImageKey || sourceStory.coverImageKey,
-        useAiImage: sourceStory.useAiImage,
-        useTts: sourceStory.useTts,
-        status: 'ready',
-        reviewedAt: new Date(),
-      },
+    const oldCharacters = await tx.storyCharacter.findMany({
+      where: { storyId },
+      include: { character: { select: { name: true } } },
     });
 
-    // 2. Clone story characters without personal character references (using default names)
-    for (const slot of template.slots) {
-      await tx.storyCharacter.create({
-        data: {
-          storyId: clonedStory.id,
-          slotKey: slot.slotKey,
-          characterId: null, // De-personalized: no private characterId
-        },
+    // Nhan vat bi bo ma token con nam trong `situation`: KHONG tu dien lai ten that. Ten do khong
+    // con trong ngu canh ten moi nen se bi luu nguyen van roi gui sang AI (lo ten that). Buoc phu
+    // huynh sua tinh huong truoc. (Chu trang/diem dung da bi chan 409 o tren nen chi con situation.)
+    const dropped = findDroppedTokens(
+      story.situation,
+      oldCharacters.map((sc) => ({
+        token: sc.token,
+        characterId: sc.characterId,
+        name: sc.character?.name ?? sc.aliasName,
+      })),
+      storyCharacters.map((sc) => sc.characterId),
+    );
+    if (dropped.length > 0) {
+      throw new ApiError(
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        `Tình huống của truyện đang nhắc tới ${dropped.map((d) => d.name).join(', ')}. ` +
+          'Hãy sửa tình huống để bỏ nhân vật này trước khi đổi nhân vật.',
+        dropped.map((d) => ({ path: 'situation', message: `Tình huống còn nhắc tới "${d.name}"` })),
+      );
+    }
+
+    const children = await loadChildren(tx, user.id);
+    const situation = tokenizeOrReject(
+      detokenize(story.situation, oldCharacters),
+      buildNameContext({ storyCharacters, children }),
+    );
+
+    await tx.storyCharacter.deleteMany({ where: { storyId } });
+    await tx.storyCharacter.createMany({
+      data: storyCharacters.map((sc) => ({
+        storyId,
+        token: sc.token,
+        characterId: sc.characterId,
+        isMain: sc.isMain,
+      })),
+    });
+    if (needsTarget > 0) {
+      await tx.storyCheckpoint.updateMany({
+        where: { storyId, type: { in: NEEDS_TARGET } },
+        data: { targetToken: target },
       });
     }
+    await tx.story.update({ where: { id: storyId }, data: { situation } });
 
-    // 3. Clone pages and choices with text de-personalization
-    const choiceIdMap = new Map(); // oldChoiceId -> newChoiceId
+    return getDetail(tx, storyId);
+  }, TX_OPTIONS);
+};
 
-    // First pass: create non-consequence pages and choices
-    for (const page of pages) {
-      const dePersonalizedContent = depersonalizeText(page.contentText);
-
-      const clonedPage = await tx.storyPage.create({
-        data: {
-          storyId: clonedStory.id,
-          stageId: page.stageId,
-          pageKind: page.pageKind,
-          pageOrder: page.pageOrder,
-          contentText: dePersonalizedContent,
-          aiOriginalText: page.aiOriginalText,
-          origin: page.origin,
-          backgroundId: page.backgroundId,
-          imageKey: page.imageKey,
-          audioKey: null, // TTS will need re-generation if names changed
-        },
-      });
-
-      for (const choice of page.choices) {
-        const clonedChoice = await tx.storyChoice.create({
-          data: {
-            pageId: clonedPage.id,
-            choiceOrder: choice.choiceOrder,
-            choiceText: depersonalizeText(choice.choiceText),
-            choiceTypeId: choice.choiceTypeId,
-          },
-        });
-        choiceIdMap.set(choice.id, clonedChoice.id);
-      }
-    }
-
-    // Second pass: link consequence pages to their cloned fromChoiceId
-    for (const page of pages) {
-      if (page.fromChoiceId && choiceIdMap.has(page.fromChoiceId)) {
-        const newChoiceId = choiceIdMap.get(page.fromChoiceId);
-        await tx.storyPage.updateMany({
-          where: {
-            storyId: clonedStory.id,
-            pageOrder: page.pageOrder,
-          },
-          data: {
-            fromChoiceId: newChoiceId,
-          },
-        });
-      }
-    }
-
-    return clonedStory;
-  });
-
-  return getStoryById(user, publishedStory.id);
+/** Xoa mem. Cho phep ca khi dang `generating`: worker bo qua ket qua cua truyen da xoa. */
+const deleteStory = async (user, storyId) => {
+  await loadOwnedStory(user, storyId);
+  await prisma.story.update({ where: { id: storyId }, data: { deletedAt: new Date() } });
 };
 
 export default {
@@ -960,12 +337,6 @@ export default {
   getStories,
   getStoryById,
   updateStory,
-  deleteStory,
   bindCharacters,
-  updatePage,
-  createPage,
-  deletePage,
-  updateChoice,
-  reviewStory,
-  publishStoryVersion,
+  deleteStory,
 };

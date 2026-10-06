@@ -29,9 +29,10 @@ tranh tương tác cá nhân hoá cho con 5–8 tuổi, giáo dục trí tuệ c
 ```
 Frontend ─▶ Backend Node.js ─(HTTP nội bộ)─▶ AI Core Service (repo này) ─▶ Gemini / VieNeu / ComfyUI
                │
-               ├─ PostgreSQL (truyện, hàng đợi ai_requests, ví…)
-               └─ Object storage (ảnh, audio)
+               ├─ Redis + BullMQ (hàng đợi thực thi job AI; service này không có Redis)
+               ├─ PostgreSQL (truyện, bản ghi ai_requests, ví…)
+               └─ Object storage (ảnh, audio — service này upload và trả key)
 ```
 
-Backend dựng khung truyện, che tên, quản lý hạn mức và hàng đợi, lưu file. Service này chỉ
-nhận một tác vụ, gọi AI, kiểm tra, trả kết quả.
+Backend dựng khung truyện, che tên, quản lý hạn mức và hàng đợi, lưu bản ghi. Service này chỉ
+nhận một tác vụ, gọi AI, kiểm tra, upload ảnh / audio lên Storage, trả kết quả (key, không bytes).

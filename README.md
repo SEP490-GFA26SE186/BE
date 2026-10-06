@@ -46,8 +46,9 @@ Project Settings → Database → Connection string:
 `JWT_SECRET` và `INTERNAL_TOKEN` đã có giá trị dev sẵn trong `.env.example`,
 đổi trước khi deploy là được.
 
-**Không cần API key AI.** Mặc định `AI_PROVIDER=mock` — trả dữ liệu giả nhưng
-đúng cấu trúc thật, đủ để chạy trọn luồng từ đầu đến cuối.
+**Không cần API key AI.** Mặc định `LLM_PROVIDER=mock` và `TTS_PROVIDER=mock` — trả truyện giả
+nhưng đúng khung request và đi qua validator thật, đủ để chạy trọn luồng từ đầu đến cuối. Đặt
+`LLM_PROVIDER=gemini` + `GEMINI_API_KEY` + `GEMINI_TEXT_MODEL` mới gọi Gemini thật (tốn tiền).
 
 Nếu quên tạo `.env`, compose **dừng lại ngay** và nói rõ thiếu biến nào:
 
@@ -111,16 +112,9 @@ docker compose ps                      # cả 4 service phải là (healthy)
 curl localhost:3000/api/v1/health      # {"status":"ok",...}
 ```
 
-Đẩy thử một AI job qua queue:
-
-```bash
-docker compose exec worker node scripts/enqueue-ai-job.js narration '{"text":"xin chao"}'
-docker compose logs worker --tail 5    # phải thấy "succeeded"
-```
-
-Lệnh trên là bài kiểm quan trọng nhất: nó đi qua **toàn bộ** chuỗi — enqueue →
-Redis → BullMQ → worker → HTTP sang FastAPI → upload Storage → trả `usage`. Nếu
-nó `succeeded` thì cả hệ đã nối đúng.
+Đẩy thử một AI job qua queue — xem mục **Kiểm đầu-cuối** ở cuối file
+bên dưới. Đó là bài kiểm quan trọng nhất: nó đi qua **toàn bộ** chuỗi — enqueue → Redis → BullMQ →
+worker → HTTP sang FastAPI → ghi DB. Nếu nó `succeeded` thì cả hệ đã nối đúng.
 
 | Địa chỉ | Là gì |
 |---|---|
@@ -184,13 +178,14 @@ Client ──> api (Express)          KHÔNG gọi ai/ trực tiếp
            BullMQ (Redis)         attempts=3, backoff exponential 2s
              │
              ↓
-           worker (Node)          CÙNG image với api, khác command
-             │  POST http://ai:8000/v1/generate/...
+           worker (Node)          CÙNG image với api, khác command; job chỉ mang { ai_request_id }
+             │  đọc DB -> dựng payload -> POST http://ai:8000/v1/story/generate
+             │  (ảnh: /v1/images/portrait, /v1/images/scene; giọng: /v1/tts/synthesize)
              ↓
-           ai (FastAPI)  ──> provider (Gemini / TTS)
-             │             └──> Supabase Storage (file ảnh / audio)
+           ai (FastAPI)  ──> provider (Gemini cho chữ / mock; ảnh + TTS: mock)
+             │             └──> Supabase Storage (ảnh / audio — ai upload, trả key)
              ↓
-           worker ghi kết quả vào DB + commit credit
+           worker ghi kết quả vào DB + chốt / hoàn credit
 ```
 
 Vì sao phải vòng qua queue thay vì để API gọi thẳng Python: nếu AI chậm hoặc
@@ -216,7 +211,8 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 | `REDIS_URL` | ✓ | ✓ | — |
 | `AI_SERVICE_URL` | **—** | ✓ | — |
 | `INTERNAL_TOKEN` | — | ✓ | ✓ |
-| `AI_PROVIDER`, `GEMINI_API_KEY` | — | — | ✓ |
+| `AI_TIMEOUT_MS_<JOB>`, `AI_JOB_ATTEMPTS`, `AI_WORKER_CONCURRENCY` | — | ✓ | — |
+| `LLM_PROVIDER`, `TTS_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `LLM_*`, `TOKENS_PER_WORD`, `PRICE_TEXT_*` | — | — | ✓ |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
 
 Hai ô đáng chú ý:
@@ -245,7 +241,7 @@ npm run worker:dev          # worker, mở terminal khác
 
 # Python
 cd ai/
-cp .env.example .env
+cp .env.example .env        # LLM_PROVIDER=mock mặc định; KHÔNG đặt gemini nếu không định tốn tiền
 uv sync                     # cài uv: https://docs.astral.sh/uv/getting-started/installation/
 uv run uvicorn app.main:app --reload
 ```
@@ -258,8 +254,8 @@ Chạy ngoài Docker vẫn cần Redis. Cách nhanh nhất là bật riêng nó 
 ## Test
 
 ```bash
-cd api/ && npm test          # node:test — phân loại lỗi của aiClient
-cd ai/  && uv run pytest     # pytest — auth, envelope, bảng lỗi
+cd api/ && npm test          # node:test — aiClient, processor, lib; integration bỏ qua nếu không có TEST_DATABASE_URL
+cd ai/  && uv run pytest     # pytest — không chạm mạng; gồm tests/api/test_node_contract.py (payload y hệt Node)
 ```
 
 ---
@@ -298,10 +294,42 @@ BE/
     └── app/
         ├── main.py              # FastAPI + exception handler
         ├── errors.py            # bảng phân loại lỗi
-        ├── api/v1/              # story_page.py, narration.py
-        ├── providers/           # base (Protocol), mock, gemini (chưa làm)
+        ├── api/v1/              # story.py, images.py, tts.py
+        ├── core/                # orchestrator, validator, prompt, guards, usage
+        ├── providers/           # llm/ (mock, gemini), image/ (mock), tts/ (mock)
         └── storage/             # supabase, local (dự phòng)
 ```
+
+---
+
+## Kiểm đầu-cuối (queue → worker → ai → DB)
+
+Cần `.env` ở root có `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `INTERNAL_TOKEN`; DB đã migrate +
+seed (`platform_settings` có `ai_cost.story_text`); một truyện `medium` đã có khung (trang + điểm dừng)
+và chủ truyện còn credit. **Script ghi thật vào DB đang cấu hình và trừ credit thật** — dùng DB test
+riêng, đừng chạy trên DB Supabase dùng chung của nhóm.
+
+```bash
+# 1. Chạy toàn bộ với mock (không gọi Gemini)
+LLM_PROVIDER=mock docker compose up --build -d
+docker compose exec ai env | grep -E "DATABASE_URL|REDIS_URL"   # phải RỖNG
+
+# 2. Nhánh thành công
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId>
+docker compose logs worker --tail 20        # job succeeded; GET /api/v1/stories/<storyId>/generation
+
+# 3. Các nhánh lỗi (cờ --force chỉ có tác dụng khi NODE_ENV != production và provider là mock)
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId> --force SAFETY_BLOCKED
+#    -> dừng ở attempt 1/3 (KHÔNG có attempt 2, 3); ai_request `blocked`; credit hoàn
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId> --force INVALID_OUTPUT_ONCE
+#    -> succeeded (service tự thử lại nội bộ, usage.attempts = 2)
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId> --force PROVIDER_ERROR
+#    -> retry có backoff tới attempt 3/3 rồi `failed`; credit hoàn
+```
+
+Mỗi lần chạy tạo một `ai_request` mới cho cùng truyện; truyện đang sinh dở thì `startGeneration` từ
+chối — chờ lần trước kết thúc. Kiểm tương thích **không cần DB** (payload Node thật → ai/ mock →
+`planPersist`) đã có ở `ai/tests/api/test_node_contract.py`.
 
 ---
 
@@ -310,13 +338,18 @@ BE/
 Đã xong và kiểm chứng được bằng lệnh:
 
 - Tách source, Docker hoá, queue + worker + retry, phân loại lỗi khớp nhau ở cả
-  hai đầu, upload Storage, mock provider có thể kích lỗi để test.
+  hai đầu (`NON_RETRYABLE_ERROR_CODES` ↔ `NON_RETRYABLE`), mock provider có thể kích lỗi để test.
+- `/v1/story/generate` (M1–M3): prompt, validator tất định, thử lại nội bộ một lần, `GeminiLLMProvider`
+  cho chữ. Worker dựng payload từ DB và ghi kết quả (`persistPlan.js`) cho job `story_text`.
+- Ảnh / TTS: endpoint + mock, upload Storage và trả key.
 
 **Chưa xong** — đừng tưởng đã có:
 
-- `GeminiProvider` chưa hiện thực (đặt `AI_PROVIDER=gemini` sẽ trả lỗi rõ ràng,
-  không im lặng).
-- Bước **ghi kết quả vào DB** trong `api/src/workers/ai.processor.js` chưa làm,
-  vì schema chưa chốt. Đó là **duy nhất một chỗ** cần sửa khi schema chốt.
-- **NFR 15s chưa đo được** vì mock trả về gần như tức thì.
-- Hình dạng của `input` trong request AI chưa chốt (đang để passthrough).
+- Model ảnh thật (M4b, mã nguồn mở) và TTS thật (M5). Worker chưa xử lý job `character_portrait`,
+  `scene_image`, `narration` (trả `UnrecoverableError` "chưa hỗ trợ").
+- Spike Gemini mới làm một phần: mức bị bộ lọc an toàn chặn và hành vi cắt cụt còn mở
+  (`ai/docs/01-decisions.md`).
+- **NFR 15s** được hiểu là **độ trễ nhận việc** — từ lúc phụ huynh bấm tạo truyện tới lúc giao diện
+  phản hồi (request trả ngay sau khi enqueue, UI hiện tiến trình). AI viết cả truyện một lần, nên
+  không còn đơn vị "một trang". Thời gian sinh truyện thật là số đo riêng
+  (`ai/scripts/try_story.py`), chưa đo trên Gemini.

@@ -15,7 +15,9 @@ const worker = new Worker(AI_QUEUE_NAME, processAiJob, {
 
 worker.on('failed', (job, error) => {
   const attempts = job ? `${job.attemptsMade}/${job.opts.attempts}` : '?';
-  console.error(`[worker] ${job?.name} ${job?.id} failed (attempt ${attempts}): ${error.message}`);
+  // AiServiceError co `code`; UnrecoverableError da gan "[CODE] ..." vao message.
+  const code = error.code ? ` [${error.code}]` : '';
+  console.error(`[worker] ${job?.name} ${job?.id} failed (attempt ${attempts})${code}: ${error.message}`);
 });
 
 worker.on('error', (error) => {
@@ -24,7 +26,7 @@ worker.on('error', (error) => {
 
 console.log(
   `[worker] listening on queue "${AI_QUEUE_NAME}" ` +
-    `(concurrency=${env.ai.concurrency}, ai=${env.ai.serviceUrl}, timeout=${env.ai.timeoutMs}ms)`,
+    `(concurrency=${env.ai.concurrency}, ai=${env.ai.serviceUrl})`,
 );
 
 // Graceful shutdown: worker.close() cho cac job dang chay hoan tat truoc khi

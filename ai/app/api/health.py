@@ -1,26 +1,22 @@
 from fastapi import APIRouter
 
-from app.config import get_settings
-from app.storage import get_storage
+from app.deps import SettingsDep
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    """Liveness. KHONG goi provider — de healthcheck cua Docker khong tieu quota."""
-    return {"status": "ok"}
-
-
-@router.get("/ready")
-async def ready() -> dict[str, object]:
-    """Readiness: da du cau hinh de xu ly job that chua?"""
-    settings = get_settings()
-    storage = get_storage()
-    provider_ready = settings.ai_provider == "mock" or bool(settings.gemini_api_key)
+@router.get("/ready", include_in_schema=False)
+async def health(settings: SettingsDep) -> dict[str, str]:
+    """Liveness + active providers. Never calls a provider (no quota use); no token needed."""
+    llm_model = (settings.gemini_text_model or "") if settings.llm_provider == "gemini" else "mock-v1"
+    has_supabase = bool(settings.supabase_url and settings.supabase_service_key)
     return {
-        "status": "ok" if provider_ready else "degraded",
-        "provider": settings.ai_provider,
-        "providerConfigured": provider_ready,
-        "storageBackend": storage.backend,
+        "status": "ok",
+        "llm_provider": settings.llm_provider,
+        "llm_model": llm_model,
+        "image_profile_portrait": settings.image_profile_portrait,
+        "image_profile_scene": settings.image_profile_scene,
+        "tts_provider": settings.tts_provider,
+        "storage_backend": "supabase" if has_supabase else "local",
     }
