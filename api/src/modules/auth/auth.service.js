@@ -427,6 +427,82 @@ const verifyEmail = async (rawToken) => {
   };
 };
 
+/**
+ * Request password reset email
+ * @param {string} email
+ */
+const forgotPassword = async (email) => {
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await prisma.user.findFirst({
+    where: { email: normalizedEmail, deletedAt: null },
+  });
+
+  if (!user) {
+    // Return success message even if not found to prevent user enumeration
+    return { message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.' };
+  }
+
+  const resetToken = await tokenService.generatePasswordResetToken(user.id);
+  await emailService.sendPasswordResetEmail(user.email, resetToken, user.fullName || user.username);
+
+  return { message: 'Email hướng dẫn đặt lại mật khẩu đã được gửi.' };
+};
+
+/**
+ * Reset password using token
+ * @param {Object} param0
+ * @param {string} param0.token
+ * @param {string} param0.newPassword
+ */
+const resetPassword = async ({ token, newPassword }) => {
+  const user = await tokenService.verifyAndConsumePasswordResetToken(token);
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash },
+  });
+
+  // Revoke all active refresh tokens for safety
+  await prisma.authToken.deleteMany({
+    where: { userId: user.id, type: 'refresh' },
+  });
+
+  return { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' };
+};
+
+/**
+ * Change password when logged in
+ * @param {string} userId
+ * @param {Object} param1
+ * @param {string} param1.currentPassword
+ * @param {string} param1.newPassword
+ */
+const changePassword = async (userId, { currentPassword, newPassword }) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw ApiError.notFound('Người dùng không tồn tại');
+  }
+
+  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!isMatch) {
+    throw ApiError.badRequest('Mật khẩu hiện tại không chính xác');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+
+  return { message: 'Đổi mật khẩu thành công.' };
+};
+
 export default {
   register,
   login,
@@ -439,4 +515,7 @@ export default {
   exitKidMode,
   sendVerificationEmail,
   verifyEmail,
+  forgotPassword,
+  resetPassword,
+  changePassword,
 };

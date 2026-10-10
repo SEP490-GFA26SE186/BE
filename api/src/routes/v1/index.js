@@ -16,6 +16,7 @@ import contentLibraryRouter, {
   backgroundsRouter,
   uiAudioAssetsRouter,
   checklistItemsRouter,
+  topicsRouter,
 } from '../../modules/content-library/content-library.routes.js';
 import notificationsRoutes from '../../modules/notifications/notifications.routes.js';
 import reportsRoutes from '../../modules/reports/reports.routes.js';
@@ -44,6 +45,7 @@ router.use('/stories', storiesRoutes);
 router.use('/backgrounds', backgroundsRouter);
 router.use('/ui-audio-assets', uiAudioAssetsRouter);
 router.use('/checklist-items', checklistItemsRouter);
+router.use('/topics', topicsRouter);
 router.use('/content-library', contentLibraryRouter);
 router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);

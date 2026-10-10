@@ -703,6 +703,88 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
+    '/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: '[Public] Yêu cầu gửi email khôi phục mật khẩu',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nGửi mã đặt lại mật khẩu về email đăng ký (hạn sử dụng 1 giờ).',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email'],
+                properties: {
+                  email: { type: 'string', format: 'email', example: 'user@example.com' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Email hướng dẫn đã được gửi', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
+        },
+      },
+    },
+
+    '/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: '[Public] Đặt lại mật khẩu mới bằng token',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nNhập token nhận được qua email và mật khẩu mới để cập nhật mật khẩu.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['token', 'newPassword'],
+                properties: {
+                  token: { type: 'string', example: 'a1b2c3d4e5f67890123456789abcdef0' },
+                  newPassword: { type: 'string', minLength: 8, example: 'NewSecret123!' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đặt lại mật khẩu thành công', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
+          400: { description: 'Token không hợp lệ hoặc đã hết hạn', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+
+    '/auth/change-password': {
+      put: {
+        tags: ['Auth'],
+        summary: '[Parent | Moderator | Admin] Đổi mật khẩu khi đã đăng nhập',
+        description: '**Quyền truy cập:** Đã đăng nhập (`parent`, `moderator`, `admin`).\nXác thực mật khẩu cũ và thay đổi sang mật khẩu mới.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['currentPassword', 'newPassword'],
+                properties: {
+                  currentPassword: { type: 'string', example: 'OldSecret123!' },
+                  newPassword: { type: 'string', minLength: 8, example: 'NewSecret123!' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đổi mật khẩu thành công', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
+          400: { description: 'Mật khẩu hiện tại không chính xác', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+
     // ---- CHILDREN PROFILES ----
     '/children': {
       get: {
@@ -1432,6 +1514,122 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             },
           },
           404: { description: 'Không tìm thấy kỹ năng EQ' },
+        },
+      },
+    },
+
+    // ---- TOPICS (PEDAGOGICAL FRAMEWORK) ----
+    '/topics': {
+      get: {
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Public | Parent | Staff] Lấy danh sách các chủ đề bài học sư phạm',
+        description: '**Quyền truy cập:** Public hoặc đã đăng nhập.\nLấy danh sách các chủ đề bài học thuộc khung năng lực CASEL hỗ trợ lọc theo độ tuổi, kỹ năng EQ và tìm kiếm.',
+        security: [],
+        parameters: [
+          { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' }, description: 'Lọc theo ID kỹ năng EQ' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo tên hoặc nội dung hướng dẫn' },
+          { name: 'ageMin', in: 'query', schema: { type: 'integer' }, description: 'Độ tuổi tối thiểu' },
+          { name: 'ageMax', in: 'query', schema: { type: 'integer' }, description: 'Độ tuổi tối đa' },
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Lọc theo trạng thái kích hoạt' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: {
+            description: 'Danh sách chủ đề bài học thành công',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } },
+          },
+        },
+      },
+      post: {
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Moderator | Admin] Tạo mới một chủ đề bài học sư phạm',
+        description: '**Quyền truy cập:** `moderator` | `admin`.\nTạo mới chủ đề bài học gắn liền với một năng lực EQ CASEL.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'skillId', 'guidance'],
+                properties: {
+                  title: { type: 'string', example: 'Học cách nói lời xin lỗi chân thành' },
+                  skillId: { type: 'string', format: 'uuid', example: '841c1656-9de0-404d-ac91-4202335bf08f' },
+                  guidance: { type: 'string', example: 'Giúp bé hiểu khi mắc lỗi cần nhận lỗi và sửa sai...' },
+                  ageMin: { type: 'integer', default: 5, example: 5 },
+                  ageMax: { type: 'integer', default: 8, example: 8 },
+                  displayOrder: { type: 'integer', default: 0 },
+                  isActive: { type: 'boolean', default: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo chủ đề thành công' },
+          400: { description: 'Dữ liệu không hợp lệ hoặc skillId không tồn tại' },
+        },
+      },
+    },
+
+    '/topics/{id}': {
+      get: {
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Public | Staff] Lấy chi tiết chủ đề bài học',
+        description: '**Quyền truy cập:** Public hoặc đã đăng nhập.\nLấy thông tin chi tiết một chủ đề kèm thông tin kỹ năng EQ liên kết.',
+        security: [],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID chủ đề' },
+        ],
+        responses: {
+          200: { description: 'Chi tiết chủ đề thành công' },
+          404: { description: 'Không tìm thấy chủ đề' },
+        },
+      },
+      put: {
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Moderator | Admin] Cập nhật thông tin chủ đề bài học',
+        description: '**Quyền truy cập:** `moderator` | `admin`.\nCập nhật tiêu đề, định hướng sư phạm, độ tuổi hoặc trạng thái hoạt động.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID chủ đề' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  skillId: { type: 'string', format: 'uuid' },
+                  guidance: { type: 'string' },
+                  ageMin: { type: 'integer' },
+                  ageMax: { type: 'integer' },
+                  displayOrder: { type: 'integer' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật thành công' },
+          404: { description: 'Không tìm thấy chủ đề' },
+        },
+      },
+      delete: {
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Moderator | Admin] Xóa hoặc ngưng kích hoạt chủ đề bài học',
+        description: '**Quyền truy cập:** `moderator` | `admin`.\nXóa chủ đề (nếu chưa có truyện liên kết) hoặc tự động chuyển sang inactive nếu đã có truyện.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID chủ đề' },
+        ],
+        responses: {
+          200: { description: 'Xóa hoặc ngưng kích hoạt thành công' },
+          404: { description: 'Không tìm thấy chủ đề' },
         },
       },
     },
@@ -3687,6 +3885,220 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         ],
         responses: {
           200: { description: 'Danh sách nhật ký kiểm toán phân trang' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Admin User Management (/admin/users)
+    // =========================================================================
+    '/admin/users': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Lấy danh sách người dùng trong hệ thống',
+        description: '**Quyền truy cập:** `admin`.\nTruy vấn danh sách người dùng có hỗ trợ phân trang, lọc theo vai trò (parent, moderator, admin), trạng thái và tìm kiếm.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'role', in: 'query', schema: { type: 'string', enum: ['admin', 'moderator', 'parent'] }, description: 'Lọc theo vai trò' },
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Lọc tài khoản còn hoạt động hay bị khóa' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo username, email, họ tên hoặc số điện thoại' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách người dùng thành công' },
+        },
+      },
+    },
+
+    '/admin/users/{id}': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Xem thông tin chi tiết một người dùng',
+        description: '**Quyền truy cập:** `admin`.\nXem chi tiết hồ sơ người dùng, các bé phụ thuộc, ví tiền và hồ sơ tác giả (nếu có).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID người dùng' },
+        ],
+        responses: {
+          200: { description: 'Chi tiết người dùng thành công' },
+          404: { description: 'Không tìm thấy người dùng' },
+        },
+      },
+    },
+
+    '/admin/users/{id}/role': {
+      put: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Phân quyền vai trò người dùng (Role Management)',
+        description: '**Quyền truy cập:** `admin`.\nBổ nhiệm hoặc hạ quyền vai trò người dùng (ví dụ thăng cấp thành moderator hoặc chuyển về parent).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID người dùng' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['role'],
+                properties: {
+                  role: { type: 'string', enum: ['admin', 'moderator', 'parent'], example: 'moderator' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật vai trò thành công' },
+          400: { description: 'Không thể tự đổi quyền của chính mình' },
+        },
+      },
+    },
+
+    '/admin/users/{id}/status': {
+      put: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Khóa hoặc mở khóa tài khoản người dùng (Ban / Unban)',
+        description: '**Quyền truy cập:** `admin`.\nKhóa hoạt động tài khoản vi phạm (hủy toàn bộ phiên đăng nhập hiện tại) hoặc mở khóa.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID người dùng' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['isActive'],
+                properties: {
+                  isActive: { type: 'boolean', example: false, description: 'false để khóa tài khoản, true để mở lại' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật trạng thái thành công' },
+          400: { description: 'Không thể tự khóa tài khoản của chính mình' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Admin Voucher Management (/admin/vouchers)
+    // =========================================================================
+    '/admin/vouchers': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Lấy danh sách các mã giảm giá voucher',
+        description: '**Quyền truy cập:** `admin`.\nQuản lý toàn bộ danh sách mã khuyến mãi trên toàn hệ thống.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Lọc theo trạng thái hiệu lực' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo mã code' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách mã giảm giá thành công' },
+        },
+      },
+      post: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Tạo mới mã giảm giá voucher',
+        description: '**Quyền truy cập:** `admin`.\nTạo mã voucher giảm theo phần trăm (percent) hoặc cố định (fixed VNĐ). Chiết khấu do nền tảng chịu.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['code', 'discountType', 'value', 'startsAt', 'endsAt'],
+                properties: {
+                  code: { type: 'string', example: 'CHAOBE2026' },
+                  discountType: { type: 'string', enum: ['percent', 'fixed'], example: 'percent' },
+                  value: { type: 'number', example: 20, description: '20% hoặc số tiền VNĐ cố định' },
+                  maxDiscountVnd: { type: 'number', example: 50000, description: 'Số tiền giảm tối đa (nếu là percent)' },
+                  minOrderVnd: { type: 'number', example: 100000, default: 0 },
+                  startsAt: { type: 'string', format: 'date-time' },
+                  endsAt: { type: 'string', format: 'date-time' },
+                  usageLimit: { type: 'integer', example: 500 },
+                  perUserLimit: { type: 'integer', example: 1, default: 1 },
+                  isActive: { type: 'boolean', default: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo mã voucher thành công' },
+          409: { description: 'Mã voucher đã tồn tại' },
+        },
+      },
+    },
+
+    '/admin/vouchers/{id}': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Xem chi tiết một mã voucher',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID voucher' },
+        ],
+        responses: {
+          200: { description: 'Chi tiết voucher thành công' },
+          404: { description: 'Không tìm thấy voucher' },
+        },
+      },
+      put: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Cập nhật thông tin mã voucher',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID voucher' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  code: { type: 'string' },
+                  discountType: { type: 'string', enum: ['percent', 'fixed'] },
+                  value: { type: 'number' },
+                  maxDiscountVnd: { type: 'number' },
+                  minOrderVnd: { type: 'number' },
+                  startsAt: { type: 'string', format: 'date-time' },
+                  endsAt: { type: 'string', format: 'date-time' },
+                  usageLimit: { type: 'integer' },
+                  perUserLimit: { type: 'integer' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật voucher thành công' },
+          404: { description: 'Không tìm thấy voucher' },
+        },
+      },
+      delete: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Xóa hoặc chuyển voucher sang ngừng hoạt động',
+        description: 'Nếu voucher đã có người dùng sử dụng thì tự động chuyển sang inactive để bảo toàn lịch sử giao dịch.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID voucher' },
+        ],
+        responses: {
+          200: { description: 'Xóa hoặc ngừng kích hoạt thành công' },
+          404: { description: 'Không tìm thấy voucher' },
         },
       },
     },

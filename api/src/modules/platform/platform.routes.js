@@ -24,4 +24,69 @@ router.get(
   platformController.getAuditLogs
 );
 
+// Admin User Management (Admin only)
+router.get(
+  '/users',
+  ...requireAdmin,
+  validate(platformValidation.getUsers),
+  platformController.getUsers
+);
+
+router.get(
+  '/users/:id',
+  ...requireAdmin,
+  validate(platformValidation.getUserById),
+  platformController.getUserById
+);
+
+router.put(
+  '/users/:id/role',
+  ...requireAdmin,
+  validate(platformValidation.updateUserRole),
+  platformController.updateUserRole
+);
+
+router.put(
+  '/users/:id/status',
+  ...requireAdmin,
+  validate(platformValidation.updateUserStatus),
+  platformController.updateUserStatus
+);
+
+// Admin Voucher Management (Admin only)
+router.get(
+  '/vouchers',
+  ...requireAdmin,
+  validate(platformValidation.getVouchers),
+  platformController.getVouchers
+);
+
+router.get(
+  '/vouchers/:id',
+  ...requireAdmin,
+  validate(platformValidation.getVoucherById),
+  platformController.getVoucherById
+);
+
+router.post(
+  '/vouchers',
+  ...requireAdmin,
+  validate(platformValidation.createVoucher),
+  platformController.createVoucher
+);
+
+router.put(
+  '/vouchers/:id',
+  ...requireAdmin,
+  validate(platformValidation.updateVoucher),
+  platformController.updateVoucher
+);
+
+router.delete(
+  '/vouchers/:id',
+  ...requireAdmin,
+  validate(platformValidation.getVoucherById),
+  platformController.deleteVoucher
+);
+
 export default router;

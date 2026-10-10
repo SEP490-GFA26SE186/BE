@@ -105,9 +105,13 @@ contentLibraryRouter.put(
 );
 
 
+import topicsRouter from './topics.routes.js';
+export { topicsRouter };
+
 // Mount resource routers also under unified content-library
 contentLibraryRouter.use('/backgrounds', backgroundsRouter);
 contentLibraryRouter.use('/ui-audio-assets', uiAudioAssetsRouter);
 contentLibraryRouter.use('/checklist-items', checklistItemsRouter);
+contentLibraryRouter.use('/topics', topicsRouter);
 
 export default contentLibraryRouter;

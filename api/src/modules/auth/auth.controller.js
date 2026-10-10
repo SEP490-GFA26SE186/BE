@@ -116,6 +116,33 @@ const verifyEmail = catchAsync(async (req, res) => {
   });
 });
 
+const forgotPassword = catchAsync(async (req, res) => {
+  const result = await authService.forgotPassword(req.body.email);
+  return ApiResponse.success(res, {
+    message: result.message,
+  });
+});
+
+const resetPassword = catchAsync(async (req, res) => {
+  const result = await authService.resetPassword({
+    token: req.body.token,
+    newPassword: req.body.newPassword,
+  });
+  return ApiResponse.success(res, {
+    message: result.message,
+  });
+});
+
+const changePassword = catchAsync(async (req, res) => {
+  const result = await authService.changePassword(req.user.id, {
+    currentPassword: req.body.currentPassword,
+    newPassword: req.body.newPassword,
+  });
+  return ApiResponse.success(res, {
+    message: result.message,
+  });
+});
+
 export default {
   register,
   login,
@@ -128,4 +155,7 @@ export default {
   exitKidMode,
   sendVerificationEmail,
   verifyEmail,
+  forgotPassword,
+  resetPassword,
+  changePassword,
 };
