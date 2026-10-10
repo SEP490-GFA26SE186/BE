@@ -133,11 +133,11 @@ const getReviewQueue = async (query = {}) => {
             title: true,
             coverImageKey: true,
             _count: { select: { pages: true } },
-            template: {
+            topic: {
               select: {
                 id: true,
                 title: true,
-                primarySkill: { select: { nameVi: true, nameEn: true } },
+                skill: { select: { nameVi: true, nameEn: true } },
               },
             },
           },
@@ -171,7 +171,7 @@ const getReviewQueue = async (query = {}) => {
         id: l.publishedStory.id,
         title: l.publishedStory.title,
         totalPages: l.publishedStory._count.pages,
-        template: l.publishedStory.template,
+        topic: l.publishedStory.topic,
       },
       latestReview: latestReview
         ? {

@@ -77,13 +77,13 @@ const getBookshelf = async (user, query) => {
             useAiImage: true,
             useTts: true,
             createdAt: true,
-            template: {
+            topic: {
               select: {
                 id: true,
                 title: true,
                 ageMin: true,
                 ageMax: true,
-                primarySkill: {
+                skill: {
                   select: {
                     id: true,
                     caselCode: true,
@@ -153,7 +153,7 @@ const getBookshelf = async (user, query) => {
       useTts: story.useTts,
       addedAt: item.addedAt,
       totalPages,
-      template: story.template,
+      topic: story.topic,
       readingProgress: session
         ? {
             sessionId: session.id,
@@ -197,11 +197,11 @@ const addToBookshelf = async (user, { childId, storyId }) => {
       deletedAt: null,
     },
     include: {
-      template: {
+      topic: {
         select: {
           id: true,
           title: true,
-          primarySkill: {
+          skill: {
             select: { id: true, caselCode: true, nameVi: true, nameEn: true },
           },
         },

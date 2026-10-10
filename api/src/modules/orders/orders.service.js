@@ -592,11 +592,10 @@ const getMyEntitlements = async (userId) => {
               id: true,
               title: true,
               coverImageKey: true,
-              templateId: true,
-              template: {
+              topicId: true,
+              topic: {
                 select: {
                   title: true,
-                  slots: true,
                 },
               },
             },
@@ -679,7 +678,7 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
       data: {
         ownerId: userId,
         kind: 'private',
-        templateId: publishedStory.templateId,
+        topicId: publishedStory.topicId,
         sourceStoryId: publishedStory.id,
         title: title || publishedStory.title,
         coverImageKey: publishedStory.coverImageKey,

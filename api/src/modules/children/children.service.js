@@ -572,14 +572,14 @@ const getChildEqReport = async (parentId, childId, filter = {}) => {
   const playSessions = await prisma.playSession.findMany({
     where: playSessionWhere,
     include: {
-      eqScore: true,
+      answers: true,
       story: {
         select: {
           id: true,
           title: true,
-          template: {
+          topic: {
             select: {
-              primarySkill: true,
+              skill: true,
             },
           },
         },
@@ -603,10 +603,12 @@ const getChildEqReport = async (parentId, childId, filter = {}) => {
   });
 
   playSessions.forEach((ps) => {
-    if (ps.eqScore && skillScores[ps.eqScore.skillId]) {
-      skillScores[ps.eqScore.skillId].score += ps.eqScore.scoreDelta;
-      skillScores[ps.eqScore.skillId].sessionsCount += 1;
-    }
+    (ps.answers || []).forEach((ans) => {
+      if (ans.skillId && skillScores[ans.skillId]) {
+        skillScores[ans.skillId].score += Number(ans.score);
+        skillScores[ans.skillId].sessionsCount += 1;
+      }
+    });
   });
 
   const skillsArray = Object.values(skillScores);

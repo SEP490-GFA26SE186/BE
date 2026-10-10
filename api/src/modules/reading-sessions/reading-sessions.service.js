@@ -76,8 +76,8 @@ const computeEqAssessment = async (sessionId) => {
     include: {
       story: {
         include: {
-          template: {
-            include: { primarySkill: true },
+          topic: {
+            include: { skill: true },
           },
         },
       },
@@ -105,7 +105,7 @@ const computeEqAssessment = async (sessionId) => {
 
   // Aggregate signals per EQ skill
   const skillMap = {};
-  for (const decision of session.decisions) {
+  for (const decision of (session.decisions || [])) {
     const choiceType = decision.choice?.choiceType;
     if (!choiceType) continue;
 
@@ -128,12 +128,12 @@ const computeEqAssessment = async (sessionId) => {
         if (isProsocial) skillMap[skillId].prosocialChoices += 1;
         skillMap[skillId].deltaSum += sig.delta || 0;
       }
-    } else if (session.story?.template?.primarySkillId) {
-      // Fallback: attribute to story primary EQ skill
-      const primarySkillId = session.story.template.primarySkillId;
+    } else if (session.story?.topic?.skillId) {
+      // Fallback: attribute to story EQ skill
+      const primarySkillId = session.story.topic.skillId;
       if (!skillMap[primarySkillId]) {
         skillMap[primarySkillId] = {
-          skill: session.story.template.primarySkill,
+          skill: session.story.topic.skill,
           occurrences: 0,
           prosocialChoices: 0,
           deltaSum: 0,
@@ -245,9 +245,9 @@ const startSession = async (user, { childId, storyId, isReplay = false }) => {
           },
         },
       },
-      template: {
+      topic: {
         include: {
-          primarySkill: {
+          skill: {
             select: { id: true, caselCode: true, nameVi: true, nameEn: true },
           },
         },
@@ -311,7 +311,7 @@ const startSession = async (user, { childId, storyId, isReplay = false }) => {
           id: story.id,
           title: story.title,
           coverImageKey: story.coverImageKey,
-          primarySkill: story.template?.primarySkill,
+          primarySkill: story.topic?.skill,
         },
         currentPage: formatPage(currentPage),
       };
@@ -377,7 +377,7 @@ const startSession = async (user, { childId, storyId, isReplay = false }) => {
       id: story.id,
       title: story.title,
       coverImageKey: story.coverImageKey,
-      primarySkill: story.template?.primarySkill,
+      primarySkill: story.topic?.skill,
     },
     currentPage: formatPage(firstPage),
   };
@@ -402,11 +402,11 @@ const getSession = async (user, sessionId) => {
           title: true,
           coverImageKey: true,
           _count: { select: { pages: true } },
-          template: {
+          topic: {
             select: {
               id: true,
               title: true,
-              primarySkill: {
+              skill: {
                 select: { id: true, caselCode: true, nameVi: true, nameEn: true },
               },
             },
@@ -472,7 +472,7 @@ const getSession = async (user, sessionId) => {
       id: session.story.id,
       title: session.story.title,
       coverImageKey: session.story.coverImageKey,
-      primarySkill: session.story.template?.primarySkill,
+      primarySkill: session.story.topic?.skill,
     },
     status: session.status,
     isReplay: session.isReplay,
@@ -696,8 +696,8 @@ const completeSession = async (user, sessionId, options = {}) => {
       child: true,
       story: {
         include: {
-          template: {
-            include: { primarySkill: true },
+          topic: {
+            include: { skill: true },
           },
         },
       },
@@ -752,7 +752,7 @@ const completeSession = async (user, sessionId, options = {}) => {
     story: {
       id: session.story.id,
       title: session.story.title,
-      primarySkill: session.story.template?.primarySkill,
+      primarySkill: session.story.topic?.skill,
     },
     eqAssessment,
   };
@@ -790,11 +790,11 @@ const getChildHistory = async (user, childId, query) => {
             id: true,
             title: true,
             coverImageKey: true,
-            template: {
+            topic: {
               select: {
                 id: true,
                 title: true,
-                primarySkill: {
+                skill: {
                   select: { id: true, caselCode: true, nameVi: true, nameEn: true },
                 },
               },

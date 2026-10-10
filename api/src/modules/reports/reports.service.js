@@ -76,20 +76,19 @@ const getChildEqReport = async (parentId, childId, filter = {}) => {
     where: playSessionWhere,
     orderBy: { completedAt: 'asc' },
     include: {
-      eqScore: true,
+      answers: true,
       story: {
         select: {
           id: true,
           title: true,
-          template: {
+          topic: {
             select: {
-              primarySkill: true,
-              stages: {
-                select: {
-                  emotionToName: true,
-                  learningObjective: true,
-                },
-              },
+              skill: true,
+            },
+          },
+          checkpoints: {
+            select: {
+              answerEmotion: true,
             },
           },
         },
@@ -115,17 +114,20 @@ const getChildEqReport = async (parentId, childId, filter = {}) => {
   let totalScore = 0;
 
   playSessions.forEach((ps) => {
-    if (ps.eqScore && skillMap[ps.eqScore.skillId]) {
-      skillMap[ps.eqScore.skillId].score += ps.eqScore.scoreDelta;
-      skillMap[ps.eqScore.skillId].sessionsCount += 1;
-      totalScore += ps.eqScore.scoreDelta;
-    }
+    (ps.answers || []).forEach((ans) => {
+      if (ans.skillId && skillMap[ans.skillId]) {
+        const scoreVal = Number(ans.score);
+        skillMap[ans.skillId].score += scoreVal;
+        skillMap[ans.skillId].sessionsCount += 1;
+        totalScore += scoreVal;
+      }
+    });
 
     // Collect emotion challenges encountered
-    if (ps.story?.template?.stages) {
-      ps.story.template.stages.forEach((stage) => {
-        if (stage.emotionToName) {
-          const emotion = stage.emotionToName.trim();
+    if (ps.story?.checkpoints) {
+      ps.story.checkpoints.forEach((cp) => {
+        if (cp.answerEmotion) {
+          const emotion = cp.answerEmotion.trim();
           emotionFrequencies[emotion] = (emotionFrequencies[emotion] || 0) + 1;
         }
       });
