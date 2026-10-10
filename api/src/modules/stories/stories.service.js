@@ -16,10 +16,9 @@ const verifyStoryAccess = async (user, storyId, requireOwner = false, checkMutat
       deletedAt: null,
     },
     include: {
-      template: {
+      topic: {
         include: {
-          slots: true,
-          primarySkill: true,
+          skill: true,
         },
       },
     },
@@ -70,15 +69,18 @@ const verifyStoryAccess = async (user, storyId, requireOwner = false, checkMutat
 };
 
 /**
- * Create a new story draft based on a pedagogical template
+ * Create a new story draft based on a pedagogical topic
  * @param {Object} user - Authenticated parent
  * @param {Object} data - Story creation payload
  * @returns {Promise<Object>} Created story
  */
 const createStory = async (user, data) => {
   const {
+    topicId,
     templateId,
     title,
+    length = 'medium',
+    situation,
     coverImageKey,
     useAiImage = false,
     useTts = true,
@@ -86,28 +88,23 @@ const createStory = async (user, data) => {
     characters = [],
   } = data;
 
-  // 1. Verify template exists and is active
-  const template = await prisma.template.findUnique({
-    where: { id: templateId },
-    include: {
-      slots: true,
-      stages: {
-        orderBy: { stageOrder: 'asc' },
-        include: {
-          choices: {
-            orderBy: { choiceOrder: 'asc' },
-          },
-        },
-      },
-    },
-  });
-
-  if (!template) {
-    throw ApiError.notFound('Pedagogical template not found');
+  const targetTopicId = topicId || templateId;
+  if (!targetTopicId) {
+    throw ApiError.badRequest('Topic ID is required');
   }
 
-  if (template.status === 'retired') {
-    throw ApiError.badRequest('Cannot create stories from a retired template');
+  // 1. Verify topic exists and is active
+  const topic = await prisma.topic.findUnique({
+    where: { id: targetTopicId },
+    include: { skill: true },
+  });
+
+  if (!topic) {
+    throw ApiError.notFound('Pedagogical topic not found');
+  }
+
+  if (!topic.isActive) {
+    throw ApiError.badRequest('Cannot create stories from an inactive topic');
   }
 
   // 2. Validate family characters if provided
@@ -135,85 +132,51 @@ const createStory = async (user, data) => {
       data: {
         ownerId: user.id,
         kind: 'private',
-        templateId,
+        topicId: targetTopicId,
+        length,
+        situation: situation || null,
         title,
         coverImageKey: coverImageKey || null,
-        useAiImage,
-        useTts,
+        useAiImage: Boolean(useAiImage),
+        useTts: Boolean(useTts),
         status: 'draft',
       },
     });
 
-    // 3.2 Bind character slots
-    const slotMap = new Map(characters.map((c) => [c.slotKey, c.characterId]));
-    for (const slot of template.slots) {
+    // 3.2 Bind character tokens
+    for (let i = 0; i < characters.length; i++) {
+      const c = characters[i];
+      const token = c.token || c.slotKey || `{NV${i + 1}}`;
       await tx.storyCharacter.create({
         data: {
           storyId: newStory.id,
-          slotKey: slot.slotKey,
-          characterId: slotMap.get(slot.slotKey) || null,
+          token,
+          characterId: c.characterId || null,
+          aliasName: c.aliasName || null,
+          isMain: c.isMain ?? (i === 0),
         },
       });
     }
 
-    // 3.3 Auto-initialize story skeleton pages from template stages if requested
-    if (autoInitializePages && template.stages.length > 0) {
-      let pageOrder = 1;
+    // 3.3 Auto-initialize story skeleton (scene & initial page)
+    if (autoInitializePages) {
+      const defaultScene = await tx.storyScene.create({
+        data: {
+          storyId: newStory.id,
+          sceneOrder: 1,
+          description: `Khung cảnh mở đầu cho bài học "${topic.title}"`,
+        },
+      });
 
-      for (const stage of template.stages) {
-        // A. Situation / Decision point page
-        const situationPage = await tx.storyPage.create({
-          data: {
-            storyId: newStory.id,
-            stageId: stage.id,
-            pageKind: pageOrder === 1 ? 'lead_in' : 'situation',
-            pageOrder: pageOrder++,
-            contentText: `[${stage.learningObjective}] - Mô tả tình huống...`,
-            origin: 'human',
-          },
-        });
-
-        // B. Choices for this stage
-        if (stage.choices && stage.choices.length > 0) {
-          for (const choiceType of stage.choices) {
-            const createdChoice = await tx.storyChoice.create({
-              data: {
-                pageId: situationPage.id,
-                choiceOrder: choiceType.choiceOrder,
-                choiceText: choiceType.description,
-                choiceTypeId: choiceType.id,
-              },
-            });
-
-            // C. Consequence page branching from this choice
-            await tx.storyPage.create({
-              data: {
-                storyId: newStory.id,
-                stageId: stage.id,
-                pageKind: 'consequence',
-                pageOrder: pageOrder++,
-                fromChoiceId: createdChoice.id,
-                contentText: `Kết quả diễn biến cho lựa chọn "${choiceType.description}"...`,
-                origin: 'human',
-              },
-            });
-          }
-        }
-
-        // D. Ending page if this is the climax or the last stage
-        if (stage.isClimax || stage.stageOrder === template.stages.length) {
-          await tx.storyPage.create({
-            data: {
-              storyId: newStory.id,
-              stageId: stage.id,
-              pageKind: 'ending',
-              pageOrder: pageOrder++,
-              contentText: 'Bài học cảm xúc và kết thúc câu chuyện...',
-              origin: 'human',
-            },
-          });
-        }
-      }
+      await tx.storyPage.create({
+        data: {
+          storyId: newStory.id,
+          sceneId: defaultScene.id,
+          pageOrder: 1,
+          contentText: `Mở đầu câu chuyện về chủ đề "${topic.title}"...`,
+          origin: 'human',
+        },
+      });
     }
 
     return newStory;
@@ -229,7 +192,8 @@ const createStory = async (user, data) => {
  * @returns {Promise<Object>} Paginated stories list
  */
 const getStories = async (user, filter = {}) => {
-  const { kind, status, templateId, search, page = 1, limit = 10 } = filter;
+  const { kind, status, topicId, templateId, search, page = 1, limit = 10 } = filter;
+  const targetTopicId = topicId || templateId;
   const pageNum = Math.max(1, Number(page) || 1);
   const limitNum = Math.max(1, Number(limit) || 10);
   const skip = (pageNum - 1) * limitNum;
@@ -241,7 +205,7 @@ const getStories = async (user, filter = {}) => {
 
   if (kind) where.kind = kind;
   if (status) where.status = status;
-  if (templateId) where.templateId = templateId;
+  if (targetTopicId) where.topicId = targetTopicId;
   if (search) {
     where.title = { contains: search, mode: 'insensitive' };
   }
@@ -254,13 +218,14 @@ const getStories = async (user, filter = {}) => {
       take: limitNum,
       orderBy: { updatedAt: 'desc' },
       include: {
-        template: {
+        topic: {
           select: {
             id: true,
             title: true,
+            guidance: true,
             ageMin: true,
             ageMax: true,
-            primarySkill: {
+            skill: {
               select: { id: true, caselCode: true, nameVi: true, nameEn: true },
             },
           },
@@ -268,7 +233,7 @@ const getStories = async (user, filter = {}) => {
         storyCharacters: {
           include: {
             character: {
-              select: { id: true, name: true, role: true, portraitImageKey: true },
+              select: { id: true, name: true, appearance: true, portraitImageKey: true },
             },
           },
         },
@@ -291,6 +256,8 @@ const getStories = async (user, filter = {}) => {
     stories: stories.map((s) => ({
       id: s.id,
       title: s.title,
+      length: s.length,
+      situation: s.situation,
       coverImageKey: s.coverImageKey,
       kind: s.kind,
       status: s.status,
@@ -298,9 +265,12 @@ const getStories = async (user, filter = {}) => {
       useTts: s.useTts,
       reviewedAt: s.reviewedAt,
       isReviewed: s.reviewedAt !== null,
-      template: s.template,
+      topic: s.topic,
       characters: s.storyCharacters.map((sc) => ({
-        slotKey: sc.slotKey,
+        token: sc.token,
+        characterId: sc.characterId,
+        aliasName: sc.aliasName,
+        isMain: sc.isMain,
         character: sc.character,
       })),
       totalPages: s._count.pages,
@@ -313,7 +283,7 @@ const getStories = async (user, filter = {}) => {
 };
 
 /**
- * Get full story detail including stages, pages, and branching choices
+ * Get full story detail including scenes, pages, and checkpoints
  * @param {Object} user - Authenticated user
  * @param {string} storyId - Story ID
  * @returns {Promise<Object>} Story with full pages hierarchy
@@ -328,10 +298,9 @@ const getStoryById = async (user, storyId) => {
       owner: {
         select: { id: true, fullName: true },
       },
-      template: {
+      topic: {
         include: {
-          primarySkill: true,
-          slots: true,
+          skill: true,
         },
       },
       storyCharacters: {
@@ -339,41 +308,33 @@ const getStoryById = async (user, storyId) => {
           character: true,
         },
       },
-      pages: {
-        orderBy: { pageOrder: 'asc' },
+      scenes: {
+        orderBy: { sceneOrder: 'asc' },
         include: {
-          stage: {
-            select: {
-              id: true,
-              stageOrder: true,
-              learningObjective: true,
-              emotionToName: true,
-              isClimax: true,
-            },
-          },
           background: {
             select: { id: true, name: true, imageKey: true },
           },
-          choices: {
-            orderBy: { choiceOrder: 'asc' },
+        },
+      },
+      pages: {
+        orderBy: { pageOrder: 'asc' },
+        include: {
+          scene: {
+            select: { id: true, sceneOrder: true, description: true, imageKey: true },
+          },
+          checkpoint: {
             include: {
-              choiceType: {
-                select: {
-                  id: true,
-                  choiceOrder: true,
-                  typeCode: true,
-                  description: true,
-                  isProsocial: true,
-                },
+              options: {
+                orderBy: { optionOrder: 'asc' },
               },
             },
           },
-          fromChoice: {
-            select: {
-              id: true,
-              choiceOrder: true,
-              choiceText: true,
-            },
+        },
+      },
+      checkpoints: {
+        include: {
+          options: {
+            orderBy: { optionOrder: 'asc' },
           },
         },
       },
@@ -400,6 +361,8 @@ const getStoryById = async (user, storyId) => {
   return {
     id: story.id,
     title: story.title,
+    length: story.length,
+    situation: story.situation,
     coverImageKey: story.coverImageKey,
     kind: story.kind,
     status: story.status,
@@ -408,44 +371,29 @@ const getStoryById = async (user, storyId) => {
     reviewedAt: story.reviewedAt,
     isReviewed: story.reviewedAt !== null,
     owner: story.owner,
-    template: {
-      id: story.template.id,
-      title: story.template.title,
-      description: story.template.description,
-      primarySkill: story.template.primarySkill,
-      ageMin: story.template.ageMin,
-      ageMax: story.template.ageMax,
-      slots: story.template.slots,
-    },
+    topic: story.topic,
     characters: story.storyCharacters.map((sc) => ({
-      slotKey: sc.slotKey,
+      token: sc.token,
+      characterId: sc.characterId,
+      aliasName: sc.aliasName,
+      isMain: sc.isMain,
       character: sc.character,
     })),
+    scenes: story.scenes,
     pages: story.pages.map((p) => ({
       id: p.id,
       pageOrder: p.pageOrder,
-      pageKind: p.pageKind,
-      stageId: p.stageId,
-      stage: p.stage,
-      fromChoiceId: p.fromChoiceId,
-      fromChoice: p.fromChoice,
+      sceneId: p.sceneId,
+      scene: p.scene,
       contentText: p.contentText,
       aiOriginalText: p.aiOriginalText,
       origin: p.origin,
-      background: p.background,
-      imageKey: p.imageKey,
       audioKey: p.audioKey,
-      imageStatus: p.imageStatus,
       audioStatus: p.audioStatus,
-      choices: p.choices.map((c) => ({
-        id: c.id,
-        choiceOrder: c.choiceOrder,
-        choiceText: c.choiceText,
-        audioKey: c.audioKey,
-        choiceType: c.choiceType,
-      })),
-      updatedAt: p.updatedAt,
+      checkpoint: p.checkpoint,
     })),
+    checkpoints: story.checkpoints,
+    totalPages: story.pages.length,
     bookshelfCount: story._count.bookshelfItems,
     playCount: story._count.playSessions,
     createdAt: story.createdAt,
@@ -495,7 +443,7 @@ const deleteStory = async (user, storyId) => {
 };
 
 /**
- * Bind or rebind family characters to story template slots
+ * Bind or rebind family characters to story character tokens
  * @param {Object} user - Authenticated user
  * @param {string} storyId - Story ID
  * @param {Array} characters - Slot character mappings
@@ -519,23 +467,28 @@ const bindCharacters = async (user, storyId, characters) => {
     }
   }
 
-  // Update or insert slot bindings in transaction
   await prisma.$transaction(async (tx) => {
-    for (const item of characters) {
+    for (let i = 0; i < characters.length; i++) {
+      const item = characters[i];
+      const token = item.token || item.slotKey || `{NV${i + 1}}`;
       await tx.storyCharacter.upsert({
         where: {
-          storyId_slotKey: {
+          storyId_token: {
             storyId: story.id,
-            slotKey: item.slotKey,
+            token,
           },
         },
         create: {
           storyId: story.id,
-          slotKey: item.slotKey,
+          token,
           characterId: item.characterId || null,
+          aliasName: item.aliasName || null,
+          isMain: item.isMain ?? (i === 0),
         },
         update: {
           characterId: item.characterId || null,
+          aliasName: item.aliasName || null,
+          isMain: item.isMain ?? undefined,
         },
       });
     }
@@ -580,16 +533,13 @@ const updatePage = async (user, storyId, pageId, data) => {
     where: { id: page.id },
     data: {
       ...(data.contentText !== undefined && { contentText: data.contentText }),
-      ...(data.backgroundId !== undefined && { backgroundId: data.backgroundId }),
-      ...(data.imageKey !== undefined && { imageKey: data.imageKey }),
+      ...(data.sceneId !== undefined && { sceneId: data.sceneId }),
       ...(data.audioKey !== undefined && { audioKey: data.audioKey }),
       origin,
     },
     include: {
-      background: true,
-      choices: {
-        include: { choiceType: true },
-      },
+      scene: { include: { background: true } },
+      checkpoint: { include: { options: true } },
     },
   });
 
@@ -616,16 +566,38 @@ const createPage = async (user, storyId, data) => {
     pageOrder = (lastPage?.pageOrder || 0) + 1;
   }
 
+  // Ensure a scene exists for story
+  let sceneId = data.sceneId;
+  if (!sceneId) {
+    const firstScene = await prisma.storyScene.findFirst({
+      where: { storyId },
+      orderBy: { sceneOrder: 'asc' },
+    });
+    if (firstScene) {
+      sceneId = firstScene.id;
+    } else {
+      const newScene = await prisma.storyScene.create({
+        data: {
+          storyId,
+          sceneOrder: 1,
+          description: 'Khung cảnh trang truyện',
+        },
+      });
+      sceneId = newScene.id;
+    }
+  }
+
   const newPage = await prisma.storyPage.create({
     data: {
       storyId,
-      stageId: data.stageId,
-      pageKind: data.pageKind,
+      sceneId,
       pageOrder,
-      fromChoiceId: data.fromChoiceId || null,
       contentText: data.contentText || '',
-      backgroundId: data.backgroundId || null,
       origin: data.origin || 'human',
+    },
+    include: {
+      scene: true,
+      checkpoint: true,
     },
   });
 
@@ -674,39 +646,41 @@ const deletePage = async (user, storyId, pageId) => {
 };
 
 /**
- * Update choice text of a branch point
+ * Update choice / checkpoint option text
  * @param {Object} user - Authenticated user
  * @param {string} storyId - Story ID
  * @param {string} pageId - Page ID
- * @param {string} choiceId - Choice ID
- * @param {Object} data - Choice update data
- * @returns {Promise<Object>} Updated choice
+ * @param {string} choiceId - Option ID
+ * @param {Object} data - Option update data
+ * @returns {Promise<Object>} Updated option
  */
 const updateChoice = async (user, storyId, pageId, choiceId, data) => {
   await verifyStoryAccess(user, storyId, true, true);
 
-  const choice = await prisma.storyChoice.findFirst({
+  const option = await prisma.checkpointOption.findFirst({
     where: {
       id: choiceId,
-      pageId,
-      page: { storyId },
+      checkpoint: { storyId },
     },
   });
 
-  if (!choice) {
-    throw ApiError.notFound('Choice not found');
+  if (!option) {
+    throw ApiError.notFound('Checkpoint option not found');
   }
 
-  const updatedChoice = await prisma.storyChoice.update({
-    where: { id: choice.id },
+  const updatedOption = await prisma.checkpointOption.update({
+    where: { id: option.id },
     data: {
-      choiceText: data.choiceText,
-      ...(data.audioKey !== undefined && { audioKey: data.audioKey }),
+      ...(data.choiceText !== undefined && { text: data.choiceText }),
+      ...(data.text !== undefined && { text: data.text }),
+      ...(data.role !== undefined && { role: data.role }),
+      ...(data.isCorrect !== undefined && { isCorrect: data.isCorrect }),
+      ...(data.feedback !== undefined && { feedback: data.feedback }),
+      ...(data.audioKey !== undefined && { textAudioKey: data.audioKey }),
     },
-    include: { choiceType: true },
   });
 
-  return updatedChoice;
+  return updatedOption;
 };
 
 /**
@@ -721,9 +695,6 @@ const reviewStory = async (user, storyId) => {
   // 1. Check minimum requirements
   const pages = await prisma.storyPage.findMany({
     where: { storyId: story.id },
-    include: {
-      choices: true,
-    },
   });
 
   if (pages.length === 0) {
@@ -738,11 +709,16 @@ const reviewStory = async (user, storyId) => {
     );
   }
 
-  // 3. Ensure choices have text
-  for (const page of pages) {
-    for (const choice of page.choices) {
-      if (!choice.choiceText || choice.choiceText.trim() === '') {
-        throw ApiError.badRequest(`Choice order ${choice.choiceOrder} on page ${page.pageOrder} has empty text`);
+  // 3. Ensure checkpoints options have text if any checkpoints exist
+  const checkpoints = await prisma.storyCheckpoint.findMany({
+    where: { storyId: story.id },
+    include: { options: true },
+  });
+
+  for (const cp of checkpoints) {
+    for (const opt of cp.options) {
+      if (!opt.text || opt.text.trim() === '') {
+        throw ApiError.badRequest(`Option order ${opt.optionOrder} on checkpoint ${cp.id} has empty text`);
       }
     }
   }
@@ -785,38 +761,25 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
     throw ApiError.badRequest('You must review the private story before publishing it');
   }
 
-  const template = sourceStory.template;
+  const topic = sourceStory.topic;
 
-  // Fetch full pages and choices to clone
-  const pages = await prisma.storyPage.findMany({
-    where: { storyId: sourceStory.id },
-    orderBy: { pageOrder: 'asc' },
-    include: {
-      choices: {
-        orderBy: { choiceOrder: 'asc' },
-      },
-    },
-  });
-
-  // Prepare de-personalization: Map character names to slot default names or parent custom names
-  const slotDefaultNames = new Map(template.slots.map((s) => [s.slotKey, s.defaultName]));
-
-  // Also replace any private character name occurrences
+  // Fetch story characters to prepare de-personalization
   const storyCharacters = await prisma.storyCharacter.findMany({
     where: { storyId: sourceStory.id },
     include: { character: true },
   });
 
   // Map custom replacement names if provided by parent in options.nameReplacements
-  const customBySlot = new Map();
+  const customByToken = new Map();
   const customByName = new Map();
 
   if (Array.isArray(options.nameReplacements)) {
     for (const item of options.nameReplacements) {
       const target = item?.customName?.trim();
       if (!target) continue;
-      if (item.slotKey?.trim()) {
-        customBySlot.set(item.slotKey.trim(), target);
+      const tokenKey = (item.token || item.slotKey)?.trim();
+      if (tokenKey) {
+        customByToken.set(tokenKey, target);
       }
       if (item.fromName?.trim()) {
         customByName.set(item.fromName.trim().toLowerCase(), target);
@@ -829,9 +792,9 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
     if (sc.character) {
       const charName = sc.character.name;
       const targetName =
-        customBySlot.get(sc.slotKey) ||
+        customByToken.get(sc.token) ||
         customByName.get(charName.toLowerCase()) ||
-        slotDefaultNames.get(sc.slotKey) ||
+        sc.aliasName ||
         'Nhân vật';
 
       nameReplacements.push({
@@ -859,7 +822,6 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
     let result = text;
     for (const rep of nameReplacements) {
       if (!rep.from) continue;
-      // Unicode word boundary lookaround supporting Vietnamese diacritics
       const regex = new RegExp(
         `(?<=^|[^\\p{L}\\p{N}])${escapeRegex(rep.from)}(?=$|[^\\p{L}\\p{N}])`,
         'gui'
@@ -876,7 +838,9 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
       data: {
         ownerId: user.id,
         kind: 'published',
-        templateId: sourceStory.templateId,
+        topicId: sourceStory.topicId,
+        length: sourceStory.length,
+        situation: sourceStory.situation,
         sourceStoryId: sourceStory.id,
         title: options.title || sourceStory.title,
         coverImageKey: options.coverImageKey || sourceStory.coverImageKey,
@@ -887,65 +851,103 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
       },
     });
 
-    // 2. Clone story characters without personal character references (using default names)
-    for (const slot of template.slots) {
+    // 2. Clone story characters with aliasName (de-personalized, characterId is null)
+    for (const sc of storyCharacters) {
+      const aliasName =
+        customByToken.get(sc.token) ||
+        (sc.character ? customByName.get(sc.character.name.toLowerCase()) : null) ||
+        sc.aliasName ||
+        sc.character?.name ||
+        'Nhân vật';
+
       await tx.storyCharacter.create({
         data: {
           storyId: clonedStory.id,
-          slotKey: slot.slotKey,
-          characterId: null, // De-personalized: no private characterId
+          token: sc.token,
+          characterId: null, // De-personalized
+          aliasName,
+          isMain: sc.isMain,
         },
       });
     }
 
-    // 3. Clone pages and choices with text de-personalization
-    const choiceIdMap = new Map(); // oldChoiceId -> newChoiceId
+    // 3. Clone scenes
+    const scenes = await prisma.storyScene.findMany({
+      where: { storyId: sourceStory.id },
+      orderBy: { sceneOrder: 'asc' },
+    });
 
-    // First pass: create non-consequence pages and choices
+    const oldSceneIdToNewSceneId = new Map();
+    for (const sc of scenes) {
+      const newScene = await tx.storyScene.create({
+        data: {
+          storyId: clonedStory.id,
+          sceneOrder: sc.sceneOrder,
+          description: sc.description,
+          imageKey: sc.imageKey,
+          backgroundId: sc.backgroundId,
+          imageStatus: sc.imageStatus,
+        },
+      });
+      oldSceneIdToNewSceneId.set(sc.id, newScene.id);
+    }
+
+    // 4. Clone pages and checkpoints
+    const pages = await prisma.storyPage.findMany({
+      where: { storyId: sourceStory.id },
+      orderBy: { pageOrder: 'asc' },
+      include: {
+        checkpoint: {
+          include: { options: true },
+        },
+      },
+    });
+
     for (const page of pages) {
       const dePersonalizedContent = depersonalizeText(page.contentText);
+      const newSceneId = oldSceneIdToNewSceneId.get(page.sceneId);
 
       const clonedPage = await tx.storyPage.create({
         data: {
           storyId: clonedStory.id,
-          stageId: page.stageId,
-          pageKind: page.pageKind,
+          sceneId: newSceneId || Array.from(oldSceneIdToNewSceneId.values())[0],
           pageOrder: page.pageOrder,
           contentText: dePersonalizedContent,
           aiOriginalText: page.aiOriginalText,
           origin: page.origin,
-          backgroundId: page.backgroundId,
-          imageKey: page.imageKey,
-          audioKey: null, // TTS will need re-generation if names changed
+          audioKey: null,
+          audioStatus: 'none',
         },
       });
 
-      for (const choice of page.choices) {
-        const clonedChoice = await tx.storyChoice.create({
+      // Clone checkpoint if page had one
+      if (page.checkpoint) {
+        const cp = page.checkpoint;
+        const clonedCp = await tx.storyCheckpoint.create({
           data: {
-            pageId: clonedPage.id,
-            choiceOrder: choice.choiceOrder,
-            choiceText: depersonalizeText(choice.choiceText),
-            choiceTypeId: choice.choiceTypeId,
-          },
-        });
-        choiceIdMap.set(choice.id, clonedChoice.id);
-      }
-    }
-
-    // Second pass: link consequence pages to their cloned fromChoiceId
-    for (const page of pages) {
-      if (page.fromChoiceId && choiceIdMap.has(page.fromChoiceId)) {
-        const newChoiceId = choiceIdMap.get(page.fromChoiceId);
-        await tx.storyPage.updateMany({
-          where: {
             storyId: clonedStory.id,
-            pageOrder: page.pageOrder,
-          },
-          data: {
-            fromChoiceId: newChoiceId,
+            afterPageId: clonedPage.id,
+            type: cp.type,
+            targetToken: cp.targetToken,
+            question: depersonalizeText(cp.question),
+            answerEmotion: cp.answerEmotion,
+            hint: depersonalizeText(cp.hint),
+            origin: cp.origin,
           },
         });
+
+        for (const opt of cp.options) {
+          await tx.checkpointOption.create({
+            data: {
+              checkpointId: clonedCp.id,
+              optionOrder: opt.optionOrder,
+              text: depersonalizeText(opt.text),
+              role: opt.role,
+              isCorrect: opt.isCorrect,
+              feedback: depersonalizeText(opt.feedback),
+            },
+          });
+        }
       }
     }
 

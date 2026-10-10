@@ -365,6 +365,57 @@ export const consumeKidSessionToken = async (tokenId) => {
   });
 };
 
+/**
+ * Generate password reset token
+ * @param {string} userId
+ * @returns {Promise<string>} rawToken
+ */
+export const generatePasswordResetToken = async (userId) => {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  await prisma.authToken.create({
+    data: {
+      userId,
+      type: 'password_reset',
+      tokenHash,
+      expiresAt,
+    },
+  });
+
+  return rawToken;
+};
+
+/**
+ * Verify and consume password reset token
+ * @param {string} rawToken
+ * @returns {Promise<Object>} user record
+ */
+export const verifyAndConsumePasswordResetToken = async (rawToken) => {
+  const tokenHash = hashToken(rawToken);
+
+  const tokenRecord = await prisma.authToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  });
+
+  if (!tokenRecord || tokenRecord.type !== 'password_reset' || tokenRecord.consumedAt !== null) {
+    throw ApiError.badRequest('Mã khôi phục mật khẩu không hợp lệ hoặc đã được sử dụng');
+  }
+
+  if (tokenRecord.expiresAt < new Date()) {
+    throw ApiError.badRequest('Mã khôi phục mật khẩu đã hết hạn');
+  }
+
+  await prisma.authToken.update({
+    where: { id: tokenRecord.id },
+    data: { consumedAt: new Date() },
+  });
+
+  return tokenRecord.user;
+};
+
 export default {
   hashToken,
   parseDuration,
@@ -376,4 +427,6 @@ export default {
   generateKidSessionToken,
   verifyKidSessionToken,
   consumeKidSessionToken,
+  generatePasswordResetToken,
+  verifyAndConsumePasswordResetToken,
 };

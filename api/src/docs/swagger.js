@@ -35,7 +35,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Children', description: 'Quản lý hồ sơ bé và kiểm soát thời gian sử dụng màn hình' },
     { name: 'Characters', description: 'Quản lý nhân vật gia đình đưa vào truyện và chân dung AI' },
     { name: 'EQ Skills', description: 'Danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn CASEL' },
-    { name: 'Templates', description: 'Thư viện kịch bản truyện mẫu sư phạm và cây quyết định cảm xúc' },
+    { name: 'Topics', description: 'Chủ đề bài học sư phạm (Topics)' },
     { name: 'Stories', description: 'Sáng tác truyện, quản lý trang, lựa chọn rẽ nhánh và chế độ kiểm duyệt phụ huynh' },
     { name: 'Content Library', description: 'Thư viện tài nguyên sư phạm: ảnh nền mặc định, âm thanh UI, tiêu chuẩn kiểm duyệt và cấu hình kịch bản' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
@@ -189,84 +189,20 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           nameEn: { type: 'string', example: 'Self-Awareness' },
           description: { type: 'string', example: 'Khả năng hiểu rõ cảm xúc, suy nghĩ và giá trị của bản thân...' },
           displayOrder: { type: 'integer', example: 1 },
-          activeTemplatesCount: { type: 'integer', example: 3 },
+          activeTopicsCount: { type: 'integer', example: 3 },
         },
       },
-      TemplateSlot: {
-        type: 'object',
-        properties: {
-          slotKey: { type: 'string', example: '{CON}' },
-          characterRole: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'], example: 'self' },
-          defaultName: { type: 'string', example: 'Bé' },
-        },
-      },
-      TemplateChoiceSignal: {
-        type: 'object',
-        properties: {
-          skillId: { type: 'string', format: 'uuid' },
-          delta: { type: 'integer', example: 2 },
-          skill: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              caselCode: { type: 'string', example: 'relationship_skills' },
-              nameVi: { type: 'string', example: 'Kỹ năng quan hệ' },
-            },
-          },
-        },
-      },
-      TemplateChoiceType: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' },
-          choiceOrder: { type: 'integer', example: 1 },
-          typeCode: { type: 'string', example: 'CHIA_SE_DOI_LUOT' },
-          description: { type: 'string', example: 'Nhường bạn chơi trước 5 phút rồi đổi lượt cho nhau' },
-          isProsocial: { type: 'boolean', example: true },
-          choiceSignals: {
-            type: 'array',
-            items: { $ref: '#/components/schemas/TemplateChoiceSignal' },
-          },
-        },
-      },
-      TemplateStage: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' },
-          stageOrder: { type: 'integer', example: 1 },
-          learningObjective: { type: 'string', example: 'Nhận diện niềm vui khi có món đồ chơi mới...' },
-          emotionToName: { type: 'string', nullable: true, example: 'bực bội' },
-          leadInPages: { type: 'integer', example: 2 },
-          isClimax: { type: 'boolean', example: true },
-          choiceTypes: {
-            type: 'array',
-            items: { $ref: '#/components/schemas/TemplateChoiceType' },
-          },
-        },
-      },
-      Template: {
+      Topic: {
         type: 'object',
         properties: {
           id: { type: 'string', format: 'uuid', example: '3c7766ca-55cf-4c9d-aef1-5aaf1ee79772' },
           title: { type: 'string', example: 'Tập chia sẻ đồ chơi cùng bạn' },
-          description: { type: 'string', example: 'Giúp bé nhận diện niềm vui khi chơi chung...' },
-          primarySkill: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              caselCode: { type: 'string', example: 'relationship_skills' },
-              nameVi: { type: 'string', example: 'Kỹ năng quan hệ' },
-            },
-          },
+          guidance: { type: 'string', example: 'Giúp bé nhận diện niềm vui khi chơi chung...' },
+          skillId: { type: 'string', format: 'uuid' },
           ageMin: { type: 'integer', example: 4 },
           ageMax: { type: 'integer', example: 7 },
-          status: { type: 'string', enum: ['draft', 'active', 'retired'], example: 'active' },
-          slots: {
-            type: 'array',
-            items: { $ref: '#/components/schemas/TemplateSlot' },
-          },
-          stagesCount: { type: 'integer', example: 3 },
-          storiesCount: { type: 'integer', example: 0 },
+          displayOrder: { type: 'integer', example: 1 },
+          isActive: { type: 'boolean', example: true },
           createdAt: { type: 'string', format: 'date-time' },
         },
       },
@@ -763,6 +699,88 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         responses: {
           200: { description: 'Xác thực email thành công' },
           400: { description: 'Token không hợp lệ hoặc đã hết hạn' },
+        },
+      },
+    },
+
+    '/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: '[Public] Yêu cầu gửi email khôi phục mật khẩu',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nGửi mã đặt lại mật khẩu về email đăng ký (hạn sử dụng 1 giờ).',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email'],
+                properties: {
+                  email: { type: 'string', format: 'email', example: 'user@example.com' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Email hướng dẫn đã được gửi', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
+        },
+      },
+    },
+
+    '/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: '[Public] Đặt lại mật khẩu mới bằng token',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nNhập token nhận được qua email và mật khẩu mới để cập nhật mật khẩu.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['token', 'newPassword'],
+                properties: {
+                  token: { type: 'string', example: 'a1b2c3d4e5f67890123456789abcdef0' },
+                  newPassword: { type: 'string', minLength: 8, example: 'NewSecret123!' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đặt lại mật khẩu thành công', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
+          400: { description: 'Token không hợp lệ hoặc đã hết hạn', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
+        },
+      },
+    },
+
+    '/auth/change-password': {
+      put: {
+        tags: ['Auth'],
+        summary: '[Parent | Moderator | Admin] Đổi mật khẩu khi đã đăng nhập',
+        description: '**Quyền truy cập:** Đã đăng nhập (`parent`, `moderator`, `admin`).\nXác thực mật khẩu cũ và thay đổi sang mật khẩu mới.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['currentPassword', 'newPassword'],
+                properties: {
+                  currentPassword: { type: 'string', example: 'OldSecret123!' },
+                  newPassword: { type: 'string', minLength: 8, example: 'NewSecret123!' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đổi mật khẩu thành công', content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } } },
+          400: { description: 'Mật khẩu hiện tại không chính xác', content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } } },
         },
       },
     },
@@ -1499,89 +1517,34 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
       },
     },
-    '/templates': {
+
+    // ---- TOPICS (PEDAGOGICAL FRAMEWORK) ----
+    '/topics': {
       get: {
-        tags: ['Templates'],
-        summary: '[Public] Kho kịch bản truyện mẫu sư phạm',
-        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nDuyệt kho kịch bản truyện mẫu sư phạm đang hoạt động (`active`), hỗ trợ tìm kiếm và lọc theo kỹ năng EQ, độ tuổi mục tiêu.',
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Public | Parent | Staff] Lấy danh sách các chủ đề bài học sư phạm',
+        description: '**Quyền truy cập:** Public hoặc đã đăng nhập.\nLấy danh sách các chủ đề bài học thuộc khung năng lực CASEL hỗ trợ lọc theo độ tuổi, kỹ năng EQ và tìm kiếm.',
         security: [],
         parameters: [
-          {
-            name: 'primarySkillId',
-            in: 'query',
-            required: false,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'Lọc theo ID kỹ năng EQ chính',
-          },
-          {
-            name: 'age',
-            in: 'query',
-            required: false,
-            schema: { type: 'integer' },
-            example: 5,
-            description: 'Lọc kịch bản phù hợp với độ tuổi của bé (ageMin <= age <= ageMax)',
-          },
-          {
-            name: 'search',
-            in: 'query',
-            required: false,
-            schema: { type: 'string' },
-            description: 'Tìm kiếm theo tiêu đề hoặc mô tả',
-          },
-          {
-            name: 'status',
-            in: 'query',
-            required: false,
-            schema: { type: 'string', enum: ['draft', 'active', 'retired'], default: 'active' },
-            description: 'Trạng thái kịch bản (mặc định active)',
-          },
-          {
-            name: 'page',
-            in: 'query',
-            required: false,
-            schema: { type: 'integer', default: 1 },
-          },
-          {
-            name: 'limit',
-            in: 'query',
-            required: false,
-            schema: { type: 'integer', default: 10 },
-          },
+          { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' }, description: 'Lọc theo ID kỹ năng EQ' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo tên hoặc nội dung hướng dẫn' },
+          { name: 'ageMin', in: 'query', schema: { type: 'integer' }, description: 'Độ tuổi tối thiểu' },
+          { name: 'ageMax', in: 'query', schema: { type: 'integer' }, description: 'Độ tuổi tối đa' },
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Lọc theo trạng thái kích hoạt' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
         ],
         responses: {
           200: {
-            description: 'Lấy danh sách kịch bản mẫu thành công',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    success: { type: 'boolean', example: true },
-                    message: { type: 'string' },
-                    data: {
-                      type: 'array',
-                      items: { $ref: '#/components/schemas/Template' },
-                    },
-                    pagination: {
-                      type: 'object',
-                      properties: {
-                        page: { type: 'integer' },
-                        limit: { type: 'integer' },
-                        total: { type: 'integer' },
-                        totalPages: { type: 'integer' },
-                      },
-                    },
-                  },
-                },
-              },
-            },
+            description: 'Danh sách chủ đề bài học thành công',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } },
           },
         },
       },
       post: {
-        tags: ['Templates'],
-        summary: '[Moderator | Admin] Tạo kịch bản mẫu mới',
-        description: '**Quyền truy cập:** `moderator` | `admin` (Yêu cầu tài khoản có quyền Quản trị hoặc Kiểm duyệt viên).\nTạo mới kịch bản truyện mẫu sư phạm bao gồm các vị trí thế vai nhân vật (slots), các hồi/giai đoạn (stages) và cây quyết định cảm xúc (choices & signals).',
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Moderator | Admin] Tạo mới một chủ đề bài học sư phạm',
+        description: '**Quyền truy cập:** `moderator` | `admin`.\nTạo mới chủ đề bài học gắn liền với một năng lực EQ CASEL.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1589,109 +1552,48 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['title', 'primarySkillId', 'slots'],
+                required: ['title', 'skillId', 'guidance'],
                 properties: {
-                  title: { type: 'string', example: 'Học cách kiểm soát cơn giận' },
-                  description: { type: 'string', example: 'Giúp bé nhận diện cơn giận và các cách hạ hỏa an toàn' },
-                  primarySkillId: { type: 'string', format: 'uuid' },
-                  ageMin: { type: 'integer', example: 4 },
-                  ageMax: { type: 'integer', example: 7 },
-                  status: { type: 'string', enum: ['draft', 'active', 'retired'], default: 'draft' },
-                  slots: {
-                    type: 'array',
-                    items: { $ref: '#/components/schemas/TemplateSlot' },
-                  },
-                  stages: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      required: ['stageOrder', 'learningObjective'],
-                      properties: {
-                        stageOrder: { type: 'integer', example: 1 },
-                        learningObjective: { type: 'string', example: 'Nhận diện nhịp tim đập nhanh khi bực mình' },
-                        emotionToName: { type: 'string', example: 'tức giận' },
-                        leadInPages: { type: 'integer', example: 1 },
-                        isClimax: { type: 'boolean', example: false },
-                        choices: {
-                          type: 'array',
-                          items: {
-                            type: 'object',
-                            required: ['choiceOrder', 'typeCode', 'description'],
-                            properties: {
-                              choiceOrder: { type: 'integer', example: 1 },
-                              typeCode: { type: 'string', example: 'DEM_TU_1_DEN_10' },
-                              description: { type: 'string', example: 'Dừng lại và đếm thầm từ 1 đến 10' },
-                              isProsocial: { type: 'boolean', example: true },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
+                  title: { type: 'string', example: 'Học cách nói lời xin lỗi chân thành' },
+                  skillId: { type: 'string', format: 'uuid', example: '841c1656-9de0-404d-ac91-4202335bf08f' },
+                  guidance: { type: 'string', example: 'Giúp bé hiểu khi mắc lỗi cần nhận lỗi và sửa sai...' },
+                  ageMin: { type: 'integer', default: 5, example: 5 },
+                  ageMax: { type: 'integer', default: 8, example: 8 },
+                  displayOrder: { type: 'integer', default: 0 },
+                  isActive: { type: 'boolean', default: true },
                 },
               },
             },
           },
         },
         responses: {
-          201: { description: 'Tạo kịch bản mẫu thành công' },
-          400: { description: 'Dữ liệu không hợp lệ' },
+          201: { description: 'Tạo chủ đề thành công' },
+          400: { description: 'Dữ liệu không hợp lệ hoặc skillId không tồn tại' },
         },
       },
     },
-    '/templates/{id}': {
+
+    '/topics/{id}': {
       get: {
-        tags: ['Templates'],
-        summary: '[Public] Xem chi tiết bộ kịch bản mẫu',
-        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nXem chi tiết toàn bộ kịch bản truyện mẫu bao gồm các slots nhân vật, các giai đoạn và cây quyết định cảm xúc.',
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Public | Staff] Lấy chi tiết chủ đề bài học',
+        description: '**Quyền truy cập:** Public hoặc đã đăng nhập.\nLấy thông tin chi tiết một chủ đề kèm thông tin kỹ năng EQ liên kết.',
         security: [],
         parameters: [
-          {
-            name: 'id',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'ID kịch bản mẫu',
-          },
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID chủ đề' },
         ],
         responses: {
-          200: {
-            description: 'Lấy chi tiết kịch bản mẫu thành công',
-            content: {
-              'application/json': {
-                schema: {
-                  allOf: [
-                    { $ref: '#/components/schemas/SuccessResponse' },
-                    {
-                      properties: {
-                        data: {
-                          properties: {
-                            template: { $ref: '#/components/schemas/Template' },
-                          },
-                        },
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          },
-          404: { description: 'Không tìm thấy kịch bản mẫu' },
+          200: { description: 'Chi tiết chủ đề thành công' },
+          404: { description: 'Không tìm thấy chủ đề' },
         },
       },
       put: {
-        tags: ['Templates'],
-        summary: '[Moderator | Admin] Cập nhật thông tin hoặc trạng thái kịch bản mẫu',
-        description: '**Quyền truy cập:** `moderator` | `admin` (Yêu cầu tài khoản có quyền Quản trị hoặc Kiểm duyệt viên).\nChỉnh sửa thông tin kịch bản truyện mẫu, hoặc cập nhật trạng thái hoạt động (`draft` / `active` / `retired`).',
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Moderator | Admin] Cập nhật thông tin chủ đề bài học',
+        description: '**Quyền truy cập:** `moderator` | `admin`.\nCập nhật tiêu đề, định hướng sư phạm, độ tuổi hoặc trạng thái hoạt động.',
         security: [{ BearerAuth: [] }],
         parameters: [
-          {
-            name: 'id',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'ID kịch bản mẫu',
-          },
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID chủ đề' },
         ],
         requestBody: {
           required: true,
@@ -1701,42 +1603,36 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 type: 'object',
                 properties: {
                   title: { type: 'string' },
-                  description: { type: 'string' },
-                  primarySkillId: { type: 'string', format: 'uuid' },
+                  skillId: { type: 'string', format: 'uuid' },
+                  guidance: { type: 'string' },
                   ageMin: { type: 'integer' },
                   ageMax: { type: 'integer' },
-                  status: { type: 'string', enum: ['draft', 'active', 'retired'] },
+                  displayOrder: { type: 'integer' },
+                  isActive: { type: 'boolean' },
                 },
               },
             },
           },
         },
         responses: {
-          200: { description: 'Cập nhật kịch bản mẫu thành công' },
-          404: { description: 'Không tìm thấy kịch bản mẫu' },
+          200: { description: 'Cập nhật thành công' },
+          404: { description: 'Không tìm thấy chủ đề' },
         },
       },
       delete: {
-        tags: ['Templates'],
-        summary: '[Admin] Xóa hoặc ngưng dùng kịch bản mẫu',
-        description: '**Quyền truy cập:** `admin` (Dành riêng cho Quản trị viên cấp cao).\nXóa kịch bản truyện mẫu (nếu đã có truyện phát sinh sẽ tự động chuyển sang trạng thái ngưng dùng `retired` để bảo toàn dữ liệu).',
+        tags: ['Topics (Chủ đề bài học)'],
+        summary: '[Moderator | Admin] Xóa hoặc ngưng kích hoạt chủ đề bài học',
+        description: '**Quyền truy cập:** `moderator` | `admin`.\nXóa chủ đề (nếu chưa có truyện liên kết) hoặc tự động chuyển sang inactive nếu đã có truyện.',
         security: [{ BearerAuth: [] }],
         parameters: [
-          {
-            name: 'id',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'ID kịch bản mẫu',
-          },
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID chủ đề' },
         ],
         responses: {
-          200: { description: 'Xóa hoặc lưu trữ kịch bản mẫu thành công' },
-          404: { description: 'Không tìm thấy kịch bản mẫu' },
+          200: { description: 'Xóa hoặc ngưng kích hoạt thành công' },
+          404: { description: 'Không tìm thấy chủ đề' },
         },
       },
     },
-
     // ---- BOOKSHELF ----
     '/bookshelf': {
       get: {
@@ -3031,9 +2927,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['templateId', 'title'],
+                required: ['topicId', 'title'],
                 properties: {
-                  templateId: { type: 'string', format: 'uuid', example: '11111111-2222-3333-4444-555555555555' },
+                  topicId: { type: 'string', format: 'uuid', example: '11111111-2222-3333-4444-555555555555', description: 'ID chủ đề bài học' },
                   title: { type: 'string', example: 'Chiếc xe cứu hỏa của Bo' },
                   coverImageKey: { type: 'string', nullable: true, example: 'stories/covers/cover-1.jpg' },
                   useAiImage: { type: 'boolean', default: false },
@@ -3067,7 +2963,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         parameters: [
           { name: 'kind', in: 'query', schema: { type: 'string', enum: ['private', 'published'] } },
           { name: 'status', in: 'query', schema: { type: 'string', enum: ['draft', 'generating', 'ready'] } },
-          { name: 'templateId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'topicId', in: 'query', schema: { type: 'string', format: 'uuid' } },
           { name: 'search', in: 'query', schema: { type: 'string' } },
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
@@ -3725,231 +3621,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     },
 
     // =========================================================================
-    // Content Library: Granular Template Configuration (Stages, Slots, Choices)
-    // =========================================================================
-    '/templates/{id}/stages': {
-      post: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Thêm phân đoạn sư phạm cho kịch bản mẫu',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['stageOrder', 'learningObjective'],
-                properties: {
-                  stageOrder: { type: 'integer', example: 1 },
-                  learningObjective: { type: 'string', example: 'Nhận diện cảm xúc ghen tị khi em gái có đồ chơi mới' },
-                  emotionToName: { type: 'string', example: 'Ghen tị' },
-                  leadInPages: { type: 'integer', default: 1 },
-                  isClimax: { type: 'boolean', default: false },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Thêm phân đoạn thành công' },
-        },
-      },
-    },
-
-    '/templates/stages/{stageId}': {
-      put: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Cập nhật phân đoạn sư phạm',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'stageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  stageOrder: { type: 'integer' },
-                  learningObjective: { type: 'string' },
-                  emotionToName: { type: 'string' },
-                  leadInPages: { type: 'integer' },
-                  isClimax: { type: 'boolean' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật thành công' },
-        },
-      },
-      delete: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Xóa phân đoạn sư phạm',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'stageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Xóa thành công' },
-        },
-      },
-    },
-
-    '/templates/{id}/slots': {
-      post: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Cập nhật danh sách vị trí nhân vật (slots)',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['slots'],
-                properties: {
-                  slots: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      required: ['slotKey', 'characterRole', 'defaultName'],
-                      properties: {
-                        slotKey: { type: 'string', example: '{CON}' },
-                        characterRole: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'] },
-                        defaultName: { type: 'string', example: 'Bé Bi' },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật slots thành công' },
-        },
-      },
-    },
-
-    '/templates/{id}/slots/{slotKey}': {
-      delete: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Xóa một vị trí nhân vật (slot)',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-          { name: 'slotKey', in: 'path', required: true, schema: { type: 'string' }, example: '{CON}' },
-        ],
-        responses: {
-          200: { description: 'Xóa slot thành công' },
-        },
-      },
-    },
-
-    '/templates/stages/{stageId}/choices': {
-      post: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Thêm lựa chọn rẽ nhánh kèm điểm tín hiệu cảm xúc CASEL',
-        description: 'Tín hiệu cảm xúc do chuyên gia / Moderator chỉ định, là căn cứ khoa học khách quan để đánh giá EQ của bé khi chọn.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'stageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['choiceOrder', 'typeCode', 'description'],
-                properties: {
-                  choiceOrder: { type: 'integer', example: 1 },
-                  typeCode: { type: 'string', example: 'DUNG_LAI_THO_SAU' },
-                  description: { type: 'string', example: 'Dừng lại, hít một hơi thật sâu và đếm từ 1 đến 5' },
-                  isProsocial: { type: 'boolean', default: true },
-                  signals: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      required: ['skillId', 'delta'],
-                      properties: {
-                        skillId: { type: 'string', format: 'uuid' },
-                        delta: { type: 'integer', example: 5 },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Thêm lựa chọn rẽ nhánh thành công' },
-        },
-      },
-    },
-
-    '/templates/choices/{choiceId}': {
-      put: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Cập nhật lựa chọn rẽ nhánh và điểm tín hiệu cảm xúc',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'choiceId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  choiceOrder: { type: 'integer' },
-                  typeCode: { type: 'string' },
-                  description: { type: 'string' },
-                  isProsocial: { type: 'boolean' },
-                  signals: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        skillId: { type: 'string', format: 'uuid' },
-                        delta: { type: 'integer' },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật thành công' },
-        },
-      },
-      delete: {
-        tags: ['Content Library', 'Templates'],
-        summary: '[Moderator / Admin] Xóa lựa chọn rẽ nhánh',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'choiceId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Xóa thành công' },
-        },
-      },
-    },
-
-    // =========================================================================
     // Moderation: Strike Appeals (Khiếu nại gậy cảnh cáo)
     // =========================================================================
     '/moderation/strikes/{strikeId}/appeals': {
@@ -4214,6 +3885,220 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         ],
         responses: {
           200: { description: 'Danh sách nhật ký kiểm toán phân trang' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Admin User Management (/admin/users)
+    // =========================================================================
+    '/admin/users': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Lấy danh sách người dùng trong hệ thống',
+        description: '**Quyền truy cập:** `admin`.\nTruy vấn danh sách người dùng có hỗ trợ phân trang, lọc theo vai trò (parent, moderator, admin), trạng thái và tìm kiếm.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'role', in: 'query', schema: { type: 'string', enum: ['admin', 'moderator', 'parent'] }, description: 'Lọc theo vai trò' },
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Lọc tài khoản còn hoạt động hay bị khóa' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo username, email, họ tên hoặc số điện thoại' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách người dùng thành công' },
+        },
+      },
+    },
+
+    '/admin/users/{id}': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Xem thông tin chi tiết một người dùng',
+        description: '**Quyền truy cập:** `admin`.\nXem chi tiết hồ sơ người dùng, các bé phụ thuộc, ví tiền và hồ sơ tác giả (nếu có).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID người dùng' },
+        ],
+        responses: {
+          200: { description: 'Chi tiết người dùng thành công' },
+          404: { description: 'Không tìm thấy người dùng' },
+        },
+      },
+    },
+
+    '/admin/users/{id}/role': {
+      put: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Phân quyền vai trò người dùng (Role Management)',
+        description: '**Quyền truy cập:** `admin`.\nBổ nhiệm hoặc hạ quyền vai trò người dùng (ví dụ thăng cấp thành moderator hoặc chuyển về parent).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID người dùng' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['role'],
+                properties: {
+                  role: { type: 'string', enum: ['admin', 'moderator', 'parent'], example: 'moderator' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật vai trò thành công' },
+          400: { description: 'Không thể tự đổi quyền của chính mình' },
+        },
+      },
+    },
+
+    '/admin/users/{id}/status': {
+      put: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Khóa hoặc mở khóa tài khoản người dùng (Ban / Unban)',
+        description: '**Quyền truy cập:** `admin`.\nKhóa hoạt động tài khoản vi phạm (hủy toàn bộ phiên đăng nhập hiện tại) hoặc mở khóa.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID người dùng' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['isActive'],
+                properties: {
+                  isActive: { type: 'boolean', example: false, description: 'false để khóa tài khoản, true để mở lại' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật trạng thái thành công' },
+          400: { description: 'Không thể tự khóa tài khoản của chính mình' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // Admin Voucher Management (/admin/vouchers)
+    // =========================================================================
+    '/admin/vouchers': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Lấy danh sách các mã giảm giá voucher',
+        description: '**Quyền truy cập:** `admin`.\nQuản lý toàn bộ danh sách mã khuyến mãi trên toàn hệ thống.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Lọc theo trạng thái hiệu lực' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo mã code' },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: {
+          200: { description: 'Danh sách mã giảm giá thành công' },
+        },
+      },
+      post: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Tạo mới mã giảm giá voucher',
+        description: '**Quyền truy cập:** `admin`.\nTạo mã voucher giảm theo phần trăm (percent) hoặc cố định (fixed VNĐ). Chiết khấu do nền tảng chịu.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['code', 'discountType', 'value', 'startsAt', 'endsAt'],
+                properties: {
+                  code: { type: 'string', example: 'CHAOBE2026' },
+                  discountType: { type: 'string', enum: ['percent', 'fixed'], example: 'percent' },
+                  value: { type: 'number', example: 20, description: '20% hoặc số tiền VNĐ cố định' },
+                  maxDiscountVnd: { type: 'number', example: 50000, description: 'Số tiền giảm tối đa (nếu là percent)' },
+                  minOrderVnd: { type: 'number', example: 100000, default: 0 },
+                  startsAt: { type: 'string', format: 'date-time' },
+                  endsAt: { type: 'string', format: 'date-time' },
+                  usageLimit: { type: 'integer', example: 500 },
+                  perUserLimit: { type: 'integer', example: 1, default: 1 },
+                  isActive: { type: 'boolean', default: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Tạo mã voucher thành công' },
+          409: { description: 'Mã voucher đã tồn tại' },
+        },
+      },
+    },
+
+    '/admin/vouchers/{id}': {
+      get: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Xem chi tiết một mã voucher',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID voucher' },
+        ],
+        responses: {
+          200: { description: 'Chi tiết voucher thành công' },
+          404: { description: 'Không tìm thấy voucher' },
+        },
+      },
+      put: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Cập nhật thông tin mã voucher',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID voucher' },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  code: { type: 'string' },
+                  discountType: { type: 'string', enum: ['percent', 'fixed'] },
+                  value: { type: 'number' },
+                  maxDiscountVnd: { type: 'number' },
+                  minOrderVnd: { type: 'number' },
+                  startsAt: { type: 'string', format: 'date-time' },
+                  endsAt: { type: 'string', format: 'date-time' },
+                  usageLimit: { type: 'integer' },
+                  perUserLimit: { type: 'integer' },
+                  isActive: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Cập nhật voucher thành công' },
+          404: { description: 'Không tìm thấy voucher' },
+        },
+      },
+      delete: {
+        tags: ['Admin Management'],
+        summary: '[Admin] Xóa hoặc chuyển voucher sang ngừng hoạt động',
+        description: 'Nếu voucher đã có người dùng sử dụng thì tự động chuyển sang inactive để bảo toàn lịch sử giao dịch.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID voucher' },
+        ],
+        responses: {
+          200: { description: 'Xóa hoặc ngừng kích hoạt thành công' },
+          404: { description: 'Không tìm thấy voucher' },
         },
       },
     },

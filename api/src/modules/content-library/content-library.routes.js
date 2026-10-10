@@ -104,61 +104,14 @@ contentLibraryRouter.put(
   contentLibraryController.updateKeyword
 );
 
-// Granular Template Management (Stages, Slots, Choices)
-contentLibraryRouter.post(
-  '/templates/:id/stages',
-  ...requireModerator,
-  validate(contentLibraryValidation.addTemplateStage),
-  contentLibraryController.addTemplateStage
-);
-contentLibraryRouter.put(
-  '/templates/stages/:stageId',
-  ...requireModerator,
-  validate(contentLibraryValidation.updateTemplateStage),
-  contentLibraryController.updateTemplateStage
-);
-contentLibraryRouter.delete(
-  '/templates/stages/:stageId',
-  ...requireModerator,
-  validate(contentLibraryValidation.deleteTemplateStage),
-  contentLibraryController.deleteTemplateStage
-);
 
-contentLibraryRouter.post(
-  '/templates/:id/slots',
-  ...requireModerator,
-  validate(contentLibraryValidation.addOrUpdateTemplateSlots),
-  contentLibraryController.addOrUpdateTemplateSlots
-);
-contentLibraryRouter.delete(
-  '/templates/:id/slots/:slotKey',
-  ...requireModerator,
-  validate(contentLibraryValidation.deleteTemplateSlot),
-  contentLibraryController.deleteTemplateSlot
-);
-
-contentLibraryRouter.post(
-  '/templates/stages/:stageId/choices',
-  ...requireModerator,
-  validate(contentLibraryValidation.addTemplateChoice),
-  contentLibraryController.addTemplateChoice
-);
-contentLibraryRouter.put(
-  '/templates/choices/:choiceId',
-  ...requireModerator,
-  validate(contentLibraryValidation.updateTemplateChoice),
-  contentLibraryController.updateTemplateChoice
-);
-contentLibraryRouter.delete(
-  '/templates/choices/:choiceId',
-  ...requireModerator,
-  validate(contentLibraryValidation.deleteTemplateChoice),
-  contentLibraryController.deleteTemplateChoice
-);
+import topicsRouter from './topics.routes.js';
+export { topicsRouter };
 
 // Mount resource routers also under unified content-library
 contentLibraryRouter.use('/backgrounds', backgroundsRouter);
 contentLibraryRouter.use('/ui-audio-assets', uiAudioAssetsRouter);
 contentLibraryRouter.use('/checklist-items', checklistItemsRouter);
+contentLibraryRouter.use('/topics', topicsRouter);
 
 export default contentLibraryRouter;

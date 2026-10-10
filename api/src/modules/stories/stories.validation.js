@@ -6,32 +6,44 @@ const PAGE_KINDS = ['lead_in', 'situation', 'consequence', 'ending'];
 const CONTENT_ORIGINS = ['human', 'ai', 'ai_edited'];
 
 const createStory = z.object({
-  body: z.object({
-    templateId: z.string({ required_error: 'Template ID is required' }).uuid('Invalid template ID format'),
-    title: z
-      .string({ required_error: 'Story title is required' })
-      .trim()
-      .min(1, 'Title cannot be empty')
-      .max(200, 'Title must not exceed 200 characters'),
-    coverImageKey: z.string().trim().max(300).nullable().optional(),
-    useAiImage: z.boolean().default(false),
-    useTts: z.boolean().default(true),
-    autoInitializePages: z.boolean().default(true),
-    characters: z
-      .array(
-        z.object({
-          slotKey: z.string().trim().min(1).max(30),
-          characterId: z.string().uuid('Invalid character ID format').nullable().optional(),
-        })
-      )
-      .optional(),
-  }),
+  body: z
+    .object({
+      topicId: z.string().uuid('Invalid topic ID format').optional(),
+      templateId: z.string().uuid('Invalid template ID format').optional(),
+      length: z.enum(['short', 'medium', 'long', 'custom']).default('medium'),
+      situation: z.string().trim().max(1000).optional(),
+      title: z
+        .string({ required_error: 'Story title is required' })
+        .trim()
+        .min(1, 'Title cannot be empty')
+        .max(200, 'Title must not exceed 200 characters'),
+      coverImageKey: z.string().trim().max(300).nullable().optional(),
+      useAiImage: z.boolean().default(false),
+      useTts: z.boolean().default(true),
+      autoInitializePages: z.boolean().default(true),
+      characters: z
+        .array(
+          z.object({
+            token: z.string().trim().min(1).max(30).optional(),
+            slotKey: z.string().trim().min(1).max(30).optional(),
+            characterId: z.string().uuid('Invalid character ID format').nullable().optional(),
+            aliasName: z.string().trim().max(100).nullable().optional(),
+            isMain: z.boolean().optional(),
+          })
+        )
+        .optional(),
+    })
+    .refine((data) => data.topicId || data.templateId, {
+      message: 'Topic ID is required',
+      path: ['topicId'],
+    }),
 });
 
 const getStories = z.object({
   query: z.object({
     kind: z.enum(STORY_KINDS).optional(),
     status: z.enum(STORY_STATUSES).optional(),
+    topicId: z.string().uuid().optional(),
     templateId: z.string().uuid().optional(),
     search: z.string().trim().optional(),
     page: z

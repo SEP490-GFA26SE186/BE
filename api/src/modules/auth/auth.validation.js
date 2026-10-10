@@ -123,6 +123,37 @@ const verifyEmail = z.object({
   path: ['token'],
 });
 
+const forgotPassword = z.object({
+  body: z.object({
+    email: z
+      .string({ required_error: 'Email is required' })
+      .trim()
+      .email('Invalid email address'),
+  }),
+});
+
+const resetPassword = z.object({
+  body: z.object({
+    token: z
+      .string({ required_error: 'Token is required' })
+      .min(1, 'Token is required'),
+    newPassword: z
+      .string({ required_error: 'New password is required' })
+      .min(8, 'New password must be at least 8 characters'),
+  }),
+});
+
+const changePassword = z.object({
+  body: z.object({
+    currentPassword: z
+      .string({ required_error: 'Current password is required' })
+      .min(1, 'Current password is required'),
+    newPassword: z
+      .string({ required_error: 'New password is required' })
+      .min(8, 'New password must be at least 8 characters'),
+  }),
+});
+
 export default {
   register,
   login,
@@ -134,4 +165,7 @@ export default {
   exitKidMode,
   sendVerificationEmail,
   verifyEmail,
+  forgotPassword,
+  resetPassword,
+  changePassword,
 };

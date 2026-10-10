@@ -117,7 +117,37 @@ export const sendVerificationEmail = async (to, token, username = 'bạn') => {
   await sendEmail({ to, toName: username, subject, text, html });
 };
 
+/**
+ * Send password reset email
+ * @param {string} to
+ * @param {string} token
+ * @param {string} [username]
+ */
+export const sendPasswordResetEmail = async (to, token, username = 'bạn') => {
+  const subject = 'StoryWeaver AI - Yêu cầu khôi phục mật khẩu';
+  const text = `Xin chào ${username},\n\nBạn đã yêu cầu đặt lại mật khẩu cho tài khoản tại StoryWeaver AI.\n\nMã khôi phục mật khẩu của bạn là:\n${token}\n\nMã này có hiệu lực trong vòng 1 giờ. Nếu không phải bạn yêu cầu, vui lòng bỏ qua email này.\n\nTrân trọng,\nĐội ngũ StoryWeaver AI`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+      <h2 style="color: #4F46E5; text-align: center;">StoryWeaver AI</h2>
+      <p>Xin chào <strong>${username}</strong>,</p>
+      <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại <strong>StoryWeaver AI</strong>.</p>
+      <p>Dưới đây là mã xác thực để đặt lại mật khẩu của bạn:</p>
+      <div style="text-align: center; margin: 25px 0;">
+        <div style="background-color: #f3f4f6; color: #1e1b4b; padding: 14px 20px; border-radius: 6px; font-family: Consolas, Monaco, monospace; font-size: 15px; font-weight: bold; letter-spacing: 0.5px; word-break: break-all; border: 1px dashed #6366f1; display: inline-block;">
+          ${token}
+        </div>
+      </div>
+      <p style="font-size: 13px; color: #555;">Vui lòng nhập mã trên để hoàn tất việc thiết lập mật khẩu mới.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="font-size: 12px; color: #999; text-align: center;">Mã xác thực này có hiệu lực trong 1 giờ. Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email để đảm bảo an toàn.</p>
+    </div>
+  `;
+
+  await sendEmail({ to, toName: username, subject, text, html });
+};
+
 export default {
   sendEmail,
   sendVerificationEmail,
+  sendPasswordResetEmail,
 };

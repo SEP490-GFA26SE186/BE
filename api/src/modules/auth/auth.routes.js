@@ -27,4 +27,9 @@ router.post(
 router.post('/verify-email', validate(authValidation.verifyEmail), authController.verifyEmail);
 router.get('/verify-email', validate(authValidation.verifyEmail), authController.verifyEmail);
 
+// ---- Password Management ----
+router.post('/forgot-password', validate(authValidation.forgotPassword), authController.forgotPassword);
+router.post('/reset-password', validate(authValidation.resetPassword), authController.resetPassword);
+router.put('/change-password', auth, validate(authValidation.changePassword), authController.changePassword);
+
 export default router;

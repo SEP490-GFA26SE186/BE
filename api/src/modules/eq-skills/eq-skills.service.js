@@ -2,7 +2,7 @@ import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 
 /**
- * Get all CASEL EQ skills with published template counts
+ * Get all CASEL EQ skills with active topic counts
  * @param {Object} [filter]
  * @returns {Promise<Array>}
  */
@@ -25,8 +25,8 @@ const getEqSkills = async (filter = {}) => {
     include: {
       _count: {
         select: {
-          templates: {
-            where: { status: 'active' },
+          topics: {
+            where: { isActive: true },
           },
         },
       },
@@ -40,7 +40,7 @@ const getEqSkills = async (filter = {}) => {
     nameEn: skill.nameEn,
     description: skill.description,
     displayOrder: skill.displayOrder,
-    activeTemplatesCount: skill._count.templates,
+    activeTopicsCount: skill._count.topics,
   }));
 };
 
@@ -55,15 +55,15 @@ const getEqSkillById = async (idOrCode) => {
   const skill = await prisma.eqSkill.findFirst({
     where: isUuid ? { id: idOrCode } : { caselCode: idOrCode },
     include: {
-      templates: {
-        where: { status: 'active' },
+      topics: {
+        where: { isActive: true },
         select: {
           id: true,
           title: true,
-          description: true,
+          guidance: true,
           ageMin: true,
           ageMax: true,
-          status: true,
+          isActive: true,
           createdAt: true,
         },
       },
@@ -81,7 +81,7 @@ const getEqSkillById = async (idOrCode) => {
     nameEn: skill.nameEn,
     description: skill.description,
     displayOrder: skill.displayOrder,
-    publishedTemplates: skill.templates,
+    topics: skill.topics,
   };
 };
 

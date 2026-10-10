@@ -4,7 +4,6 @@ import authRoutes from '../../modules/auth/auth.routes.js';
 import childrenRoutes from '../../modules/children/children.routes.js';
 import charactersRoutes from '../../modules/characters/characters.routes.js';
 import eqSkillsRoutes from '../../modules/eq-skills/eq-skills.routes.js';
-import templatesRoutes from '../../modules/templates/templates.routes.js';
 import bookshelfRoutes from '../../modules/bookshelf/bookshelf.routes.js';
 import readingSessionsRoutes from '../../modules/reading-sessions/reading-sessions.routes.js';
 import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
@@ -17,6 +16,7 @@ import contentLibraryRouter, {
   backgroundsRouter,
   uiAudioAssetsRouter,
   checklistItemsRouter,
+  topicsRouter,
 } from '../../modules/content-library/content-library.routes.js';
 import notificationsRoutes from '../../modules/notifications/notifications.routes.js';
 import reportsRoutes from '../../modules/reports/reports.routes.js';
@@ -41,11 +41,11 @@ router.use('/children', childrenRoutes);
 router.use('/child-profiles', childrenRoutes);
 router.use('/characters', charactersRoutes);
 router.use('/eq-skills', eqSkillsRoutes);
-router.use('/templates', templatesRoutes);
 router.use('/stories', storiesRoutes);
 router.use('/backgrounds', backgroundsRouter);
 router.use('/ui-audio-assets', uiAudioAssetsRouter);
 router.use('/checklist-items', checklistItemsRouter);
+router.use('/topics', topicsRouter);
 router.use('/content-library', contentLibraryRouter);
 router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);

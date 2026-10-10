@@ -119,12 +119,12 @@ const getListings = async (query) => {
     }),
     ...(query.skillId && {
       publishedStory: {
-        template: { primarySkillId: query.skillId },
+        topic: { skillId: query.skillId },
       },
     }),
     ...(query.age !== undefined && {
       publishedStory: {
-        template: {
+        topic: {
           ageMin: { lte: query.age },
           ageMax: { gte: query.age },
         },
@@ -176,13 +176,13 @@ const getListings = async (query) => {
             id: true,
             title: true,
             coverImageKey: true,
-            template: {
+            topic: {
               select: {
                 id: true,
                 title: true,
                 ageMin: true,
                 ageMax: true,
-                primarySkill: {
+                skill: {
                   select: { id: true, caselCode: true, nameVi: true, nameEn: true },
                 },
               },
@@ -213,7 +213,7 @@ const getListings = async (query) => {
     seller: l.seller,
     story: {
       id: l.publishedStory.id,
-      template: l.publishedStory.template,
+      topic: l.publishedStory.topic,
     },
   }));
 
@@ -262,13 +262,13 @@ const getListingById = async (listingId, currentUser) => {
           coverImageKey: true,
           useAiImage: true,
           useTts: true,
-          template: {
+          topic: {
             select: {
               id: true,
               title: true,
               ageMin: true,
               ageMax: true,
-              primarySkill: {
+              skill: {
                 select: { id: true, caselCode: true, nameVi: true, nameEn: true },
               },
             },
@@ -333,7 +333,7 @@ const getListingById = async (listingId, currentUser) => {
       totalPages: listing.publishedStory._count.pages,
       useAiImage: listing.publishedStory.useAiImage,
       useTts: listing.publishedStory.useTts,
-      template: listing.publishedStory.template,
+      topic: listing.publishedStory.topic,
     },
   };
 };
