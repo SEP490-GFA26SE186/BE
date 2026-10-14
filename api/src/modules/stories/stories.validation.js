@@ -17,7 +17,6 @@ const createStory = z.object({
         .trim()
         .min(1, 'Title cannot be empty')
         .max(200, 'Title must not exceed 200 characters'),
-      coverImageKey: z.string().trim().max(300).nullable().optional(),
       useAiImage: z.boolean().default(false),
       useTts: z.boolean().default(true),
       autoInitializePages: z.boolean().default(true),
@@ -71,7 +70,6 @@ const updateStory = z.object({
   }),
   body: z.object({
     title: z.string().trim().min(1).max(200).optional(),
-    coverImageKey: z.string().trim().max(300).nullable().optional(),
     useAiImage: z.boolean().optional(),
     useTts: z.boolean().optional(),
     status: z.enum(STORY_STATUSES).optional(),
@@ -161,7 +159,6 @@ const publishStoryVersion = z.object({
   body: z
     .object({
       title: z.string().trim().min(1).max(200).optional(),
-      coverImageKey: z.string().trim().max(300).nullable().optional(),
       nameReplacements: z
         .array(
           z.object({

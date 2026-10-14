@@ -6,30 +6,6 @@ import bookshelfService from '../bookshelf/bookshelf.service.js';
 const DEFAULT_FREE_MAX_CHILDREN = 2;
 
 /**
- * Helper: Parse "HH:mm" or "HH:mm:ss" string to UTC Date object for PostgreSQL Time field
- * @param {string|null} timeStr
- * @returns {Date|null}
- */
-const parseTimeToDate = (timeStr) => {
-  if (!timeStr) return null;
-  const [hours, minutes, seconds = 0] = timeStr.split(':').map(Number);
-  return new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds));
-};
-
-/**
- * Helper: Format Date object to "HH:mm" string
- * @param {Date|null} dateObj
- * @returns {string|null}
- */
-const formatTimeToHHMM = (dateObj) => {
-  if (!dateObj) return null;
-  const d = new Date(dateObj);
-  const h = String(d.getUTCHours()).padStart(2, '0');
-  const m = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-};
-
-/**
  * Helper: Calculate age from birth date
  * @param {Date|string|null} birthDate
  * @returns {number|null} Age in years
@@ -47,31 +23,6 @@ const calculateAge = (birthDate) => {
 };
 
 /**
- * Helper: Check if current time in VN timezone (UTC+7) is bedtime
- * @param {Date|null} bedtimeStart
- * @param {Date|null} bedtimeEnd
- * @returns {boolean}
- */
-const checkIsBedtimeNow = (bedtimeStart, bedtimeEnd) => {
-  if (!bedtimeStart || !bedtimeEnd) return false;
-  const now = new Date();
-  const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-  const curMinutes = vnTime.getUTCHours() * 60 + vnTime.getUTCMinutes();
-
-  const startD = new Date(bedtimeStart);
-  const startMinutes = startD.getUTCHours() * 60 + startD.getUTCMinutes();
-
-  const endD = new Date(bedtimeEnd);
-  const endMinutes = endD.getUTCHours() * 60 + endD.getUTCMinutes();
-
-  if (startMinutes <= endMinutes) {
-    return curMinutes >= startMinutes && curMinutes <= endMinutes;
-  }
-  // Overnight: e.g. 21:00 to 06:00
-  return curMinutes >= startMinutes || curMinutes <= endMinutes;
-};
-
-/**
  * Helper: Format child profile database record for client response
  * @param {Object} child
  * @returns {Object}
@@ -86,9 +37,6 @@ const formatChildResponse = (child) => {
     birthDate: child.birthDate ? child.birthDate.toISOString().split('T')[0] : null,
     age: calculateAge(child.birthDate),
     dailyScreenTimeMinutes: child.dailyScreenTimeMinutes,
-    bedtimeStart: formatTimeToHHMM(child.bedtimeStart),
-    bedtimeEnd: formatTimeToHHMM(child.bedtimeEnd),
-    isBedtimeNow: checkIsBedtimeNow(child.bedtimeStart, child.bedtimeEnd),
     preferredVoice: child.preferredVoice,
     avatar: selfChar
       ? {
@@ -156,8 +104,6 @@ const createChild = async (parentId, data) => {
         name: data.name.trim(),
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
         dailyScreenTimeMinutes: data.dailyScreenTimeMinutes ?? 30,
-        bedtimeStart: parseTimeToDate(data.bedtimeStart),
-        bedtimeEnd: parseTimeToDate(data.bedtimeEnd),
         preferredVoice: data.preferredVoice?.trim() || null,
       },
     });
@@ -285,8 +231,6 @@ const updateChild = async (parentId, childId, data) => {
   if (data.name !== undefined) updatePayload.name = data.name.trim();
   if (data.birthDate !== undefined) updatePayload.birthDate = data.birthDate ? new Date(data.birthDate) : null;
   if (data.dailyScreenTimeMinutes !== undefined) updatePayload.dailyScreenTimeMinutes = data.dailyScreenTimeMinutes;
-  if (data.bedtimeStart !== undefined) updatePayload.bedtimeStart = parseTimeToDate(data.bedtimeStart);
-  if (data.bedtimeEnd !== undefined) updatePayload.bedtimeEnd = parseTimeToDate(data.bedtimeEnd);
   if (data.preferredVoice !== undefined) updatePayload.preferredVoice = data.preferredVoice?.trim() || null;
 
   return prisma.$transaction(async (tx) => {
@@ -484,7 +428,6 @@ const getChildUsage = async (parentId, childId, dateStr) => {
     usedSeconds: totalDurationSeconds,
     remainingMinutes,
     isLimitReached,
-    isBedtimeNow: checkIsBedtimeNow(child.bedtimeStart, child.bedtimeEnd),
     sessionsCount: sessions.length,
     sessions: sessions.map((s) => ({
       id: s.id,
@@ -649,7 +592,6 @@ const getChildOverview = async (parentId, childId) => {
         select: {
           id: true,
           title: true,
-          coverImageKey: true,
         },
       },
     },
@@ -662,7 +604,6 @@ const getChildOverview = async (parentId, childId) => {
       usedMinutes: todayUsage.usedMinutes,
       remainingMinutes: todayUsage.remainingMinutes,
       isLimitReached: todayUsage.isLimitReached,
-      isBedtimeNow: todayUsage.isBedtimeNow,
     },
     readingStats: {
       booksInBookshelf: child.booksCount,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const ORDER_STATUSES = ['pending', 'paid', 'cancelled', 'expired'];
-const ORDER_ITEM_TYPES = ['listing', 'plan', 'credit_pack'];
+const ORDER_ITEM_TYPES = ['listing', 'plan'];
 
 // =============================================================================
 // Cart Validations

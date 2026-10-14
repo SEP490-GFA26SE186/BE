@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
+import plansService from '../plans/plans.service.js';
 
 // =============================================================================
 // HELPERS
@@ -13,27 +14,6 @@ const generatePayosOrderCode = () => {
   const tsPart = Date.now().toString().slice(-9);
   const randPart = Math.floor(Math.random() * 900 + 100).toString();
   return BigInt(`${tsPart}${randPart}`);
-};
-
-/**
- * Create a user notification safely without failing main transaction
- */
-const createNotification = async (tx, { userId, type, title, body, refType, refId }) => {
-  try {
-    const client = tx || prisma;
-    await client.notification.create({
-      data: {
-        userId,
-        type,
-        title,
-        body,
-        refType: refType || null,
-        refId: refId || null,
-      },
-    });
-  } catch (err) {
-    console.error('Failed to create notification:', err);
-  }
 };
 
 // =============================================================================
@@ -61,7 +41,6 @@ const getCart = async (userId) => {
             select: {
               id: true,
               title: true,
-              coverImageKey: true,
             },
           },
         },
@@ -129,7 +108,7 @@ const addToCart = async (userId, listingId) => {
       listing: {
         include: {
           priceTier: true,
-          publishedStory: { select: { title: true, coverImageKey: true } },
+          publishedStory: { select: { title: true } },
         },
       },
     },
@@ -277,31 +256,12 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         sellerShareRate: null,
         sellerAmountVnd: null,
       });
-    } else if (itemType === 'credit_pack') {
-      const pack = await prisma.creditPack.findUnique({
-        where: { id: itemId },
-      });
-
-      if (!pack || !pack.isActive) {
-        throw ApiError.badRequest('Gói nạp Credit không tồn tại hoặc đã ngừng cung cấp');
-      }
-
-      itemsToOrder.push({
-        itemType: 'credit_pack',
-        creditPackId: itemId,
-        unitPriceVnd: pack.priceVnd,
-        creditsGranted: pack.credits,
-        bonusGranted: pack.bonusCredits,
-        sellerShareRate: null,
-        sellerAmountVnd: null,
-      });
     }
   }
 
   // Calculate totals
   const subtotalVnd = itemsToOrder.reduce((sum, item) => sum + item.unitPriceVnd, 0n);
   const totalVnd = subtotalVnd;
-  const payosOrderCode = generatePayosOrderCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
   return prisma.$transaction(async (tx) => {
@@ -314,7 +274,8 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         discountVnd: 0n,
         totalVnd,
         status: isFree ? 'paid' : 'pending',
-        payosOrderCode,
+        // Don 0d khong di qua payOS
+        payosOrderCode: isFree ? null : generatePayosOrderCode(),
         paidAt: isFree ? new Date() : null,
         expiresAt,
         items: {
@@ -322,10 +283,7 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
             itemType: item.itemType,
             listingId: item.listingId || null,
             planId: item.planId || null,
-            creditPackId: item.creditPackId || null,
             unitPriceVnd: item.unitPriceVnd,
-            creditsGranted: item.creditsGranted || null,
-            bonusGranted: item.bonusGranted || null,
             sellerShareRate: item.sellerShareRate || null,
             sellerAmountVnd: item.sellerAmountVnd || null,
             status: 'active',
@@ -344,7 +302,6 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
               },
             },
             plan: true,
-            creditPack: true,
           },
         },
       },
@@ -358,7 +315,6 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
             data: {
               parentId: userId,
               listingId: item.listingId,
-              source: 'free_claim',
               orderItemId: item.id,
             },
           });
@@ -370,70 +326,17 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
             },
           });
         } else if (item.itemType === 'plan' && item.planId) {
-          const plan = await tx.plan.findUnique({ where: { id: item.planId } });
-          const days = plan?.period === 'year' ? 365 : 30;
-          await tx.subscription.create({
-            data: {
-              parentId: userId,
-              planId: item.planId,
-              orderItemId: item.id,
-              periodStart: new Date(),
-              periodEnd: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
-              status: 'active',
-            },
-          });
-        } else if (item.itemType === 'credit_pack' && item.creditPackId) {
-          const totalCredits = (item.creditsGranted || 0) + (item.bonusGranted || 0);
-          let wallet = await tx.wallet.findUnique({ where: { userId } });
-          if (!wallet) {
-            wallet = await tx.wallet.create({
-              data: {
-                userId,
-                creditBalance: 0,
-                earningPendingVnd: 0n,
-                earningAvailableVnd: 0n,
-                earningLockedVnd: 0n,
-              },
-            });
-          }
-
-          const newBalance = wallet.creditBalance + totalCredits;
-          await tx.wallet.update({
-            where: { userId },
-            data: { creditBalance: newBalance },
-          });
-
-          await tx.walletLedger.create({
-            data: {
-              userId,
-              walletType: 'credit',
-              entryType: 'credit_topup',
-              amount: BigInt(totalCredits),
-              balanceAfter: BigInt(newBalance),
-              idempotencyKey: `order-${order.id}-${item.id}`,
-              refType: 'order',
-              refId: order.id,
-            },
+          await plansService.activateSubscription(tx, {
+            userId,
+            plan: item.plan,
+            orderItemId: item.id,
           });
         }
       }
+    }
 
-      if (fromCart) {
-        await tx.cartItem.deleteMany({ where: { parentId: userId } });
-      }
-
-      await createNotification(tx, {
-        userId,
-        type: 'order_completed',
-        title: 'Đơn hàng hoàn tất',
-        body: `Đơn hàng #${order.payosOrderCode} miễn phí đã được kích hoạt thành công.`,
-        refType: 'order',
-        refId: order.id,
-      });
-    } else {
-      if (fromCart) {
-        await tx.cartItem.deleteMany({ where: { parentId: userId } });
-      }
+    if (fromCart) {
+      await tx.cartItem.deleteMany({ where: { parentId: userId } });
     }
 
     return order;
@@ -474,7 +377,6 @@ const getMyOrders = async (userId, filter = {}) => {
               },
             },
             plan: true,
-            creditPack: true,
           },
         },
       },
@@ -519,7 +421,6 @@ const getOrderById = async (user, orderId) => {
             },
           },
           plan: true,
-          creditPack: true,
         },
       },
     },
@@ -591,7 +492,6 @@ const getMyEntitlements = async (userId) => {
             select: {
               id: true,
               title: true,
-              coverImageKey: true,
               topicId: true,
               topic: {
                 select: {
@@ -681,7 +581,6 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
         topicId: publishedStory.topicId,
         sourceStoryId: publishedStory.id,
         title: title || publishedStory.title,
-        coverImageKey: publishedStory.coverImageKey,
         useAiImage: publishedStory.useAiImage,
         useTts: publishedStory.useTts,
         status: 'ready',

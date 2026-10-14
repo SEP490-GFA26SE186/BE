@@ -57,6 +57,40 @@ const getMyLedger = async (userId, query = {}) => {
   };
 };
 
+/**
+ * Cap credit thang cho mot subscription (ghi credit_grant vao ledger).
+ * Phai goi trong transaction cua noi tao/gia han subscription.
+ * @param {Object} tx - Prisma transaction client
+ * @param {Object} params - { userId, subscriptionId, credits, grantIndex }
+ */
+const grantSubscriptionCredits = async (tx, { userId, subscriptionId, credits, grantIndex = 0 }) => {
+  await tx.wallet.upsert({
+    where: { userId },
+    update: {},
+    create: { userId },
+  });
+
+  const wallet = await tx.wallet.update({
+    where: { userId },
+    data: { creditBalance: { increment: credits } },
+  });
+
+  await tx.walletLedger.create({
+    data: {
+      userId,
+      walletType: 'credit',
+      entryType: 'credit_grant',
+      amount: BigInt(credits),
+      balanceAfter: BigInt(wallet.creditBalance),
+      idempotencyKey: `sub-grant-${subscriptionId}-${grantIndex}`,
+      refType: 'subscription',
+      refId: subscriptionId,
+    },
+  });
+
+  return wallet;
+};
+
 // ==========================================
 // 2. ADMIN CREDIT GRANT
 // ==========================================
@@ -431,6 +465,7 @@ const processWithdrawal = async (adminId, withdrawalId, { status, bankTransactio
 export default {
   getMyWallet,
   getMyLedger,
+  grantSubscriptionCredits,
   adminGrantCredits,
   requestWithdrawal,
   getMyWithdrawals,

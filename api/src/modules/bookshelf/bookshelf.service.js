@@ -71,7 +71,6 @@ const getBookshelf = async (user, query) => {
           select: {
             id: true,
             title: true,
-            coverImageKey: true,
             kind: true,
             status: true,
             useAiImage: true,
@@ -146,7 +145,6 @@ const getBookshelf = async (user, query) => {
     return {
       storyId: story.id,
       title: story.title,
-      coverImageKey: story.coverImageKey,
       kind: story.kind,
       status: story.status,
       useAiImage: story.useAiImage,
@@ -241,7 +239,6 @@ const addToBookshelf = async (user, { childId, storyId }) => {
       story: {
         id: story.id,
         title: story.title,
-        coverImageKey: story.coverImageKey,
       },
     };
   }
@@ -256,7 +253,6 @@ const addToBookshelf = async (user, { childId, storyId }) => {
         select: {
           id: true,
           title: true,
-          coverImageKey: true,
         },
       },
     },

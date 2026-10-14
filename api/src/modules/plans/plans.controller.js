@@ -38,43 +38,6 @@ const deletePlan = catchAsync(async (req, res) => {
   });
 });
 
-const getCreditPacks = catchAsync(async (_req, res) => {
-  const creditPacks = await plansService.getCreditPacks();
-  return ApiResponse.success(res, {
-    data: { creditPacks },
-  });
-});
-
-const getCreditPackById = catchAsync(async (req, res) => {
-  const creditPack = await plansService.getCreditPackById(req.params.id);
-  return ApiResponse.success(res, {
-    data: { creditPack },
-  });
-});
-
-const createCreditPack = catchAsync(async (req, res) => {
-  const creditPack = await plansService.createCreditPack(req.body);
-  return ApiResponse.created(res, {
-    message: 'Credit pack created successfully',
-    data: { creditPack },
-  });
-});
-
-const updateCreditPack = catchAsync(async (req, res) => {
-  const creditPack = await plansService.updateCreditPack(req.params.id, req.body);
-  return ApiResponse.success(res, {
-    message: 'Credit pack updated successfully',
-    data: { creditPack },
-  });
-});
-
-const deleteCreditPack = catchAsync(async (req, res) => {
-  await plansService.deleteCreditPack(req.params.id);
-  return ApiResponse.success(res, {
-    message: 'Credit pack deactivated successfully',
-  });
-});
-
 const getMySubscription = catchAsync(async (req, res) => {
   const result = await plansService.getMySubscription(req.user.id);
   return ApiResponse.success(res, {
@@ -111,11 +74,6 @@ export default {
   createPlan,
   updatePlan,
   deletePlan,
-  getCreditPacks,
-  getCreditPackById,
-  createCreditPack,
-  updateCreditPack,
-  deleteCreditPack,
   getMySubscription,
   subscribeFreePlan,
   cancelMySubscription,

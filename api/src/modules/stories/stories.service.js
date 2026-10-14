@@ -81,7 +81,6 @@ const createStory = async (user, data) => {
     title,
     length = 'medium',
     situation,
-    coverImageKey,
     useAiImage = false,
     useTts = true,
     autoInitializePages = true,
@@ -136,7 +135,6 @@ const createStory = async (user, data) => {
         length,
         situation: situation || null,
         title,
-        coverImageKey: coverImageKey || null,
         useAiImage: Boolean(useAiImage),
         useTts: Boolean(useTts),
         status: 'draft',
@@ -258,7 +256,6 @@ const getStories = async (user, filter = {}) => {
       title: s.title,
       length: s.length,
       situation: s.situation,
-      coverImageKey: s.coverImageKey,
       kind: s.kind,
       status: s.status,
       useAiImage: s.useAiImage,
@@ -363,7 +360,6 @@ const getStoryById = async (user, storyId) => {
     title: story.title,
     length: story.length,
     situation: story.situation,
-    coverImageKey: story.coverImageKey,
     kind: story.kind,
     status: story.status,
     useAiImage: story.useAiImage,
@@ -415,7 +411,6 @@ const updateStory = async (user, storyId, data) => {
     where: { id: story.id },
     data: {
       ...(data.title !== undefined && { title: data.title }),
-      ...(data.coverImageKey !== undefined && { coverImageKey: data.coverImageKey }),
       ...(data.useAiImage !== undefined && { useAiImage: data.useAiImage }),
       ...(data.useTts !== undefined && { useTts: data.useTts }),
       ...(data.status !== undefined && { status: data.status }),
@@ -747,7 +742,7 @@ const reviewStory = async (user, storyId) => {
  * Create a published clone of a private story with de-personalization
  * @param {Object} user - Authenticated parent/seller
  * @param {string} storyId - Source private story ID
- * @param {Object} options - Publish options (optional title, cover)
+ * @param {Object} options - Publish options (optional title, nameReplacements)
  * @returns {Promise<Object>} De-personalized published story ready for marketplace listing
  */
 const publishStoryVersion = async (user, storyId, options = {}) => {
@@ -843,7 +838,6 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
         situation: sourceStory.situation,
         sourceStoryId: sourceStory.id,
         title: options.title || sourceStory.title,
-        coverImageKey: options.coverImageKey || sourceStory.coverImageKey,
         useAiImage: sourceStory.useAiImage,
         useTts: sourceStory.useTts,
         status: 'ready',

@@ -310,7 +310,6 @@ const startSession = async (user, { childId, storyId, isReplay = false }) => {
         story: {
           id: story.id,
           title: story.title,
-          coverImageKey: story.coverImageKey,
           primarySkill: story.topic?.skill,
         },
         currentPage: formatPage(currentPage),
@@ -376,7 +375,6 @@ const startSession = async (user, { childId, storyId, isReplay = false }) => {
     story: {
       id: story.id,
       title: story.title,
-      coverImageKey: story.coverImageKey,
       primarySkill: story.topic?.skill,
     },
     currentPage: formatPage(firstPage),
@@ -400,7 +398,6 @@ const getSession = async (user, sessionId) => {
         select: {
           id: true,
           title: true,
-          coverImageKey: true,
           _count: { select: { pages: true } },
           topic: {
             select: {
@@ -471,7 +468,6 @@ const getSession = async (user, sessionId) => {
     story: {
       id: session.story.id,
       title: session.story.title,
-      coverImageKey: session.story.coverImageKey,
       primarySkill: session.story.topic?.skill,
     },
     status: session.status,
@@ -789,7 +785,6 @@ const getChildHistory = async (user, childId, query) => {
           select: {
             id: true,
             title: true,
-            coverImageKey: true,
             topic: {
               select: {
                 id: true,

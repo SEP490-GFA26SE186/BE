@@ -4,7 +4,6 @@ import plansValidation from './plans.validation.js';
 import { auth, authorize, validate } from '../../middlewares/index.js';
 
 export const plansRouter = express.Router();
-export const creditPacksRouter = express.Router();
 export const subscriptionsRouter = express.Router();
 
 // ==========================================
@@ -23,31 +22,6 @@ plansRouter
   .delete(auth, authorize('admin'), plansController.deletePlan);
 
 // ==========================================
-// Credit Packs Routes (/api/v1/credit-packs)
-// ==========================================
-
-creditPacksRouter
-  .route('/')
-  .get(plansController.getCreditPacks)
-  .post(
-    auth,
-    authorize('admin'),
-    validate(plansValidation.createCreditPackSchema),
-    plansController.createCreditPack
-  );
-
-creditPacksRouter
-  .route('/:id')
-  .get(plansController.getCreditPackById)
-  .put(
-    auth,
-    authorize('admin'),
-    validate(plansValidation.updateCreditPackSchema),
-    plansController.updateCreditPack
-  );
-creditPacksRouter.delete('/:id', auth, authorize('admin'), plansController.deleteCreditPack);
-
-// ==========================================
 // Subscriptions Routes (/api/v1/subscriptions)
 // ==========================================
 
@@ -63,6 +37,5 @@ subscriptionsRouter.get('/admin/all', auth, authorize('admin'), plansController.
 
 export default {
   plansRouter,
-  creditPacksRouter,
   subscriptionsRouter,
 };
