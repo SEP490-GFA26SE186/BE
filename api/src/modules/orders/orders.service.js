@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
 import plansService from '../plans/plans.service.js';
+import storiesService from '../stories/stories.service.js';
 
 // =============================================================================
 // HELPERS
@@ -510,10 +511,12 @@ const getMyEntitlements = async (userId) => {
 };
 
 /**
- * Personalize an owned story into parent's private collection & bookshelf
+ * Personalize an owned story into parent's private collection & bookshelf.
+ * Tao truyen private tu ban published: gan nhan vat gia dinh vao token {NVx},
+ * token khong gan giu ten chung (alias) cua nguoi ban.
  * @param {string} userId
  * @param {string} entitlementId
- * @param {Object} payload - { title, childId, characters: [{ slotKey, characterId }] }
+ * @param {Object} payload - { title, childId, characters: [{ token, characterId }] }
  */
 const personalizeEntitlement = async (userId, entitlementId, { title, childId, characters = [] }) => {
   const entitlement = await prisma.entitlement.findFirst({
@@ -526,15 +529,7 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
       listing: {
         include: {
           publishedStory: {
-            include: {
-              pages: {
-                include: {
-                  choices: true,
-                },
-                orderBy: { pageOrder: 'asc' },
-              },
-              storyCharacters: true,
-            },
+            include: { storyCharacters: true },
           },
         },
       },
@@ -546,7 +541,7 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
   }
 
   const publishedStory = entitlement.listing?.publishedStory;
-  if (!publishedStory) {
+  if (!publishedStory || publishedStory.deletedAt) {
     throw ApiError.notFound('Không tìm thấy dữ liệu truyện gốc để nhân bản');
   }
 
@@ -560,16 +555,26 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
     }
   }
 
-  // Validate characters if provided
-  for (const c of characters) {
-    if (c.characterId) {
-      const char = await prisma.character.findFirst({
-        where: { id: c.characterId, parentId: userId, deletedAt: null },
-      });
-      if (!char) {
-        throw ApiError.notFound(`Không tìm thấy nhân vật gia đình (id: ${c.characterId})`);
-      }
+  // Validate character bindings: token phai co trong truyen, nhan vat thuoc gia dinh
+  const tokens = new Set(publishedStory.storyCharacters.map((sc) => sc.token));
+  const characterByToken = new Map();
+  for (const binding of characters) {
+    const token = binding.token || binding.slotKey;
+    if (!tokens.has(token)) {
+      throw ApiError.badRequest(`Truyện không có nhân vật ${token}`);
     }
+    if (characterByToken.has(token)) {
+      throw ApiError.badRequest(`Nhân vật ${token} được gán nhiều lần`);
+    }
+    if (!binding.characterId) continue;
+
+    const char = await prisma.character.findFirst({
+      where: { id: binding.characterId, parentId: userId, deletedAt: null },
+    });
+    if (!char) {
+      throw ApiError.notFound(`Không tìm thấy nhân vật gia đình (id: ${binding.characterId})`);
+    }
+    characterByToken.set(token, char.id);
   }
 
   return prisma.$transaction(async (tx) => {
@@ -580,92 +585,36 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
         kind: 'private',
         topicId: publishedStory.topicId,
         sourceStoryId: publishedStory.id,
+        length: publishedStory.length,
         title: title || publishedStory.title,
         useAiImage: publishedStory.useAiImage,
         useTts: publishedStory.useTts,
         status: 'ready',
+        // Noi dung da qua kiem duyet tren cho -> dua len gia sach duoc ngay
         reviewedAt: new Date(),
       },
     });
 
-    // 2. Bind characters
-    if (characters.length > 0) {
-      for (const charBinding of characters) {
-        await tx.storyCharacter.create({
-          data: {
-            storyId: newStory.id,
-            slotKey: charBinding.slotKey,
-            characterId: charBinding.characterId || null,
-          },
-        });
-      }
-    } else {
-      // Default: copy existing slots with empty bindings
-      for (const sc of publishedStory.storyCharacters) {
-        await tx.storyCharacter.create({
-          data: {
-            storyId: newStory.id,
-            slotKey: sc.slotKey,
-            characterId: null,
-          },
-        });
-      }
-    }
-
-    // 3. Two-phase clone of pages and choices to preserve branching
-    const oldChoiceIdToNewChoiceId = new Map();
-    const createdPagesWithOldChoices = [];
-
-    // Phase A: Create pages and choices
-    for (const page of publishedStory.pages) {
-      const newPage = await tx.storyPage.create({
+    // 2. Bind characters: dung mot trong character_id / alias_name
+    for (const sc of publishedStory.storyCharacters) {
+      const characterId = characterByToken.get(sc.token) || null;
+      await tx.storyCharacter.create({
         data: {
           storyId: newStory.id,
-          stageId: page.stageId,
-          pageKind: page.pageKind,
-          pageOrder: page.pageOrder,
-          contentText: page.contentText,
-          aiOriginalText: page.aiOriginalText,
-          origin: page.origin,
-          backgroundId: page.backgroundId,
-          imageKey: page.imageKey,
-          audioKey: page.audioKey,
-          imageStatus: 'completed',
-          audioStatus: page.audioKey ? 'completed' : 'none',
+          token: sc.token,
+          characterId,
+          aliasName: characterId ? null : sc.aliasName,
+          isMain: sc.isMain,
         },
       });
-
-      if (page.fromChoiceId) {
-        createdPagesWithOldChoices.push({
-          newPageId: newPage.id,
-          oldFromChoiceId: page.fromChoiceId,
-        });
-      }
-
-      for (const choice of page.choices) {
-        const newChoice = await tx.storyChoice.create({
-          data: {
-            pageId: newPage.id,
-            choiceOrder: choice.choiceOrder,
-            choiceText: choice.choiceText,
-            choiceTypeId: choice.choiceTypeId,
-            audioKey: choice.audioKey,
-          },
-        });
-        oldChoiceIdToNewChoiceId.set(choice.id, newChoice.id);
-      }
     }
 
-    // Phase B: Link consequence branch points
-    for (const item of createdPagesWithOldChoices) {
-      const mappedChoiceId = oldChoiceIdToNewChoiceId.get(item.oldFromChoiceId);
-      if (mappedChoiceId) {
-        await tx.storyPage.update({
-          where: { id: item.newPageId },
-          data: { fromChoiceId: mappedChoiceId },
-        });
-      }
-    }
+    // 3. Clone scenes, pages, checkpoints. Doi ten nhan vat thi file doc cu khong con dung
+    await storiesService.cloneStoryContent(tx, {
+      sourceStoryId: publishedStory.id,
+      targetStoryId: newStory.id,
+      keepAudio: characterByToken.size === 0,
+    });
 
     // 4. Place on child bookshelf if specified
     if (childId) {
@@ -691,6 +640,7 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
       storyId: newStory.id,
       title: newStory.title,
       childId: childId || null,
+      needsNarration: characterByToken.size > 0 && newStory.useTts,
     };
   });
 };

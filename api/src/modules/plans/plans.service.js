@@ -109,6 +109,18 @@ const getPlans = async () => {
   return plans;
 };
 
+/**
+ * Goi Mien phi dang hoat dong (uu tien code FREE). Seed goi mac dinh neu bang plans rong.
+ * @returns {Promise<Object|null>}
+ */
+const getFreePlan = async () => {
+  const byCode = await prisma.plan.findUnique({ where: { code: 'FREE' } });
+  if (byCode?.isActive) return byCode;
+
+  const plans = await getPlans();
+  return plans.find((p) => p.isActive && p.priceVnd === 0n) || null;
+};
+
 const getPlanById = async (id) => {
   const plan = await prisma.plan.findUnique({
     where: { id },
@@ -268,11 +280,7 @@ const subscribeFreePlan = async (userId, planId) => {
       throw new ApiError(400, 'Invalid free plan selected');
     }
   } else {
-    freePlan = await prisma.plan.findUnique({ where: { code: 'FREE' } });
-    if (!freePlan) {
-      const plans = await getPlans();
-      freePlan = plans.find((p) => p.priceVnd === 0n);
-    }
+    freePlan = await getFreePlan();
   }
 
   if (!freePlan) {
@@ -361,6 +369,7 @@ export default {
   createPlan,
   updatePlan,
   deletePlan,
+  getFreePlan,
   activateSubscription,
   getMySubscription,
   subscribeFreePlan,

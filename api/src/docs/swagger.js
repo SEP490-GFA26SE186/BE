@@ -127,7 +127,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           parentId: { type: 'string', format: 'uuid', example: 'd3b07384-d113-49d6-a246-24b5d2757279' },
           childId: { type: 'string', format: 'uuid', nullable: true, example: '76693be8-831c-41a7-bdaa-6e07fc5c6457' },
           name: { type: 'string', example: 'Bé Miu' },
-          role: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'], example: 'self' },
+          isChildAvatar: { type: 'boolean', example: true, description: 'Nhân vật đại diện cho một bé (childId khác null)' },
           appearance: { type: 'string', example: 'Bé gái 5 tuổi tóc búi hai bên, đeo nơ hồng, mắt to tròn tinh nghịch' },
           portraitImageKey: { type: 'string', nullable: true, example: 'https://storage.supabase.co/.../miu_portrait.png' },
           genPrompt: { type: 'string', nullable: true, example: 'Portrait of Bé Miu...' },
@@ -235,7 +235,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       post: {
         tags: ['Auth'],
         summary: '[Public] Đăng ký tài khoản phụ huynh mới',
-        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTạo tài khoản mới, khởi tạo ví tiền và tự động gửi email xác thực qua Brevo.',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTạo tài khoản mới, khởi tạo ví, đăng ký gói Miễn phí và cấp credit tháng đầu (`wallet_ledger.credit_grant`), rồi gửi email xác thực qua Brevo.',
         security: [],
         requestBody: {
           required: true,
@@ -1167,21 +1167,15 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['name', 'role', 'appearance'],
+                required: ['name', 'appearance'],
                 properties: {
                   name: { type: 'string', example: 'Bé Miu', description: 'Tên nhân vật' },
-                  role: {
-                    type: 'string',
-                    enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'],
-                    example: 'self',
-                    description: 'Vai trò trong truyện',
-                  },
                   appearance: {
                     type: 'string',
                     example: 'Bé gái 5 tuổi, tóc ngắn ngang vai màu đen cài nơ đỏ, mắt to tròn hay cười, mặc váy hoa',
                     description: 'Mô tả ngoại hình thuần văn bản (không tải ảnh thật của trẻ)',
                   },
-                  childId: { type: 'string', format: 'uuid', description: 'Liên kết tới hồ sơ bé (nếu role là self/sibling)' },
+                  childId: { type: 'string', format: 'uuid', description: 'Nhân vật đại diện cho bé này. Mỗi bé tối đa 1 nhân vật đại diện (409 nếu đã có)' },
                   portraitImageKey: { type: 'string', description: 'URL hoặc key ảnh chân dung (nếu có sẵn)' },
                 },
               },
@@ -1212,21 +1206,15 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           },
           400: { description: 'Dữ liệu không hợp lệ hoặc hồ sơ bé liên kết không đúng' },
           403: { description: 'Đã đạt giới hạn tối đa số nhân vật theo gói cước hiện tại' },
+          409: { description: 'Bé đã có nhân vật đại diện' },
         },
       },
       get: {
         tags: ['Characters'],
         summary: '[Parent] Lấy danh sách nhân vật của phụ huynh',
-        description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách nhân vật gia đình của phụ huynh (hỗ trợ lọc theo vai trò role hoặc theo bé childId).',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách nhân vật gia đình của phụ huynh (hỗ trợ lọc theo bé childId).',
         security: [{ BearerAuth: [] }],
         parameters: [
-          {
-            name: 'role',
-            in: 'query',
-            required: false,
-            schema: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'] },
-            description: 'Lọc theo vai trò nhân vật',
-          },
           {
             name: 'childId',
             in: 'query',
@@ -1325,11 +1313,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 type: 'object',
                 properties: {
                   name: { type: 'string', example: 'Bé Miu Siêu Quậy' },
-                  role: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'] },
                   appearance: { type: 'string', example: 'Tóc ngắn ngang vai cài nơ xanh, áo len sọc vàng' },
                   childId: { type: 'string', format: 'uuid', nullable: true },
-                  portraitImageKey: { type: 'string', nullable: true },
-                  portraitStatus: { type: 'string', enum: ['none', 'queued', 'generating', 'ready', 'failed'] },
+                  portraitImageKey: { type: 'string', nullable: true, description: 'Có ảnh -> portraitStatus = ready; null -> none' },
                 },
               },
             },
@@ -3143,11 +3129,11 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                   title: { type: 'string', example: 'Bài học chia sẻ đồ chơi của bạn Thỏ' },
                   nameReplacements: {
                     type: 'array',
-                    description: 'Tùy chọn danh sách tên nhân vật thay thế theo từng slotKey hoặc theo tên riêng cũ. Nếu không cung cấp, hệ thống sẽ tự động dùng defaultName của kịch bản.',
+                    description: 'Tên chung thay cho nhân vật gia đình, theo token `{NVx}` hoặc theo tên riêng cũ. Không cung cấp thì dùng aliasName sẵn có hoặc tên nhân vật. Bản đăng bán không chép `situation` và bỏ file đọc (sẽ sinh lại).',
                     items: {
                       type: 'object',
                       properties: {
-                        slotKey: { type: 'string', example: 'main_child' },
+                        token: { type: 'string', example: '{NV1}' },
                         fromName: { type: 'string', example: 'Bé Bo' },
                         customName: { type: 'string', example: 'Bé Thỏ Thông Thái' },
                       },
@@ -4117,7 +4103,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       post: {
         tags: ['Entitlements'],
         summary: '[Parent] Cá nhân hóa truyện đã mua và đưa vào giá sách của con',
-        description: 'Gán các nhân vật gia đình của phụ huynh vào các slot nhân vật của câu truyện vừa mua, nhân bản thành một bản truyện private hoàn chỉnh và tự động đưa vào giá sách của bé.',
+        description: 'Gán nhân vật gia đình vào các token `{NVx}` của truyện đã mua và nhân bản thành truyện private (cảnh, trang, điểm dừng, phương án). Token không gán giữ tên chung của người bán. Nếu có gán nhân vật thì file đọc bị bỏ (`needsNarration: true`) vì tên đã đổi. Có `childId` thì tự đưa lên giá sách của bé.',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID quyền sở hữu (Entitlement ID)' },
@@ -4135,9 +4121,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                     type: 'array',
                     items: {
                       type: 'object',
-                      required: ['slotKey'],
+                      required: ['token'],
                       properties: {
-                        slotKey: { type: 'string', example: 'main_character' },
+                        token: { type: 'string', example: '{NV1}' },
                         characterId: { type: 'string', format: 'uuid' },
                       },
                     },
@@ -4149,6 +4135,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           201: { description: 'Cá nhân hóa truyện thành công' },
+          400: { description: 'Token không có trong truyện hoặc gán trùng' },
           404: { description: 'Không tìm thấy quyền sở hữu hoặc truyện đã bị thu hồi' },
         },
       },

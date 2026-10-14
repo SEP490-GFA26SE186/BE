@@ -16,7 +16,8 @@ const formatCharacterResponse = (character) => {
     parentId: character.parentId,
     childId: character.childId,
     name: character.name,
-    role: character.role,
+    // Nhan vat dai dien cho mot dua con (characters.child_id unique)
+    isChildAvatar: Boolean(character.childId),
     appearance: character.appearance,
     portraitImageKey: character.portraitImageKey,
     genPrompt: character.genPrompt,
@@ -61,27 +62,48 @@ const getMaxCharactersQuota = async (parentId) => {
 };
 
 /**
+ * Dam bao dua con thuoc phu huynh va chua co nhan vat dai dien khac
+ * (characters.child_id unique: moi con toi da 1 nhan vat dai dien)
+ * @param {string} parentId
+ * @param {string} childId
+ * @param {string} [exceptCharacterId] - nhan vat dang duoc cap nhat
+ */
+const assertChildAvatarSlot = async (parentId, childId, exceptCharacterId = null) => {
+  const child = await prisma.childProfile.findFirst({
+    where: {
+      id: childId,
+      parentId,
+      deletedAt: null,
+    },
+  });
+
+  if (!child) {
+    throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
+  }
+
+  const holder = await prisma.character.findUnique({ where: { childId } });
+  if (!holder || holder.id === exceptCharacterId) return;
+
+  if (!holder.deletedAt) {
+    throw ApiError.conflict('This child already has a representative character');
+  }
+
+  // Nhan vat da xoa mem van giu child_id -> giai phong cho nhan vat moi
+  await prisma.character.update({ where: { id: holder.id }, data: { childId: null } });
+};
+
+/**
  * Create a new family character
  * @param {string} parentId
  * @param {Object} characterData
  * @returns {Promise<Object>} Formatted character
  */
 const createCharacter = async (parentId, characterData) => {
-  const { name, role, appearance, childId, portraitImageKey, genPrompt } = characterData;
+  const { name, appearance, childId, portraitImageKey, genPrompt } = characterData;
 
-  // 1. If childId provided, verify it belongs to this parent and is active
+  // 1. If childId provided, verify it belongs to this parent and has no representative yet
   if (childId) {
-    const child = await prisma.childProfile.findFirst({
-      where: {
-        id: childId,
-        parentId,
-        deletedAt: null,
-      },
-    });
-
-    if (!child) {
-      throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
-    }
+    await assertChildAvatarSlot(parentId, childId);
   }
 
   // 2. Check character quota for current subscription
@@ -104,7 +126,6 @@ const createCharacter = async (parentId, characterData) => {
     data: {
       parentId,
       name,
-      role,
       appearance,
       childId: childId || null,
       portraitImageKey: portraitImageKey || null,
@@ -136,10 +157,6 @@ const getCharacters = async (parentId, filter = {}) => {
     parentId,
     deletedAt: null,
   };
-
-  if (filter.role) {
-    where.role = filter.role;
-  }
 
   if (filter.childId) {
     where.childId = filter.childId;
@@ -216,30 +233,22 @@ const updateCharacter = async (parentId, characterId, updateData) => {
   }
 
   // If childId is provided/updated, verify validity
-  if (updateData.childId !== undefined && updateData.childId !== null) {
-    const child = await prisma.childProfile.findFirst({
-      where: {
-        id: updateData.childId,
-        parentId,
-        deletedAt: null,
-      },
-    });
-
-    if (!child) {
-      throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
-    }
+  if (updateData.childId && updateData.childId !== existingCharacter.childId) {
+    await assertChildAvatarSlot(parentId, updateData.childId, characterId);
   }
 
   const updatedCharacter = await prisma.character.update({
     where: { id: characterId },
     data: {
       ...(updateData.name && { name: updateData.name }),
-      ...(updateData.role && { role: updateData.role }),
       ...(updateData.appearance !== undefined && { appearance: updateData.appearance }),
       ...(updateData.childId !== undefined && { childId: updateData.childId }),
-      ...(updateData.portraitImageKey !== undefined && { portraitImageKey: updateData.portraitImageKey }),
+      // portrait_status do he thong quan ly: co anh -> ready, bo anh -> none
+      ...(updateData.portraitImageKey !== undefined && {
+        portraitImageKey: updateData.portraitImageKey,
+        portraitStatus: updateData.portraitImageKey ? 'ready' : 'none',
+      }),
       ...(updateData.genPrompt !== undefined && { genPrompt: updateData.genPrompt }),
-      ...(updateData.portraitStatus && { portraitStatus: updateData.portraitStatus }),
     },
     include: {
       child: {
@@ -276,7 +285,8 @@ const deleteCharacter = async (parentId, characterId) => {
 
   await prisma.character.update({
     where: { id: characterId },
-    data: { deletedAt: new Date() },
+    // Bo lien ket con de child_id (unique) duoc dung lai cho nhan vat dai dien moi
+    data: { deletedAt: new Date(), childId: null },
   });
 
   return { message: 'Xóa nhân vật thành công' };
@@ -321,7 +331,7 @@ const requestPortraitGeneration = async (parentId, characterId, options = {}) =>
 
   const selectedStyle = styleDescriptions[options.style] || styleDescriptions.pixar_3d;
   const promptParts = [
-    `Portrait of a character named ${character.name}, role: ${character.role}`,
+    `Portrait of a character named ${character.name}`,
     `Appearance: ${character.appearance}`,
     `Style: ${selectedStyle}`,
   ];

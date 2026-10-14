@@ -162,6 +162,7 @@ const publishStoryVersion = z.object({
       nameReplacements: z
         .array(
           z.object({
+            token: z.string().trim().min(1).max(10).optional(),
             slotKey: z.string().trim().min(1).max(30).optional(),
             fromName: z.string().trim().min(1).max(100).optional(),
             customName: z
