@@ -1756,7 +1756,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       post: {
         tags: ['Reading Sessions'],
         summary: '[Parent | Kid Session] Bắt đầu hoặc tiếp tục phiên đọc truyện tương tác',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nKhởi động phiên đọc truyện cho bé. Nếu đã có phiên dở dang (`in_progress`) sẽ tự động tiếp tục trang đang đọc; nếu chọn `isReplay: true` sẽ bắt đầu lại từ trang đầu tiên.',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nKhởi động phiên đọc truyện cho bé. Truyện phải `ready`, đã được phụ huynh xem lại (`reviewedAt`) và nằm trên kệ sách của bé (truyện riêng của phụ huynh được tự động thêm lên kệ). Nếu có phiên dở dang (`in_progress`) sẽ tiếp tục; `isReplay: true` bỏ phiên dở dang và bắt đầu lại. Chỉ lần chơi đầu tiên (`isFirstPlay`) được tính điểm EQ.\n\nTrả về toàn bộ nội dung truyện (trang, cảnh, điểm dừng ngay sau trang, phương án) đã thay token `{NVx}` bằng tên nhân vật, kèm các câu trả lời đã ghi.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1776,7 +1776,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           201: { description: 'Khởi động phiên đọc truyện thành công' },
-          400: { description: 'Truyện chưa có nội dung trang' },
+          400: { description: 'Truyện chưa sẵn sàng hoặc chưa có trang' },
+          403: { description: 'Truyện không nằm trên kệ sách của bé' },
           404: { description: 'Không tìm thấy hồ sơ bé hoặc câu chuyện' },
         },
       },
@@ -1786,7 +1787,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       get: {
         tags: ['Reading Sessions'],
         summary: '[Parent | Kid Session] Lấy trạng thái chi tiết phiên đọc truyện',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thông tin trang hiện tại, các lựa chọn rẽ nhánh, tiến độ và lịch sử các quyết định đã chọn trong phiên.',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nTrả về phiên, nội dung truyện, các câu trả lời điểm dừng đã ghi và điểm theo năng lực của riêng lần chơi này (`eqSummary`).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1804,11 +1805,11 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    '/reading-sessions/{sessionId}/choice': {
-      post: {
+    '/reading-sessions/{sessionId}/progress': {
+      patch: {
         tags: ['Reading Sessions'],
-        summary: '[Kid Session | Parent] Bé chọn phương án xử lý tình huống cảm xúc',
-        description: '**Quyền truy cập:** `kid_session` hoặc `parent`.\nGhi nhận lựa chọn của bé tại nhánh rẽ tình huống. Hệ thống sẽ điều hướng đến trang hệ quả tương ứng, hoặc hoàn thành truyện và tự động tính toán chỉ số EQ.',
+        summary: '[Parent | Kid Session] Lưu vị trí trang đang đọc',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLưu `currentPageId` để lần sau mở lại đúng trang.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1825,29 +1826,27 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['pageId', 'choiceId'],
+                required: ['pageId'],
                 properties: {
-                  pageId: { type: 'string', format: 'uuid', description: 'ID trang hiện tại' },
-                  choiceId: { type: 'string', format: 'uuid', description: 'ID nhánh rẽ bé lựa chọn' },
-                  timeToDecideMs: { type: 'integer', example: 3500, description: 'Thời gian bé suy nghĩ (mili-giây)' },
+                  pageId: { type: 'string', format: 'uuid', description: 'ID trang bé đang xem' },
                 },
               },
             },
           },
         },
         responses: {
-          200: { description: 'Ghi nhận lựa chọn thành công và trả về trang tiếp theo hoặc kết quả EQ' },
-          400: { description: 'Phiên đọc đã kết thúc hoặc sai ID trang' },
-          404: { description: 'Không tìm thấy lựa chọn tương ứng' },
+          200: { description: 'Lưu tiến độ thành công' },
+          400: { description: 'Phiên đọc không còn ở trạng thái in_progress' },
+          404: { description: 'Trang không thuộc truyện của phiên' },
         },
       },
     },
 
-    '/reading-sessions/{sessionId}/complete': {
+    '/reading-sessions/{sessionId}/answers': {
       post: {
         tags: ['Reading Sessions'],
-        summary: '[Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nĐánh dấu kết thúc phiên đọc truyện, tổng hợp điểm số 5 năng lực EQ chuẩn CASEL và tự động tích lũy thời gian sử dụng màn hình của bé.',
+        summary: '[Kid Session | Parent] Ghi câu trả lời của bé tại một điểm dừng',
+        description: '**Quyền truy cập:** `kid_session` hoặc `parent`.\nCâu cảm xúc (`emotion_self`, `emotion_other`) gửi `firstEmotion` (+ `finalEmotion` nếu chọn lại sau gợi ý, `attempts = 2`). Câu phương án (`perspective`, `problem_solving`) gửi `firstOptionId` (+ `finalOptionId`). `problem_solving` và `reflection` chỉ được chọn một lần.\n\nĐiểm chấm theo **lần chọn đầu** và chốt lại (snapshot): cảm xúc đúng 1 / sai 0; perspective đúng 1 / sai 0; problem_solving constructive 1, avoidant 0.5, impulsive 0; reflection và câu bỏ qua không có điểm. Chỉ lần chơi đầu mới cộng vào `eq_competency_stats`. Gửi lại cùng điểm dừng sẽ trả về câu trả lời đã lưu (`alreadyAnswered: true`).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1859,18 +1858,51 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           },
         ],
         requestBody: {
-          required: false,
+          required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
+                required: ['checkpointId'],
                 properties: {
-                  durationSeconds: { type: 'integer', example: 120, description: 'Thời lượng phiên đọc (giây)' },
+                  checkpointId: { type: 'string', format: 'uuid' },
+                  firstEmotion: { type: 'string', enum: ['happy', 'sad', 'angry', 'scared', 'neutral'] },
+                  firstOptionId: { type: 'string', format: 'uuid' },
+                  finalEmotion: { type: 'string', enum: ['happy', 'sad', 'angry', 'scared', 'neutral'] },
+                  finalOptionId: { type: 'string', format: 'uuid' },
+                  attempts: { type: 'integer', minimum: 1, maximum: 2, default: 1 },
+                  skipped: { type: 'boolean', default: false },
+                  timeToFirstMs: { type: 'integer', example: 3500, description: 'Thời gian tới lần chọn đầu (ms)' },
+                  questionReplays: { type: 'integer', example: 0, description: 'Số lần bé nghe lại câu hỏi' },
                 },
               },
             },
           },
         },
+        responses: {
+          201: { description: 'Ghi câu trả lời thành công' },
+          200: { description: 'Điểm dừng đã được trả lời trước đó trong phiên này' },
+          400: { description: 'Dữ liệu không khớp kiểu điểm dừng hoặc phiên đã kết thúc' },
+          404: { description: 'Không tìm thấy điểm dừng trong truyện' },
+        },
+      },
+    },
+
+    '/reading-sessions/{sessionId}/complete': {
+      post: {
+        tags: ['Reading Sessions'],
+        summary: '[Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nĐánh dấu kết thúc phiên đọc và trả về điểm theo năng lực của lần chơi này. Thời gian dùng màn hình ghi riêng qua `POST /children/{id}/usage`.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'sessionId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID phiên đọc truyện',
+          },
+        ],
         responses: {
           200: { description: 'Hoàn thành phiên đọc và tạo báo cáo EQ thành công' },
           404: { description: 'Không tìm thấy phiên đọc' },
@@ -1882,7 +1914,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       get: {
         tags: ['Reading Sessions'],
         summary: '[Parent | Kid Session] Xem lịch sử các phiên đọc truyện của bé',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLấy danh sách các câu chuyện bé đã đọc, số lượng lựa chọn cảm xúc đã đưa ra và điểm số EQ đạt được qua từng phiên.',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLấy danh sách các phiên đọc của bé, số câu trả lời điểm dừng và điểm theo năng lực của từng phiên.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
