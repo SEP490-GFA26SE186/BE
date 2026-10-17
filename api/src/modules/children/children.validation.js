@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/;
-
 const createChild = z.object({
   body: z.object({
     name: z
@@ -20,14 +18,6 @@ const createChild = z.object({
       .max(300, 'Maximum screen time is 300 minutes')
       .optional()
       .default(30),
-    bedtimeStart: z
-      .string()
-      .regex(timeRegex, 'Bedtime start must be formatted as HH:mm (e.g. 21:00)')
-      .optional(),
-    bedtimeEnd: z
-      .string()
-      .regex(timeRegex, 'Bedtime end must be formatted as HH:mm (e.g. 06:00)')
-      .optional(),
     preferredVoice: z
       .string()
       .trim()
@@ -66,16 +56,6 @@ const updateChild = z.object({
       .int('Screen time must be an integer')
       .min(5, 'Minimum screen time is 5 minutes')
       .max(300, 'Maximum screen time is 300 minutes')
-      .optional(),
-    bedtimeStart: z
-      .string()
-      .regex(timeRegex, 'Bedtime start must be formatted as HH:mm (e.g. 21:00)')
-      .nullable()
-      .optional(),
-    bedtimeEnd: z
-      .string()
-      .regex(timeRegex, 'Bedtime end must be formatted as HH:mm (e.g. 06:00)')
-      .nullable()
       .optional(),
     preferredVoice: z
       .string()
@@ -122,18 +102,20 @@ const getUsage = z.object({
   }),
 });
 
+// Phien dung may: duration_seconds va usage_date la cot DB tu sinh tu started_at / ended_at (rev8).
 const logUsageSession = z.object({
   params: z.object({
     id: z.string().uuid('Invalid child ID format'),
   }),
-  body: z.object({
-    durationSeconds: z
-      .number({ required_error: 'Duration in seconds is required' })
-      .int()
-      .positive('Duration must be positive'),
-    startedAt: z.string().datetime().optional(),
-    endedAt: z.string().datetime().optional(),
-  }),
+  body: z
+    .object({
+      startedAt: z.string({ required_error: 'startedAt is required' }).datetime(),
+      endedAt: z.string({ required_error: 'endedAt is required' }).datetime(),
+    })
+    .refine((b) => new Date(b.endedAt) > new Date(b.startedAt), {
+      message: 'endedAt must be after startedAt',
+      path: ['endedAt'],
+    }),
 });
 
 const updateAvatar = z.object({
@@ -146,13 +128,10 @@ const updateAvatar = z.object({
   }),
 });
 
+// Bao cao EQ cong don toan bo lich su (eq_competency_stats, docs/01) — khong loc theo ngay.
 const getEqReport = z.object({
   params: z.object({
     id: z.string().uuid('Invalid child ID format'),
-  }),
-  query: z.object({
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }),
 });
 
