@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { ApiError } from '../../utils/index.js';
+import { formatMySubscription } from './lib/mySubscription.js';
 
 const DEFAULT_PLANS = [
   {
@@ -143,89 +144,18 @@ const deletePlan = async (id) => {
 // 3. SUBSCRIPTIONS SERVICE
 // ==========================================
 
+/** GET /subscriptions/me — rev8: goi dang hoat dong (hoac goi Mien phi du phong) + so be / nhan vat dang dung. */
 const getMySubscription = async (userId) => {
-  const now = new Date();
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      parentId: userId,
-      status: 'active',
-      periodEnd: { gt: now },
-    },
-    include: {
-      plan: true,
-    },
-    orderBy: { periodEnd: 'desc' },
-  });
-
-  const childrenCount = await prisma.childProfile.count({
-    where: { parentId: userId, deletedAt: null },
-  });
-
-  const charactersCount = await prisma.character.count({
-    where: { parentId: userId, deletedAt: null },
-  });
-
-  if (!activeSubscription) {
-    // Return free default tier limits
-    const freePlan = (await prisma.plan.findUnique({ where: { code: 'FREE' } })) || {
-      code: 'FREE',
-      name: 'Gói Trải Nghiệm Miễn Phí',
-      maxChildren: 2,
-      maxCharacters: 5,
-      aiStoryQuota: 2,
-      aiImageQuota: 4,
-      canSell: false,
-    };
-
-    return {
-      hasActiveSubscription: false,
-      subscription: null,
-      currentUsage: {
-        childrenCount,
-        charactersCount,
-      },
-      effectivePlan: freePlan,
-    };
-  }
-
-  // Count AI usage in this subscription cycle
-  const storyAiUsageCount = await prisma.aiRequest.count({
-    where: {
-      userId,
-      quotaSource: 'plan',
-      requestType: 'story_text',
-      createdAt: {
-        gte: activeSubscription.periodStart,
-        lte: activeSubscription.periodEnd,
-      },
-    },
-  });
-
-  const imageAiUsageCount = await prisma.aiRequest.count({
-    where: {
-      userId,
-      quotaSource: 'plan',
-      requestType: { in: ['story_image', 'character_portrait'] },
-      createdAt: {
-        gte: activeSubscription.periodStart,
-        lte: activeSubscription.periodEnd,
-      },
-    },
-  });
-
-  return {
-    hasActiveSubscription: true,
-    subscription: activeSubscription,
-    currentUsage: {
-      childrenCount,
-      charactersCount,
-      storyAiUsed: storyAiUsageCount,
-      storyAiRemaining: Math.max(0, activeSubscription.plan.aiStoryQuota - storyAiUsageCount),
-      imageAiUsed: imageAiUsageCount,
-      imageAiRemaining: Math.max(0, activeSubscription.plan.aiImageQuota - imageAiUsageCount),
-    },
-    effectivePlan: activeSubscription.plan,
-  };
+  const [subscription, childrenCount, charactersCount] = await Promise.all([
+    prisma.subscription.findFirst({
+      where: { parentId: userId, status: 'active', periodEnd: { gt: new Date() } },
+      include: { plan: true },
+      orderBy: { periodEnd: 'desc' },
+    }),
+    prisma.childProfile.count({ where: { parentId: userId, deletedAt: null } }),
+    prisma.character.count({ where: { parentId: userId, deletedAt: null } }),
+  ]);
+  return formatMySubscription(subscription, { childrenCount, charactersCount });
 };
 
 const subscribeFreePlan = async (userId, planId) => {
