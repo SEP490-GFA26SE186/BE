@@ -1,5 +1,6 @@
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
+import { buildShelf, readingProgress } from './lib/shelf.js';
 
 /**
  * Verify child access permission for current user
@@ -31,154 +32,67 @@ const verifyChildAccess = async (user, childId) => {
 };
 
 /**
- * Get stories on child's bookshelf with reading progress
- * @param {Object} user - Authenticated user
- * @param {Object} query - Query parameters
- * @returns {Promise<Object>} Bookshelf items and pagination
+ * Gia sach cua be (rev8): { child, items, pagination, counts, continueReading }.
+ * query: { childId, page, limit, search, status: all|reading|completed|not_started, competency: all|<casel_code> }.
+ * Lay het muc tren gia (vai chuc) roi loc / dem / phan trang trong bo nho — lib/shelf.js.
  */
 const getBookshelf = async (user, query) => {
-  const childId = query.childId;
-  const child = await verifyChildAccess(user, childId);
-
+  const child = await verifyChildAccess(user, query.childId);
   const page = Math.max(1, Number(query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(query.limit) || 10));
-  const skip = (page - 1) * limit;
 
-  const storyWhere = {
-    deletedAt: null,
-    ...(query.search && {
-      title: { contains: query.search, mode: 'insensitive' },
-    }),
-  };
-
-  const [total, items] = await Promise.all([
-    prisma.bookshelfItem.count({
-      where: {
-        childId: child.id,
-        story: storyWhere,
-      },
-    }),
-    prisma.bookshelfItem.findMany({
-      where: {
-        childId: child.id,
-        story: storyWhere,
-      },
-      take: limit,
-      skip,
-      orderBy: { addedAt: 'desc' },
-      include: {
-        story: {
-          select: {
-            id: true,
-            title: true,
-            coverImageKey: true,
-            kind: true,
-            status: true,
-            useAiImage: true,
-            useTts: true,
-            createdAt: true,
-            template: {
-              select: {
-                id: true,
-                title: true,
-                ageMin: true,
-                ageMax: true,
-                primarySkill: {
-                  select: {
-                    id: true,
-                    caselCode: true,
-                    nameVi: true,
-                    nameEn: true,
-                  },
-                },
-              },
-            },
-            _count: {
-              select: { pages: true },
-            },
-          },
-        },
-      },
-    }),
-  ]);
-
-  // Fetch latest play session for each story to report reading progress
-  const storyIds = items.map((item) => item.storyId);
-  const latestSessions = await prisma.playSession.findMany({
-    where: {
-      childId: child.id,
-      storyId: { in: storyIds },
-    },
-    orderBy: { lastActivityAt: 'desc' },
-    include: {
-      currentPage: {
+  const rows = await prisma.bookshelfItem.findMany({
+    where: { childId: child.id, story: { deletedAt: null } },
+    orderBy: { addedAt: 'desc' },
+    select: {
+      addedAt: true,
+      story: {
         select: {
           id: true,
-          pageOrder: true,
-          pageKind: true,
+          title: true,
+          kind: true,
+          length: true,
+          useAiImage: true,
+          useTts: true,
+          topic: { select: { title: true, skill: { select: { caselCode: true } } } },
+          _count: { select: { pages: true } },
         },
       },
     },
   });
 
-  // Group latest session by storyId
-  const sessionByStoryId = {};
-  for (const session of latestSessions) {
-    if (!sessionByStoryId[session.storyId]) {
-      sessionByStoryId[session.storyId] = session;
-    }
-  }
+  // Lan choi gan nhat cua moi truyen (findMany da sap xep moi nhat truoc -> giu ban dau tien).
+  const sessions = await prisma.playSession.findMany({
+    where: { childId: child.id, storyId: { in: rows.map((r) => r.story.id) } },
+    orderBy: { lastActivityAt: 'desc' },
+    select: { storyId: true, status: true, lastActivityAt: true, currentPage: { select: { pageOrder: true } } },
+  });
+  const latest = new Map();
+  for (const s of sessions) if (!latest.has(s.storyId)) latest.set(s.storyId, s);
 
-  const formattedItems = items.map((item) => {
-    const story = item.story;
-    const session = sessionByStoryId[story.id];
+  const items = rows.map(({ addedAt, story }) => {
+    const session = latest.get(story.id);
     const totalPages = story._count.pages;
-    const currentPageOrder = session?.currentPage?.pageOrder || 0;
-    const isCompleted = session?.status === 'completed';
-
-    let progressPercentage = 0;
-    if (isCompleted) {
-      progressPercentage = 100;
-    } else if (totalPages > 0 && currentPageOrder > 0) {
-      progressPercentage = Math.round((currentPageOrder / totalPages) * 100);
-    }
-
     return {
       storyId: story.id,
       title: story.title,
-      coverImageKey: story.coverImageKey,
       kind: story.kind,
-      status: story.status,
-      useAiImage: story.useAiImage,
-      useTts: story.useTts,
-      addedAt: item.addedAt,
+      length: story.length,
       totalPages,
-      template: story.template,
-      readingProgress: session
-        ? {
-            sessionId: session.id,
-            status: session.status,
-            isCompleted,
-            currentPageOrder,
-            progressPercentage,
-            lastActivityAt: session.lastActivityAt,
-          }
-        : null,
+      useTts: story.useTts,
+      useAiImage: story.useAiImage,
+      topic: { title: story.topic.title, competency: story.topic.skill.caselCode },
+      addedAt,
+      readingProgress: readingProgress(
+        session && { ...session, currentPageOrder: session.currentPage?.pageOrder ?? null },
+        totalPages,
+      ),
     };
   });
 
   return {
-    child: {
-      id: child.id,
-      name: child.name,
-    },
-    items: formattedItems,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit) || 1,
-    },
+    child: { id: child.id, name: child.name },
+    ...buildShelf(items, { search: query.search, status: query.status, competency: query.competency, page, limit }),
   };
 };
 

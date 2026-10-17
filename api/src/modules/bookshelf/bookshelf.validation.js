@@ -4,6 +4,10 @@ const getBookshelf = z.object({
   query: z.object({
     childId: z.string().uuid('Invalid child ID format').optional(),
     search: z.string().trim().optional(),
+    status: z.enum(['all', 'reading', 'completed', 'not_started']).default('all'),
+    competency: z
+      .enum(['all', 'self_awareness', 'self_management', 'social_awareness', 'relationship_skills', 'responsible_decision_making'])
+      .default('all'),
     page: z
       .string()
       .regex(/^\d+$/, 'Page must be an integer')

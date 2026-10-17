@@ -143,6 +143,10 @@ const getChildBookshelf = z.object({
     page: z.string().regex(/^\d+$/).transform(Number).default('1'),
     limit: z.string().regex(/^\d+$/).transform(Number).default('10'),
     search: z.string().trim().optional(),
+    status: z.enum(['all', 'reading', 'completed', 'not_started']).default('all'),
+    competency: z
+      .enum(['all', 'self_awareness', 'self_management', 'social_awareness', 'relationship_skills', 'responsible_decision_making'])
+      .default('all'),
   }),
 });
 
