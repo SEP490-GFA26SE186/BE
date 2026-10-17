@@ -46,7 +46,8 @@ class CloudinaryStorage:
     shape of the other backends; public_id = folder + key, without the extension for
     image/video (Cloudinary stores the format separately).
 
-    Not yet run against a real Cloudinary account; covered by respx tests only.
+    Smoke-tested against a real account on 2026-10-17 (PNG + WAV upload, byte-identical
+    download, overwrite, missing key -> INVALID_INPUT).
     """
 
     def __init__(self, cloud_name: str, api_key: str, api_secret: str, folder: str = "") -> None:

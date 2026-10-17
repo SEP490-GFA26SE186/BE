@@ -64,7 +64,8 @@ curl -s localhost:8000/v1/tts/synthesize -H "X-Internal-Token: $TOKEN"   -H 'Con
 `/tmp/storyweaver-storage` (mất khi container bị xoá). `/health` báo `storage_backend`.
 
 Cloudinary gọi thẳng REST API bằng httpx (không cài SDK), ký request đúng cách SDK chính thức làm (`private_download_url`
-cho tải về). **Chưa chạy thử với tài khoản Cloudinary thật** — mới có test respx.
+cho tải về). Đã chạy thử với tài khoản thật (2026-10-17): upload PNG + WAV, tải lại đúng từng byte, ghi đè, key không có -> `INVALID_INPUT`;
+link Node ký mở được (200), link công khai `.../upload/...` 404, chữ ký sai 401.
 
 ## Bất biến ngân sách thời gian (§3.8)
 
