@@ -169,6 +169,35 @@ Chỉ `up` mới cần truyền file.
 
 ---
 
+## Chạy cả hệ thống với dữ liệu demo (BE + AI + Web)
+
+Ba repo nằm cạnh nhau: `BE/`, `Web/`. Lộ trình tích hợp: [`docs/roadmap-tich-hop.md`](docs/roadmap-tich-hop.md).
+
+```bash
+# 1. BE + AI (repo này) — như mục "Clone về và chạy" ở trên
+docker compose up -d --build
+docker compose exec api npx prisma migrate deploy
+docker compose exec api npm run db:seed          # chủ đề, kỹ năng EQ, platform_settings
+docker compose exec api npm run db:seed:demo     # tài khoản demo (KHÔNG chạy trên production)
+
+# 2. Web (repo Web/, terminal khác)
+cd ../Web
+cp .env.example .env        # VITE_API_URL=/api/v1 — Vite proxy chuyển /api sang localhost:3000
+npm install
+npm run dev                 # http://localhost:5173
+```
+
+`db:seed:demo` tạo đúng các tài khoản trong `Web/docs/DEMO_ACCOUNTS.md` (mật khẩu chung `123456`,
+PIN Kid Mode `1234`), cấp 50 credit cho phụ huynh (một lần, qua sổ cái `credit_grant`), một bé
+"Bin" kèm nhân vật của bé và nhân vật "Bà". Chạy lại nhiều lần không nhân đôi dữ liệu, chỉ đặt lại mật
+khẩu / PIN về mặc định.
+
+AI chữ mặc định là mock (truyện mẫu hợp lệ, không tốn tiền). Muốn AI thật: `LLM_PROVIDER=claude` +
+`ANTHROPIC_API_KEY` trong container, hoặc chạy `ai/` ngoài Docker với `claude_code` trên máy dev —
+xem `ai/README.md` mục "Claude".
+
+---
+
 ## Ai gọi ai
 
 ```
