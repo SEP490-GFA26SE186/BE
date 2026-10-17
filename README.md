@@ -7,8 +7,9 @@ Backend gồm **hai source riêng biệt** trong cùng một repo:
 | `api/` | Node 22 / Express 5 / Prisma | Nghiệp vụ: auth, CRUD, thương mại, webhook, **và BullMQ worker** |
 | `ai/` | Python 3.12 / FastAPI | Sinh nội dung AI (văn bản / ảnh / TTS). Stateless, **không đọc DB** |
 
-Database là **Supabase** (đám mây) nên không có container Postgres. Queue là
-**Redis + BullMQ**, nằm hoàn toàn ở phía Node.
+Database dùng chung là **Supabase** (đám mây). Lúc dev nên chạy **Postgres local trong
+Docker** (`docker-compose.localdb.yml`, xem [DB local](#db-local--khuyên-dùng-khi-dev)) vì
+qua Supabase mỗi truy vấn mất gần 1 giây. Queue là **Redis + BullMQ**, nằm hoàn toàn ở phía Node.
 
 ---
 
@@ -69,6 +70,30 @@ docker compose exec api npx prisma db seed           # eq_skills + topics
 
 Migration **phải** đi qua `DIRECT_URL` (port **5432**). Port 6543 là pgbouncer ở
 chế độ transaction, nó không giữ session nên Prisma migrate sẽ lỗi.
+
+### DB local — khuyên dùng khi dev
+
+Qua pooler Supabase mỗi truy vấn mất ~600–900 ms (editor lưu một trang 3–19 s, có lúc 500
+vì quá thời gian transaction). Postgres chạy cùng máy chỉ ~1 ms, API trả về trong 20–50 ms.
+
+```bash
+# Gộp thêm file localdb (thêm dòng COMPOSE_FILE vào .env cho đỡ gõ — xem mục Chế độ dev)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.localdb.yml up -d
+# Lần đầu, và mỗi khi có migration mới: tạo bảng + chủ đề, kỹ năng EQ, platform_settings + tài khoản demo
+docker compose exec api npm run db:setup
+```
+
+- `DATABASE_URL` / `DIRECT_URL` của api + worker bị file này **ghi đè** sang container
+  `postgres`, nên `.env` vẫn giữ link Supabase được. Bỏ file localdb ra là quay lại Supabase.
+- Cổng 5432 mở ra máy để dùng Prisma Studio / DBeaver
+  (`postgresql://storyweaver:storyweaver@localhost:5432/storyweaver`). Máy đã có Postgres
+  chiếm 5432 thì đặt `POSTGRES_HOST_PORT=5433` trong `.env`.
+- Dữ liệu nằm trong volume `pg-data`. `docker compose down -v` **xoá sạch**, chạy lại
+  `db:setup` là có lại dữ liệu mẫu. Ở đây được dùng `prisma migrate reset` thoải mái.
+- Mỗi người một DB riêng, không thấy dữ liệu test của nhau. Dữ liệu demo cần dùng chung
+  thì thêm vào `api/prisma/seed_demo.js`.
+- Sửa `package.json` (thêm script / dependency) thì phải `up --build`: chế độ dev chỉ
+  mount `src/`, `prisma/`, `scripts/`.
 
 #### Ba điều cần biết khi làm việc với Supabase
 
@@ -143,6 +168,8 @@ Nếu bạn làm dev cả ngày và không muốn gõ lại mỗi lần, thêm d
 ```bash
 # Windows — dấu phân cách là  ;
 COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml
+# … hoặc kèm DB local:
+COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.localdb.yml
 
 # Linux / macOS — dấu phân cách là  :
 COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
