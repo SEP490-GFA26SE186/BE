@@ -16,7 +16,6 @@ const formatCharacterResponse = (character) => {
     parentId: character.parentId,
     childId: character.childId,
     name: character.name,
-    role: character.role,
     appearance: character.appearance,
     portraitImageKey: character.portraitImageKey,
     genPrompt: character.genPrompt,
@@ -67,7 +66,7 @@ const getMaxCharactersQuota = async (parentId) => {
  * @returns {Promise<Object>} Formatted character
  */
 const createCharacter = async (parentId, characterData) => {
-  const { name, role, appearance, childId, portraitImageKey, genPrompt } = characterData;
+  const { name, appearance, childId, portraitImageKey, genPrompt } = characterData;
 
   // 1. If childId provided, verify it belongs to this parent and is active
   if (childId) {
@@ -104,7 +103,6 @@ const createCharacter = async (parentId, characterData) => {
     data: {
       parentId,
       name,
-      role,
       appearance,
       childId: childId || null,
       portraitImageKey: portraitImageKey || null,
@@ -136,10 +134,6 @@ const getCharacters = async (parentId, filter = {}) => {
     parentId,
     deletedAt: null,
   };
-
-  if (filter.role) {
-    where.role = filter.role;
-  }
 
   if (filter.childId) {
     where.childId = filter.childId;
@@ -234,7 +228,6 @@ const updateCharacter = async (parentId, characterId, updateData) => {
     where: { id: characterId },
     data: {
       ...(updateData.name && { name: updateData.name }),
-      ...(updateData.role && { role: updateData.role }),
       ...(updateData.appearance !== undefined && { appearance: updateData.appearance }),
       ...(updateData.childId !== undefined && { childId: updateData.childId }),
       ...(updateData.portraitImageKey !== undefined && { portraitImageKey: updateData.portraitImageKey }),
@@ -321,7 +314,7 @@ const requestPortraitGeneration = async (parentId, characterId, options = {}) =>
 
   const selectedStyle = styleDescriptions[options.style] || styleDescriptions.pixar_3d;
   const promptParts = [
-    `Portrait of a character named ${character.name}, role: ${character.role}`,
+    `Portrait of a character named ${character.name}`,
     `Appearance: ${character.appearance}`,
     `Style: ${selectedStyle}`,
   ];

@@ -10,6 +10,7 @@ import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
 import moderationRoutes from '../../modules/moderation/moderation.routes.js';
 import { plansRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
 import storiesRoutes from '../../modules/stories/stories.routes.js';
+import topicsRoutes from '../../modules/topics/topics.routes.js';
 import walletsRoutes from '../../modules/wallets/wallets.routes.js';
 
 import contentLibraryRouter, {
@@ -40,6 +41,7 @@ router.use('/child-profiles', childrenRoutes);
 router.use('/characters', charactersRoutes);
 router.use('/eq-skills', eqSkillsRoutes);
 router.use('/stories', storiesRoutes);
+router.use('/topics', topicsRoutes);
 router.use('/backgrounds', backgroundsRouter);
 router.use('/ui-audio-assets', uiAudioAssetsRouter);
 router.use('/checklist-items', checklistItemsRouter);

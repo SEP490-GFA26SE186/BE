@@ -17,6 +17,8 @@ const REMOVED = [
 const KEPT = [
   ['GET', '/api/v1/content-library/stats'],
   ['GET', '/api/v1/subscriptions/me'],
+  ['GET', '/api/v1/topics'],
+  ['GET', '/api/v1/characters'],
   ['POST', '/api/v1/content-library/keywords/bulk'],
 ];
 
