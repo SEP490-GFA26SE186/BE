@@ -109,3 +109,14 @@ test('formatStorySummary: dem trang, kem nhan vat, khong co noi dung trang', () 
   assert.equal('pages' in d, false);
   assert.equal('situation' in d, true);
 });
+
+test('formatStorySummary: so diem dung, nang luc CASEL cua chu de, che do AI / tu viet', () => {
+  const s = { ...story(), topic: { id: 'tp1', title: 'Chia sẻ', skill: { caselCode: 'relationship_skills' } }, _count: { pages: 8, checkpoints: 4 } };
+  const d = formatStorySummary(s);
+  assert.equal(d.checkpointCount, 4);
+  assert.deepEqual(d.topic, { id: 'tp1', title: 'Chia sẻ', competency: 'relationship_skills' });
+  assert.equal(d.mode, 'ai');
+  assert.equal(formatStorySummary({ ...s, length: 'custom' }).mode, 'manual');
+  // include cu khong co skill -> competency null, khong vo
+  assert.equal(formatStorySummary({ ...story(), _count: { pages: 1 } }).topic.competency, null);
+});

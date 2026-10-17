@@ -183,9 +183,10 @@ const createStory = async (user, data) => {
   return getDetail(prisma, storyId);
 };
 
-const getStories = async (user, { status, page = 1, limit = 10 } = {}) => {
+const getStories = async (user, { status, reviewed, page = 1, limit = 10 } = {}) => {
   const where = { ownerId: user.id, kind: 'private', deletedAt: null };
   if (status) where.status = status;
+  if (reviewed !== undefined) where.reviewedAt = reviewed === 'true' || reviewed === true ? { not: null } : null;
 
   const [total, stories] = await Promise.all([
     prisma.story.count({ where }),

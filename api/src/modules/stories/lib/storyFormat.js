@@ -6,7 +6,7 @@ const byKey = (key) => (a, b) => a[key] - b[key];
 
 /** Include Prisma du cho formatStoryDetail. */
 export const STORY_DETAIL_INCLUDE = {
-  topic: { select: { id: true, title: true } },
+  topic: { select: { id: true, title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { id: true, name: true } } } },
   scenes: true,
   pages: true,
@@ -15,9 +15,9 @@ export const STORY_DETAIL_INCLUDE = {
 
 /** Include Prisma du cho formatStorySummary. */
 export const STORY_SUMMARY_INCLUDE = {
-  topic: { select: { id: true, title: true } },
+  topic: { select: { id: true, title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { id: true, name: true } } } },
-  _count: { select: { pages: true } },
+  _count: { select: { pages: true, checkpoints: true } },
 };
 
 export function formatCharacters(storyCharacters = []) {
@@ -35,7 +35,9 @@ const formatHeader = (story) => ({
   id: story.id,
   kind: story.kind,
   topicId: story.topicId,
-  topic: story.topic ? { id: story.topic.id, title: story.topic.title } : null,
+  topic: story.topic
+    ? { id: story.topic.id, title: story.topic.title, competency: story.topic.skill?.caselCode ?? null }
+    : null,
   length: story.length,
   title: story.title,
   situation: story.situation,
@@ -95,6 +97,14 @@ export function formatStoryDetail(story) {
   };
 }
 
+// docs/01: "Tu viet" = length custom (cau truc tu do); short/medium/long = "Viet giup toi" (AI).
+const modeOf = (length) => (length === 'custom' ? 'manual' : 'ai');
+
 export function formatStorySummary(story) {
-  return { ...formatHeader(story), pageCount: story._count?.pages ?? 0 };
+  return {
+    ...formatHeader(story),
+    mode: modeOf(story.length),
+    pageCount: story._count?.pages ?? 0,
+    checkpointCount: story._count?.checkpoints ?? 0,
+  };
 }

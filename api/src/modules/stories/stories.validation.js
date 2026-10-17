@@ -52,6 +52,8 @@ const createStory = z.object({
 const getStories = z.object({
   query: z.object({
     status: z.enum(STORY_STATUSES).optional(),
+    // false = chua xem lai (reviewed_at IS NULL), true = da xem lai
+    reviewed: z.enum(['true', 'false']).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10),
   }),
