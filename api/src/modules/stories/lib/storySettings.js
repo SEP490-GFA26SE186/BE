@@ -4,6 +4,9 @@ const LAYOUT_SIZES = ['short', 'medium', 'long'];
 const LIMIT_KEYS = [
   'page_min_words',
   'page_max_words',
+  // Muc AI nham toi; min/max van la bien cung cua validator (ai/docs/01, 2026-10-15)
+  'page_target_min_words',
+  'page_target_max_words',
   'sentence_max_words',
   'question_max_words',
   'option_max_words',
@@ -60,6 +63,15 @@ export function parseStorySettings(rows) {
     if (v === undefined) continue;
     if (!isPosInt(v)) invalid.push(`${key} (cần số nguyên dương)`);
     else limits[k] = v;
+  }
+  // ai/ tu choi request neu thu tu sai (422); bao som o day thanh loi cau hinh cho Admin.
+  const { page_min_words: lo, page_target_min_words: tlo, page_target_max_words: thi,
+    page_max_words: hi } = limits;
+  if ([lo, tlo, thi, hi].every(isPosInt) && !(lo <= tlo && tlo <= thi && thi <= hi)) {
+    invalid.push(
+      'limits.page_target_* (cần page_min_words <= page_target_min_words <= ' +
+      'page_target_max_words <= page_max_words)',
+    );
   }
 
   const customLimits = {};

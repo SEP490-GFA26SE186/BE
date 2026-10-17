@@ -15,13 +15,29 @@ class Settings(BaseSettings):
     # Shared with Node. Required, no default, so a container cannot silently run unauthenticated.
     internal_token: str
 
-    llm_provider: Literal["mock", "gemini"] = "mock"
+    # claude = Anthropic API (key or `ant auth login` profile); claude_code = the logged-in
+    # `claude` CLI driven by claude-agent-sdk, DEV ONLY (README "Claude").
+    llm_provider: Literal["mock", "gemini", "claude", "claude_code"] = "mock"
     tts_provider: Literal["mock"] = "mock"
 
     gemini_api_key: SecretStr | None = None
     gemini_text_model: str | None = None
 
-    llm_timeout_seconds: float = 45
+    # Optional: empty = the SDK's own credential chain (ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN
+    # in the process env, then the active `ant auth login` profile). Unused by claude_code.
+    anthropic_api_key: SecretStr | None = None
+    # API model id for claude; a model id or CLI alias ("sonnet") for claude_code.
+    llm_claude_model: str | None = None
+    # Empty = not sent (model default). Each model accepts a different subset (docs/01).
+    llm_claude_thinking: Literal["disabled", "adaptive", "between_tools"] | None = None
+    llm_claude_effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+    # claude_code only: empty = the SDK looks for `claude` itself (bundled, then PATH).
+    llm_claude_cli_path: str | None = None
+
+    # 20-page story 90.5 s per call on Claude via the CLI, thinking on (docs/01, 2026-10-16) -
+    # a temporary safety margin until the API with thinking off is measured. Node's
+    # AI_TIMEOUT_MS_STORY_TEXT (320 s) must stay > 2 x this + overhead (README, §3.8).
+    llm_timeout_seconds: float = 150
     llm_temperature: float | None = None  # empty env value = SDK default
     # Empty = not sent (model default). Gemini 3 docs strongly advise keeping the default 1.0;
     # set a value only for a model where a lower retry temperature is known to help (docs/01).
@@ -66,6 +82,40 @@ class Settings(BaseSettings):
             if missing:
                 raise ValueError(f"LLM_PROVIDER=gemini requires: {', '.join(missing)}")
         return self
+
+    @model_validator(mode="after")
+    def _claude_rules(self) -> Self:
+        if self.llm_provider not in ("claude", "claude_code"):
+            return self
+        provider = f"LLM_PROVIDER={self.llm_provider}"
+        if not self.llm_claude_model:
+            raise ValueError(f"{provider} requires: LLM_CLAUDE_MODEL")
+        # Current Claude models reject non-default sampling and anthropic 1.x dropped the
+        # argument; failing here beats a 400 on the first story.
+        sampling = [
+            name
+            for name, value in (
+                ("LLM_TEMPERATURE", self.llm_temperature),
+                ("LLM_RETRY_TEMPERATURE", self.llm_retry_temperature),
+            )
+            if value is not None
+        ]
+        if sampling:
+            raise ValueError(f"{provider} does not support: {', '.join(sampling)} (leave empty)")
+        if self.llm_provider == "claude_code" and self.llm_claude_thinking == "between_tools":
+            raise ValueError(
+                "LLM_PROVIDER=claude_code: LLM_CLAUDE_THINKING=between_tools is API-only"
+            )
+        return self
+
+    @property
+    def llm_model(self) -> str:
+        """Model of the active LLM provider, as /health and the scripts report it."""
+        if self.llm_provider == "gemini":
+            return self.gemini_text_model or ""
+        if self.llm_provider in ("claude", "claude_code"):
+            return self.llm_claude_model or ""
+        return "mock-v1"
 
 
 @lru_cache

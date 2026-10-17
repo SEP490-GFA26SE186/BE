@@ -23,7 +23,8 @@ export const NON_RETRYABLE_ERROR_CODES = new Set([
 
 /** Endpoint + timeout mac dinh theo job (ms). env co the ghi de timeout. */
 const JOB_CONFIG = {
-  [AI_JOB.STORY_TEXT]: { endpoint: '/v1/story/generate', timeoutMs: 120_000 },
+  // > 2 x LLM_TIMEOUT_SECONDS (150 s, ai/app/config.py) + overhead: ai/ may retry once inside.
+  [AI_JOB.STORY_TEXT]: { endpoint: '/v1/story/generate', timeoutMs: 320_000 },
   [AI_JOB.CHARACTER_PORTRAIT]: { endpoint: '/v1/images/portrait', timeoutMs: 90_000 },
   [AI_JOB.SCENE_IMAGE]: { endpoint: '/v1/images/scene', timeoutMs: 90_000 },
   [AI_JOB.NARRATION]: { endpoint: '/v1/tts/synthesize', timeoutMs: 30_000 },

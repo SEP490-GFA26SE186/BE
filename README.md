@@ -182,7 +182,7 @@ Client ──> api (Express)          KHÔNG gọi ai/ trực tiếp
              │  đọc DB -> dựng payload -> POST http://ai:8000/v1/story/generate
              │  (ảnh: /v1/images/portrait, /v1/images/scene; giọng: /v1/tts/synthesize)
              ↓
-           ai (FastAPI)  ──> provider (Gemini cho chữ / mock; ảnh + TTS: mock)
+           ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh + TTS: mock)
              │             └──> Supabase Storage (ảnh / audio — ai upload, trả key)
              ↓
            worker ghi kết quả vào DB + chốt / hoàn credit
@@ -296,7 +296,7 @@ BE/
         ├── errors.py            # bảng phân loại lỗi
         ├── api/v1/              # story.py, images.py, tts.py
         ├── core/                # orchestrator, validator, prompt, guards, usage
-        ├── providers/           # llm/ (mock, gemini), image/ (mock), tts/ (mock)
+        ├── providers/           # llm/ (mock, gemini, claude, claude_code), image/ (mock), tts/ (mock)
         └── storage/             # supabase, local (dự phòng)
 ```
 

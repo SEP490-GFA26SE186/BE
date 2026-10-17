@@ -120,6 +120,30 @@ def test_limits_must_be_positive(payload: dict) -> None:
         StoryGenerateRequest.model_validate(payload)
 
 
+@pytest.mark.parametrize("field", ["page_target_min_words", "page_target_max_words"])
+def test_page_target_is_required(payload: dict, field: str) -> None:
+    # The target is a backend number like every other limit (docs/01): no service default.
+    del payload["limits"][field]
+    with pytest.raises(ValidationError):
+        StoryGenerateRequest.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("target_min", "target_max"),
+    [(19, 60), (40, 71), (61, 60)],  # below page_min, above page_max, inverted
+)
+def test_page_target_must_sit_inside_min_max(payload: dict, target_min: int, target_max: int) -> None:
+    payload["limits"].update(page_target_min_words=target_min, page_target_max_words=target_max)
+    with pytest.raises(ValidationError) as exc:
+        StoryGenerateRequest.model_validate(payload)
+    assert "page_target" in str(exc.value)
+
+
+def test_page_target_may_touch_the_bounds(payload: dict) -> None:
+    payload["limits"].update(page_target_min_words=20, page_target_max_words=70)
+    StoryGenerateRequest.model_validate(payload)
+
+
 REFERENCE_CASES = {
     "duplicate_page": lambda p: p["pages"].append("p3"),
     "duplicate_checkpoint_id": lambda p: p["checkpoints"][1].update(id="k1"),

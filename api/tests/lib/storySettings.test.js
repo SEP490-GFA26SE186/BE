@@ -18,6 +18,8 @@ const fullRows = () => [
     { type: 'reflection', after: 10 }] } },
   { key: 'limits.page_min_words', value: 20 },
   { key: 'limits.page_max_words', value: 70 },
+  { key: 'limits.page_target_min_words', value: 40 },
+  { key: 'limits.page_target_max_words', value: 60 },
   { key: 'limits.sentence_max_words', value: 15 },
   { key: 'limits.question_max_words', value: 15 },
   { key: 'limits.option_max_words', value: 12 },
@@ -36,7 +38,8 @@ test('parseStorySettings: bo dong day du -> dung cau truc, limits giu snake_case
   assert.equal(s.layouts.long.checkpoints.length, 5);
   assert.deepEqual(s.layouts.medium.checkpoints[1], { type: 'perspective', after: 4 });
   assert.deepEqual(s.limits, {
-    page_min_words: 20, page_max_words: 70, sentence_max_words: 15,
+    page_min_words: 20, page_max_words: 70, page_target_min_words: 40, page_target_max_words: 60,
+    sentence_max_words: 15,
     question_max_words: 15, option_max_words: 12, hint_max_words: 20,
     feedback_max_words: 25, max_scenes: 4,
   });
@@ -84,4 +87,22 @@ test('loadStorySettings: doc dung cac tien to roi parse', async () => {
   const prefixes = where.OR.filter((c) => typeof c.key === 'object').map((c) => c.key.startsWith);
   assert.deepEqual(prefixes, ['story_layout.', 'limits.', 'custom_limits.']);
   assert.ok(where.OR.some((c) => c.key === 'ai_cost.story_text'));
+});
+
+test('parseStorySettings: muc tieu tieng/trang phai nam trong [min, max] -> loi cau hinh', () => {
+  const rows = fullRows().map((r) =>
+    r.key === 'limits.page_target_max_words' ? { ...r, value: 80 } : r,
+  );
+  assert.throws(() => parseStorySettings(rows), (e) => {
+    assert.ok(e.message.includes('page_target'));
+    return true;
+  });
+});
+
+test('parseStorySettings: thieu muc tieu tieng/trang -> loi, neu ten khoa', () => {
+  const rows = fullRows().filter((r) => r.key !== 'limits.page_target_min_words');
+  assert.throws(() => parseStorySettings(rows), (e) => {
+    assert.ok(e.message.includes('limits.page_target_min_words'));
+    return true;
+  });
 });

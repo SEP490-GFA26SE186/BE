@@ -142,3 +142,52 @@ def test_force_rejected_with_gemini_before_provider_is_built(monkeypatch) -> Non
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "INVALID_INPUT"
     # NB: the provider may be built (FastAPI resolves it); what matters is it is never called.
+
+
+# --- Claude providers -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("provider", "attr"),
+    [("claude", "ClaudeLLMProvider"), ("claude_code", "ClaudeCodeLLMProvider")],
+)
+def test_lifespan_claude_providers_verify_once_and_share(monkeypatch, provider, attr) -> None:
+    RecordingProvider.instances = []
+    RecordingProvider.fail = False
+    monkeypatch.setattr(main_module, attr, RecordingProvider)
+    from tests.providers.test_claude_provider import make_settings as claude_settings
+
+    settings = claude_settings(llm_provider=provider)
+    app.dependency_overrides[get_settings] = lambda: settings
+    with TestClient(app):
+        assert len(RecordingProvider.instances) == 1
+        assert RecordingProvider.instances[0].verified == 1
+        assert app.state.llm_provider is RecordingProvider.instances[0]
+
+
+@pytest.mark.parametrize(
+    ("provider", "attr"),
+    [("claude", "ClaudeLLMProvider"), ("claude_code", "ClaudeCodeLLMProvider")],
+)
+def test_get_llm_provider_builds_claude_providers(monkeypatch, provider, attr) -> None:
+    from types import SimpleNamespace
+
+    from tests.providers.test_claude_provider import make_settings as claude_settings
+
+    built = []
+    monkeypatch.setattr(f"app.deps.{attr}", lambda s: built.append(s) or object())
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+    settings = claude_settings(llm_provider=provider)
+    first = get_llm_provider(request, settings)
+    assert get_llm_provider(request, settings) is first
+    assert built == [settings]
+
+
+def test_health_reports_claude_model() -> None:
+    from tests.providers.test_claude_provider import MODEL
+    from tests.providers.test_claude_provider import make_settings as claude_settings
+
+    app.dependency_overrides[get_settings] = lambda: claude_settings()
+    body = TestClient(app).get("/health").json()
+    assert body["llm_provider"] == "claude"
+    assert body["llm_model"] == MODEL

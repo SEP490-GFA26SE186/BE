@@ -68,9 +68,11 @@ AI_TIMEOUT_MS (Node, theo loại job)  >  2 x LLM_TIMEOUT_SECONDS  +  overhead
 ```
 
 Một lần sinh truyện có thể gọi LLM hai lần (lần đầu + một lần thử lại nội bộ), mỗi lần tối đa
-`LLM_TIMEOUT_SECONDS` = 45s, nên tệ nhất ~90s trong service. Node phải chờ lâu hơn thế, nếu không:
+`LLM_TIMEOUT_SECONDS` = 150s, nên tệ nhất ~300s trong service. Node phải chờ lâu hơn thế, nếu không:
 Node abort giữa chừng -> `TIMEOUT` retryable -> BullMQ chạy lại từ đầu -> ba lần sinh truyện đầy đủ
-bị vứt đi, tiền Gemini mất thật, job vẫn failed. Timeout của Node theo loại job: `story_text` 120s,
+bị vứt đi, tiền provider mất thật, job vẫn failed. 150s (45s -> 90s -> 150s) vì truyện `custom` 20 trang
+đo được 90,5s một lời gọi trên Claude qua CLI, thinking bật (2026-10-16, `docs/01`) — biên an toàn tạm,
+hạ lại nếu API tắt thinking đo nhanh hơn. Timeout của Node theo loại job: `story_text` 320s,
 `character_portrait` 90s, `scene_image` 90s, `narration` 30s. **Không cưỡng chế được bằng code** (hai
 process); chỉ có tài liệu và review. Khi đổi `LLM_TIMEOUT_SECONDS` hay timeout Node, đối chiếu cả hai
 phía (và `BE/docs/contracts/ai-service.md` §6).
@@ -89,6 +91,76 @@ Gemini **chỉ dùng cho chữ**; sinh ảnh dùng model mã nguồn mở (`docs
 **TẠM DỪNG, mới xong một phần** (xem `docs/01-decisions.md`, mục "Đang mở"): chỉ sample truyện chuẩn
 đo được; sample xung đột mạnh và truyện `custom` dài chưa đo (model quá tải 503). `LLM_RETRY_TEMPERATURE`
 mặc định **không đặt** (không gửi nhiệt độ cho lần thử lại).
+
+## Claude: hai provider để so sánh với Gemini
+
+Thêm 2026-10-15 để đo truyện 20 trang khi Gemini đang quá tải 503 (`docs/01`). **Gemini vẫn là mặc
+định.** Cả hai provider cắm vào cùng port `LLMProvider`, nên orchestrator, validator, chốt chặn tên
+thật và hợp đồng với Node không đổi gì.
+
+| | `LLM_PROVIDER=claude` | `LLM_PROVIDER=claude_code` |
+|---|---|---|
+| File | `app/providers/llm/claude.py` | `app/providers/llm/claude_code.py` |
+| Gói | `anthropic==1.11.0` (dependency chính) | `claude-agent-sdk==0.2.163` (extra `.[claude-code]`) |
+| Xác thực | `ANTHROPIC_API_KEY` trong `ai/.env`; trống thì SDK tự tìm: biến môi trường, rồi profile `ant auth login` | CLI `claude` đang đăng nhập (`claude login`, gói Pro/Max). Không cần key |
+| Tính tiền | Theo token, vào org/workspace của key/profile | Theo hạn mức gói subscription; `estimated_cost_micros` không có ý nghĩa |
+| Dùng ở đâu | Dev, và deploy được (container cần key: không có profile) | **Chỉ máy dev.** Image Docker không cài SDK, provider báo lỗi ngay lúc khởi động |
+| Kiểm lúc khởi động | `models.retrieve` (không sinh, không tính tiền): sai model, thiếu credential đều dừng ngay | Có SDK và có CLI. Không gọi model, nên model alias sai hay CLI chưa login chỉ lộ ở truyện đầu |
+
+Biến (đặt tên `LLM_CLAUDE_*` chứ không `CLAUDE_*`: Claude Code tự export `CLAUDE_EFFORT`,
+`CLAUDE_CODE_*` cho mọi tiến trình con, chạy service trong terminal Claude Code sẽ lặng lẽ nhận nhầm):
+`LLM_CLAUDE_MODEL` (bắt buộc; id model, hoặc alias CLI như `sonnet` cho `claude_code`),
+`LLM_CLAUDE_THINKING` (`disabled | adaptive | between_tools`, trống = không gửi), `LLM_CLAUDE_EFFORT`
+(`low`..`max`, trống = không gửi), `LLM_CLAUDE_CLI_PATH` (chỉ `claude_code`).
+
+Khác Gemini, đã tra trong source SDK đã cài:
+- **Nhiệt độ:** anthropic 1.x bỏ hẳn tham số `temperature`, các model Claude hiện tại trả 400 nếu gửi
+  giá trị khác mặc định. `Settings` từ chối `LLM_TEMPERATURE` / `LLM_RETRY_TEMPERATURE` khi chọn Claude.
+- **Thinking:** không phải model nào cũng tắt được. Opus 5.5 không nhận `disabled` (chỉ hạ `effort`);
+  Sonnet 5.5 tắt bằng `between_tools`; Haiku 5.5 nhận `disabled` ở effort `high` trở xuống. Vì vậy
+  provider gửi đúng chuỗi trong `LLM_CLAUDE_THINKING`, không tự quy đổi. Bật thinking thì đặt
+  `LLM_THINKING_BUDGET` > 0: token thinking nằm trong `output_tokens` và ăn vào trần.
+- **Schema:** dùng `anthropic.transform_schema(LlmStoryOutput)` (bản strict SDK tự dựng:
+  `additionalProperties: false`, default chuyển vào description). Không tự viết bộ chuyển.
+- **Retry SDK:** `max_retries=0` (mặc định SDK là 2), giống `attempts=1` bên Gemini.
+- **Token vào** = `input_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens`.
+- **`stop_reason`:** `end_turn` -> `STOP`, `max_tokens` -> `MAX_TOKENS` (orchestrator nâng trần, thử
+  lại), `refusal` -> `SAFETY_BLOCKED`.
+- **`TOKENS_PER_WORD=2.8`** đo trên tokenizer Gemini; chưa đo cho Claude.
+
+Riêng `claude_code` (theo khuôn `d:/crawler_flatform`, `core/adapters/claude_sdk_tools.py`):
+- SDK không tự gọi model mà chạy CLI `claude` như tiến trình con, mỗi lời gọi một tiến trình mới
+  (vài giây chi phí cố định). CLI bị khoá: `tools=[]`, `allowed_tools=[]`, `mcp_servers={}`,
+  `setting_sources=[]`, system prompt riêng.
+- Structured output qua `--json-schema` của CLI: một lời gọi tool ép buộc rồi CLI tự kiểm, **không**
+  phải constrained decoding. Schema đi bằng một đối số dòng lệnh (Windows giới hạn 32.767 ký tự cả
+  dòng); schema truyện chỉ vài KB nên không chạm trần.
+- `query()` chỉ nhận một prompt: lần thử lại gộp các lượt cũ vào trước, đánh dấu `<turn role=...>`.
+- Trần token gửi qua env `CLAUDE_CODE_MAX_OUTPUT_TOKENS` của CLI.
+- SDK 0.2.163 ghim CLI `2.1.286` (`claude_agent_sdk._cli_version`); wheel Windows không kèm CLI nên
+  dùng `claude` trong PATH. Lệch phiên bản có thể ra lỗi khó hiểu
+  (`Claude Code returned an error result: success`); khi đó đặt `LLM_CLAUDE_CLI_PATH` trỏ đúng bản.
+- Không bao giờ dùng cho phụ huynh thật: gói subscription dành cho dùng cá nhân.
+- **Windows: phải trỏ tới `claude.exe` thật.** PyPI không có wheel Windows cho `claude-agent-sdk`
+  (chỉ macOS/Linux kèm CLI), còn `claude` trong PATH của bản npm là shim `claude.CMD` mà SDK từ chối
+  chạy (cmd.exe chèn lệnh được qua đối số). Đặt `LLM_CLAUDE_CLI_PATH=%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe`;
+  `verify_model()` báo lỗi ngay lúc khởi động nếu chỉ tìm thấy file `.cmd`/`.bat`.
+- **`strict_mcp_config=True` là bắt buộc:** thiếu nó, CLI vẫn nạp connector claude.ai của tài khoản
+  (đo 2026-10-15: có cả tool ghi Claude Docs) dù `mcp_servers={}`.
+- **Thinking trên Sonnet 5.5 không tắt được qua CLI** (đo 2026-10-15, alias `sonnet` ->
+  `claude-sonnet-5-5`): gửi `disabled` vẫn ra `ThinkingBlock`. Thinking lấp đầy
+  `CLAUDE_CODE_MAX_OUTPUT_TOKENS` ở mỗi lượt, CLI tự hỏi lại 3 lần rồi trả "exceeded the N output
+  token maximum" (provider đổi thành `MAX_TOKENS` -> `OUTPUT_TRUNCATED`). Truyện 8 trang: 4 x 3378 =
+  13.512 token, ~100 giây, không có chữ nào.
+
+```bash
+.venv/Scripts/python -m pip install -e ".[claude-code]"    # chỉ khi dùng claude_code
+.venv/Scripts/python scripts/try_story.py --mode pipeline --provider claude_code --model sonnet \
+    --timeout 300 --sample scripts/try_story_samples/custom_long.json --confirm
+```
+
+`--timeout` chỉ đổi cho lần chạy script; `LLM_TIMEOUT_SECONDS=150` của service vẫn gắn với timeout Node
+(§3.8).
 
 ## Vì sao test Gemini bằng client tiêm chứ không `respx` (§10.3)
 

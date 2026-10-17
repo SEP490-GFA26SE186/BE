@@ -69,6 +69,8 @@ def render_story_prompt(req: StoryGenerateRequest, settings: Settings) -> str:
         checkpoints=checkpoints,
         page_min_words=lim.page_min_words,
         page_max_words=lim.page_max_words,
+        page_target_min_words=lim.page_target_min_words,
+        page_target_max_words=lim.page_target_max_words,
         sentence_max_words=lim.sentence_max_words,
         question_max_words=lim.question_max_words,
         option_max_words=lim.option_max_words,

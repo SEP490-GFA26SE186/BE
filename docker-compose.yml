@@ -94,12 +94,19 @@ services:
       context: ./ai
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      # Chu (mock | gemini) va giong doc (mock; vieneu o M5) chon rieng. Anh chi co mock toi M4b.
+      # Chu (mock | gemini | claude; claude_code chi chay ngoai Docker) va giong doc (mock; vieneu o M5) chon rieng. Anh chi co mock toi M4b.
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       TTS_PROVIDER: ${TTS_PROVIDER:-mock}
       # Chi can khi LLM_PROVIDER=gemini; model phai ton tai (kiem luc khoi dong).
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-}
+      # Chi khi LLM_PROVIDER=claude (Anthropic API). Trong container khong co profile
+      # `ant auth login`, nen phai co ANTHROPIC_API_KEY. LLM_PROVIDER=claude_code (CLI, dev)
+      # khong chay duoc trong image nay: image khong cai claude-agent-sdk.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_CLAUDE_MODEL: ${LLM_CLAUDE_MODEL:-}
+      LLM_CLAUDE_THINKING: ${LLM_CLAUDE_THINKING:-}
+      LLM_CLAUDE_EFFORT: ${LLM_CLAUDE_EFFORT:-}
       # Tuy chon. De trong = mac dinh trong ai/app/config.py (Settings bo qua bien rong).
       # Bat bien: AI_TIMEOUT_MS_STORY_TEXT (worker) > 2 x LLM_TIMEOUT_SECONDS + overhead.
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-}

@@ -53,7 +53,9 @@ def test_scene_description_setting_changes_result(settings) -> None:
 def test_exact_integer_is_not_bumped_by_float_noise(settings) -> None:
     # 1 page x 50 words, 1 scene x 0 words -> 50 x 2.0 x 1.3; in floats that is
     # 130.00000000000003, and a naive ceil would give 131.
-    frame = make_frame("custom", pages=1, limits=make_limits(page_max_words=50, max_scenes=1))
+    frame = make_frame("custom", pages=1, limits=make_limits(
+        page_max_words=50, page_target_max_words=50, max_scenes=1
+    ))
     s = settings.model_copy(update={"scene_description_max_words": 0})
     assert estimate_max_output_tokens(frame, s) == 130
 

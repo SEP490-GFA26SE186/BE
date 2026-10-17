@@ -35,7 +35,7 @@ Request:
 | `tone` | `gentle` \| `playful` | |
 | `pages` | `[page_id]` | Theo thứ tự, không trùng |
 | `checkpoints` | `[{id, type, after, target?}]` | `after` thuộc `pages`, tối đa 1 điểm dừng mỗi trang; `target` là token đã khai, bắt buộc với `emotion_other`, `perspective` |
-| `limits` | object | **Bắt buộc**, không có mặc định: `page_min_words`, `page_max_words`, `sentence_max_words`, `question_max_words`, `option_max_words`, `hint_max_words`, `feedback_max_words`, `max_scenes` (docs 03) |
+| `limits` | object | **Bắt buộc**, không có mặc định: `page_min_words`, `page_max_words`, `page_target_min_words`, `page_target_max_words` (mục tiêu đưa vào prompt; phải `min <= target_min <= target_max <= max`, sai thì `INVALID_INPUT`), `sentence_max_words`, `question_max_words`, `option_max_words`, `hint_max_words`, `feedback_max_words`, `max_scenes` (docs 03) |
 | `forbidden_terms` | `[string]` | Tên thật |
 | `blocked_keywords` | `[{keyword, severity}]` | `severity`: `warn` \| `block` |
 | `__force` | optional | Xem mục `__force` |

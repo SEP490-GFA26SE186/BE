@@ -8,6 +8,8 @@ from app.schemas.story import StoryGenerateRequest
 _LIMITS: dict[str, int] = {
     "page_min_words": 20,
     "page_max_words": 70,
+    "page_target_min_words": 40,
+    "page_target_max_words": 60,
     "sentence_max_words": 15,
     "question_max_words": 15,
     "option_max_words": 12,

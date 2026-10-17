@@ -1,6 +1,6 @@
 # CLAUDE.md — StoryWeaver AI · AI Core Service
 
-Service Python **stateless** sinh nội dung truyện tương tác cho trẻ 5–8 tuổi: chữ (Gemini),
+Service Python **stateless** sinh nội dung truyện tương tác cho trẻ 5–8 tuổi: chữ (Claude; Gemini còn trong code),
 tranh (adapter nhiều model), giọng đọc tiếng Việt (VieNeu-TTS). Backend Node.js gọi service
 này qua HTTP nội bộ.
 
@@ -40,7 +40,9 @@ service chỉ kiểm tra lại); chấm điểm EQ.
 ## Stack
 
 - Python 3.12+, FastAPI, Pydantic v2, pydantic-settings, httpx
-- Gemini qua SDK `google-genai` — **đọc tài liệu SDK hiện hành** trước khi viết, không dựa vào
+- Chữ: Claude qua `anthropic` (production, `LLM_PROVIDER=claude`) và `claude-agent-sdk` (chỉ dev,
+  `claude_code`) — README "Claude". Gemini (`google-genai`) giữ lại làm lựa chọn cấu hình.
+  Với mọi SDK: **đọc tài liệu / source SDK hiện hành** trước khi viết, không dựa vào
   trí nhớ về tên hàm
 - VieNeu-TTS 0.3B GGUF (Apache-2.0), chạy CPU — **đọc README repo VieNeu-TTS** để lấy API thật
 - ffmpeg (WAV → AAC mono), Pillow (chuẩn hoá WebP)
@@ -57,7 +59,7 @@ app/
   schemas/    common.py  story.py  llm.py  images.py  tts.py   # request/response theo endpoint
   prompts/    story.v1.md              # image_style.v1.md: M4
   providers/
-    llm/      base.py  mock.py  gemini.py
+    llm/      base.py  mock.py  gemini.py  claude.py  claude_code.py   # claude*: README "Claude"
     image/    base.py  mock.py         # M4: port.py registry.py adapters/ decorators/ safety/
     tts/      base.py  mock.py         # M5: vieneu.py
   storage/    __init__.py  local.py  supabase.py
@@ -85,6 +87,8 @@ bị chuyển chỗ, launcher trỏ sai đường dẫn).
 .venv/Scripts/python -m uvicorn app.main:app --reload      # chạy dev, mặc định mọi provider là mock
 .venv/Scripts/python -m pytest                             # phải xanh trước khi chuyển mốc
 .venv/Scripts/python scripts/try_story.py --confirm        # gọi Gemini thật, KHÔNG chạy trong pytest
+.venv/Scripts/python scripts/try_story.py --mode pipeline --provider claude_code --model sonnet \
+    --thinking-budget 12000 --timeout 300 --confirm        # Claude qua CLI dev; cần LLM_CLAUDE_CLI_PATH, LLM_CLAUDE_EFFORT=low
 ```
 
 ## Quy tắc bắt buộc
@@ -92,7 +96,7 @@ bị chuyển chỗ, launcher trỏ sai đường dẫn).
 - **Mock là mặc định** cho chữ, ảnh, giọng đọc. Test **không bao giờ** gọi mạng.
 - **Không tự thay đổi cấu trúc truyện.** `page_id`, `checkpoint_id` vào thế nào ra thế ấy.
   Không thêm/bớt trang, không đổi vị trí hay kiểu điểm dừng.
-- **Gemini không bao giờ thấy tên thật.** Chạy `assert_no_forbidden_terms` trước mọi lời gọi ra
+- **Provider chữ (Claude, Gemini) không bao giờ thấy tên thật.** Chạy `assert_no_forbidden_terms` trước mọi lời gọi ra
   ngoài, chỉ trên các trường phụ huynh nhập (`situation`, `characters[].description`; ảnh: các
   mô tả). **Không** kiểm output (xem `docs/04-ai-pipeline.md`, spec §3.1).
 - **AI chỉ đề xuất đáp án đúng**; vai của từng phương án giải quyết tình huống do **khung** quy
@@ -102,7 +106,7 @@ bị chuyển chỗ, launcher trỏ sai đường dẫn).
 - **Không log** tên thật, chữ gửi vào TTS, dữ liệu ảnh, API key.
 - **Không để ảnh từ model không có bộ lọc an toàn sẵn đi ra ngoài** mà chưa qua `SafetyCheck`.
 - **Không thêm database, hàng đợi hay logic tiền** vào service này.
-- Tài liệu chính thức (Gemini SDK, VieNeu-TTS, ComfyUI) khác với docs → **tin tài liệu chính
+- Tài liệu chính thức (Anthropic / Gemini SDK, VieNeu-TTS, ComfyUI) khác với docs → **tin tài liệu chính
   thức**, ghi chú khác biệt vào README.
 - Gặp quyết định chưa có trong `docs/01-decisions.md` → **dừng lại hỏi**, không tự chọn.
 

@@ -8,6 +8,14 @@ os.environ["INTERNAL_TOKEN"] = "test-token"
 os.environ["LLM_PROVIDER"] = "mock"
 os.environ["TTS_PROVIDER"] = "mock"
 os.environ.pop("GEMINI_API_KEY", None)
+for _name in (
+    "ANTHROPIC_API_KEY",
+    "LLM_CLAUDE_MODEL",
+    "LLM_CLAUDE_THINKING",
+    "LLM_CLAUDE_EFFORT",
+    "LLM_CLAUDE_CLI_PATH",
+):
+    os.environ.pop(_name, None)
 
 # Even a stray un-overridden get_settings() must never read ai/.env (it holds the real key).
 from app.config import Settings  # noqa: E402

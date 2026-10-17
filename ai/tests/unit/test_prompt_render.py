@@ -42,6 +42,8 @@ from tests.fixtures.frames import make_frame, make_limits  # noqa: E402
 _ODD_LIMITS = make_limits(
     page_min_words=23,
     page_max_words=91,
+    page_target_min_words=53,
+    page_target_max_words=71,
     sentence_max_words=37,
     question_max_words=31,
     option_max_words=29,
@@ -68,7 +70,7 @@ def test_render_limits_come_from_request(settings) -> None:
     default = render_story_prompt(make_frame("medium"), settings)
     odd = render_story_prompt(make_frame("medium", limits=_ODD_LIMITS), settings)
     assert default != odd
-    for n in (23, 91, 37, 31, 29, 43, 47):
+    for n in (23, 91, 53, 71, 37, 31, 29, 43, 47):
         assert re.search(rf"\b{n}\b", odd)
     # None of the docs/03 defaults is hard-coded in the template text.
     for n in (70, 60, 40, 15, 12, 20, 25):
@@ -132,3 +134,18 @@ def test_retry_turn_lists_non_warn_details_and_reminds_ids() -> None:
     assert "- chi tiết DOWNGRADE p3" in lines
     assert "chi tiết WARN p5" not in turn
     assert lines[-1] == "Giữ nguyên mọi page_id, checkpoint_id và kiểu điểm dừng."
+
+
+def test_render_states_the_page_target_as_the_aim(settings) -> None:
+    # Measured 2026-10-15: told only "20 to 70", models wrote ~31-35 words a page.
+    prompt = render_story_prompt(make_frame("medium", limits=_ODD_LIMITS), settings)
+    length_line = next(ln for ln in prompt.splitlines() if "53" in ln and "71" in ln)
+    assert "nhắm" in length_line.lower()
+
+
+def test_render_keeps_the_parent_story_main_events(settings) -> None:
+    # Decided 2026-10-15: keep what the parent told (the child should recognise it), soften
+    # only dangerous or frightening details - no more "inspiration only".
+    prompt = render_story_prompt(make_frame("medium"), settings)
+    assert "làm cảm hứng" not in prompt
+    assert "diễn biến chính" in prompt

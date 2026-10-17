@@ -10,6 +10,8 @@ from app.api import health
 from app.api.v1 import images, story, tts
 from app.config import get_settings
 from app.errors import NON_RETRYABLE, STATUS_BY_CODE, AiError, ErrorCode
+from app.providers.llm.claude import ClaudeLLMProvider
+from app.providers.llm.claude_code import ClaudeCodeLLMProvider
 from app.providers.llm.gemini import GeminiLLMProvider
 from app.schemas.common import ErrorBody, ErrorDetail, Usage
 
@@ -77,17 +79,23 @@ def install_error_handlers(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Fail at startup, not on the first request, when the Gemini model is unusable.
+    """Fail at startup, not on the first request, when the real LLM provider is unusable.
 
-    Only for LLM_PROVIDER=gemini; mock (the default, and all of pytest) does nothing here.
-    The verified provider is kept on `app.state` and shared by every request.
+    Mock (the default, and all of pytest) does nothing here. The verified provider is kept on
+    `app.state` and shared by every request.
     """
     settings = app.dependency_overrides.get(get_settings, get_settings)()
-    if settings.llm_provider == "gemini":
-        provider = GeminiLLMProvider(settings)
+    real_providers = {
+        "gemini": GeminiLLMProvider,
+        "claude": ClaudeLLMProvider,
+        "claude_code": ClaudeCodeLLMProvider,
+    }
+    provider_cls = real_providers.get(settings.llm_provider)
+    if provider_cls is not None:
+        provider = provider_cls(settings)
         await provider.verify_model()
         app.state.llm_provider = provider
-        logger.info("gemini model check ok: %s", settings.gemini_text_model)
+        logger.info("%s model check ok: %s", settings.llm_provider, settings.llm_model)
     yield
 
 

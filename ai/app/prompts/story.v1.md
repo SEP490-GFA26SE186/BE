@@ -10,7 +10,11 @@ Bài học: $topic_title
 Năng lực CASEL: $competency
 Hướng dẫn của chuyên gia: $guidance
 Giọng kể: $tone
-Chuyện thật phụ huynh kể (làm cảm hứng, không chép nguyên văn): $situation
+Chuyện thật phụ huynh kể: $situation
+
+Giữ đúng diễn biến chính của chuyện thật (ai làm gì, theo thứ tự nào) để trẻ nhận ra chuyện của
+mình; viết lại bằng lời kể cho trẻ, không chép nguyên văn. Chỉ được làm nhẹ chi tiết nguy hiểm hoặc
+đáng sợ (bị thương nặng, máu, đánh nhau); khi làm nhẹ, giữ lại hành động và cảm xúc của nhân vật.
 
 Bối cảnh là gia đình Việt Nam: ông bà, anh chị em, cô giáo, bữa cơm. Câu ngắn, mỗi câu một ý, từ
 ngữ trẻ 5–8 tuổi hiểu. Lựa chọn của nhân vật phải cụ thể, làm được ngay.
@@ -71,7 +75,9 @@ Chỉ viết các trường được nêu cho từng kiểu, không thêm trư�
 
 # Ràng buộc độ dài (đếm theo tiếng, tách theo khoảng trắng; {NV1} tính là một tiếng)
 
-- Mỗi trang: từ $page_min_words đến $page_max_words tiếng.
+- Mỗi trang: nhắm khoảng $page_target_min_words–$page_target_max_words tiếng; tuyệt đối không dưới
+  $page_min_words và không quá $page_max_words tiếng. Trang đủ dài để kể trọn một bước của câu chuyện:
+  việc gì xảy ra, nhân vật làm gì, cảm thấy ra sao.
 - Mỗi câu: tối đa $sentence_max_words tiếng.
 - Câu hỏi (question): tối đa $question_max_words tiếng.
 - Phương án (text của option): tối đa $option_max_words tiếng.

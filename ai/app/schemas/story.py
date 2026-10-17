@@ -68,12 +68,30 @@ class Limits(StrictModel):
 
     page_min_words: PositiveInt
     page_max_words: PositiveInt
+    # What the prompt asks the model to aim for; min/max stay the validator's hard bounds.
+    # Told only "min to max", models wrote near the minimum (docs/01, 2026-10-15).
+    page_target_min_words: PositiveInt
+    page_target_max_words: PositiveInt
     sentence_max_words: PositiveInt
     question_max_words: PositiveInt
     option_max_words: PositiveInt
     hint_max_words: PositiveInt
     feedback_max_words: PositiveInt
     max_scenes: PositiveInt
+
+    @model_validator(mode="after")
+    def _page_target_inside_bounds(self) -> "Limits":
+        if not (
+            self.page_min_words
+            <= self.page_target_min_words
+            <= self.page_target_max_words
+            <= self.page_max_words
+        ):
+            raise ValueError(
+                "need page_min_words <= page_target_min_words <= page_target_max_words "
+                "<= page_max_words"
+            )
+        return self
 
 
 class BlockedKeyword(StrictModel):

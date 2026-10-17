@@ -23,7 +23,8 @@ def test_missing_internal_token_fails(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_defaults() -> None:
     s = make(internal_token="t")
-    assert s.llm_timeout_seconds == 45
+    # 20-page story measured at 90.5 s per call on Claude (docs/01); Node waits 320 s for two.
+    assert s.llm_timeout_seconds == 150
     assert s.llm_thinking_budget == 0
     assert s.llm_truncation_retry_factor == 1.5
     assert s.llm_provider == "mock"
@@ -73,3 +74,75 @@ def test_gemini_ok_when_configured() -> None:
         gemini_text_model="m",
     )
     assert s.gemini_text_model == "m"
+
+
+# --- Claude (API) and Claude Code (CLI subscription) ------------------------------------
+
+
+@pytest.mark.parametrize("provider", ["claude", "claude_code"])
+def test_claude_providers_require_model(provider: str) -> None:
+    with pytest.raises(ValidationError) as exc:
+        make(internal_token="t", llm_provider=provider)
+    assert "LLM_CLAUDE_MODEL" in str(exc.value)
+
+
+def test_claude_api_key_is_optional_and_never_leaks() -> None:
+    # No key: the SDK resolves credentials itself (env vars, then an `ant auth login` profile).
+    s = make(internal_token="t", llm_provider="claude", llm_claude_model="m")
+    assert s.anthropic_api_key is None
+
+    with pytest.raises(ValidationError) as exc:
+        make(internal_token="t", llm_provider="claude", anthropic_api_key="sk-ant-sekret-123")
+    assert "sk-ant-sekret-123" not in str(exc.value)
+
+
+@pytest.mark.parametrize("provider", ["claude", "claude_code"])
+@pytest.mark.parametrize("field", ["llm_temperature", "llm_retry_temperature"])
+def test_claude_providers_reject_temperature(provider: str, field: str) -> None:
+    # Current Claude models reject non-default sampling, and anthropic 1.x has no such argument.
+    with pytest.raises(ValidationError) as exc:
+        make(internal_token="t", llm_provider=provider, llm_claude_model="m", **{field: 0.4})
+    assert field.upper() in str(exc.value)
+
+
+def test_llm_claude_thinking_and_effort_default_to_not_sent() -> None:
+    s = make(internal_token="t", llm_provider="claude", llm_claude_model="m")
+    assert s.llm_claude_thinking is None
+    assert s.llm_claude_effort is None
+
+
+def test_llm_claude_thinking_and_effort_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_CLAUDE_THINKING", "between_tools")
+    monkeypatch.setenv("LLM_CLAUDE_EFFORT", "low")
+    s = make(internal_token="t", llm_provider="claude", llm_claude_model="m")
+    assert s.llm_claude_thinking == "between_tools"
+    assert s.llm_claude_effort == "low"
+
+    monkeypatch.setenv("LLM_CLAUDE_EFFORT", "turbo")
+    with pytest.raises(ValidationError):
+        make(internal_token="t", llm_provider="claude", llm_claude_model="m")
+
+
+def test_claude_code_rejects_between_tools() -> None:
+    # The Agent SDK's ThinkingConfig only knows adaptive | enabled | disabled.
+    with pytest.raises(ValidationError) as exc:
+        make(
+            internal_token="t",
+            llm_provider="claude_code",
+            llm_claude_model="sonnet",
+            llm_claude_thinking="between_tools",
+        )
+    assert "LLM_CLAUDE_THINKING" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    ("provider", "extra", "expected"),
+    [
+        ("mock", {}, "mock-v1"),
+        ("gemini", {"gemini_api_key": "k", "gemini_text_model": "g-model"}, "g-model"),
+        ("claude", {"llm_claude_model": "c-model"}, "c-model"),
+        ("claude_code", {"llm_claude_model": "sonnet"}, "sonnet"),
+    ],
+)
+def test_llm_model_reports_the_active_model(provider: str, extra: dict, expected: str) -> None:
+    assert make(internal_token="t", llm_provider=provider, **extra).llm_model == expected

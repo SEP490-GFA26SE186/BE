@@ -7,6 +7,8 @@ from app.errors import AiError
 from app.providers.image.base import ImageProvider
 from app.providers.image.mock import MockImageProvider
 from app.providers.llm.base import LLMProvider
+from app.providers.llm.claude import ClaudeLLMProvider
+from app.providers.llm.claude_code import ClaudeCodeLLMProvider
 from app.providers.llm.gemini import GeminiLLMProvider
 from app.providers.llm.mock import MockLLMProvider
 from app.providers.tts.base import TTSProvider
@@ -46,8 +48,17 @@ def get_image_provider() -> ImageProvider:
     return MockImageProvider()
 
 
+def build_llm_provider(settings: Settings) -> LLMProvider:
+    """The real (non-mock) provider named by LLM_PROVIDER."""
+    if settings.llm_provider == "claude":
+        return ClaudeLLMProvider(settings)
+    if settings.llm_provider == "claude_code":
+        return ClaudeCodeLLMProvider(settings)
+    return GeminiLLMProvider(settings)
+
+
 def get_llm_provider(request: Request, settings: SettingsDep) -> LLMProvider:
-    """One shared Gemini provider per app (kept on `app.state`).
+    """One shared real provider per app (kept on `app.state`).
 
     `lifespan` creates and verifies it. The lazy branch only serves apps run without
     lifespan. The SDK client must live as long as the app: a garbage-collected async
@@ -59,7 +70,7 @@ def get_llm_provider(request: Request, settings: SettingsDep) -> LLMProvider:
     state = request.app.state
     provider = getattr(state, "llm_provider", None)
     if provider is None:
-        provider = GeminiLLMProvider(settings)
+        provider = build_llm_provider(settings)
         state.llm_provider = provider
     return provider
 

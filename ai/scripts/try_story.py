@@ -7,7 +7,7 @@ Spec 2.1 / 9.3. NOT part of pytest and NOT wired to /v1/story/generate.
     .venv/Scripts/python scripts/try_story.py --confirm --sample scripts/try_story_samples/custom_long.json
 
 Needs GEMINI_API_KEY (ai/.env) and GEMINI_TEXT_MODEL (env or --model). LLM_PROVIDER is
-ignored: this script always uses GeminiLLMProvider. The key is never printed or written.
+ignored: `--provider` picks the provider (default gemini). The key is never printed or written.
 
 `--mode raw` (default): one call per sample, no validator, no retry.
 `--mode pipeline`: `generate_story` (guard, validator, at most one retry), up to 2 calls per
@@ -20,6 +20,15 @@ attempt (codes + target ids, no story text) and the measured tokens per word.
 
 `--provider mock` (pipeline only) uses MockLLMProvider: no key, no network. `--force` is
 mock-only (the `__force` flag of the request).
+
+`--provider claude` / `--provider claude_code` (pipeline only) run the same pipeline on Claude:
+claude = Anthropic API (ANTHROPIC_API_KEY in ai/.env, or an `ant auth login` profile; billed per
+token), claude_code = the logged-in `claude` CLI (subscription, dev only, needs the
+`.[claude-code]` extra). Both need LLM_CLAUDE_MODEL (env or --model). `--timeout` overrides
+LLM_TIMEOUT_SECONDS for this run only - the service default stays tied to Node's timeout.
+
+    .venv/Scripts/python scripts/try_story.py --mode pipeline --provider claude_code \
+        --model sonnet --timeout 300 --sample scripts/try_story_samples/custom_long.json --confirm
 
 Output: out/try_story/<timestamp>/<sample>.raw.json (raw mode: SDK response) or
 <sample>.response.json (pipeline mode: mapped response) - story text included, out/ is
@@ -52,6 +61,8 @@ from app.core.story import (  # noqa: E402
 from app.core.text_utils import count_words  # noqa: E402
 from app.errors import AiError  # noqa: E402
 from app.providers.llm.base import LLMProvider, LLMResult, StoryLLMCall, Turn  # noqa: E402
+from app.providers.llm.claude import ClaudeLLMProvider  # noqa: E402
+from app.providers.llm.claude_code import ClaudeCodeLLMProvider  # noqa: E402
 from app.providers.llm.gemini import GeminiLLMProvider, _build_client  # noqa: E402
 from app.providers.llm.mock import MockLLMProvider  # noqa: E402
 from app.schemas.llm import LlmStoryOutput  # noqa: E402
@@ -114,15 +125,19 @@ def _use_mock(args: argparse.Namespace) -> bool:
 
 
 def _build_settings(args: argparse.Namespace) -> Settings:
+    provider = getattr(args, "provider", "gemini")
     overrides: dict[str, Any] = {
-        "llm_provider": "mock" if _use_mock(args) else "gemini",
+        "llm_provider": provider,
         # ai/.env holds only the key; the token is unused by the script.
         "internal_token": os.environ.get("INTERNAL_TOKEN", "try-story-unused"),
     }
     if args.model:
-        overrides["gemini_text_model"] = args.model
+        field = "gemini_text_model" if provider == "gemini" else "llm_claude_model"
+        overrides[field] = args.model
     if args.thinking_budget is not None:
         overrides["llm_thinking_budget"] = args.thinking_budget
+    if getattr(args, "timeout", None) is not None:
+        overrides["llm_timeout_seconds"] = args.timeout
     try:
         # Mock never reads ai/.env: no key is loaded when none is needed.
         return Settings(_env_file=None if _use_mock(args) else AI_DIR / ".env", **overrides)
@@ -193,7 +208,10 @@ def _raw_metrics(response: Any) -> dict[str, Any]:
 
 
 def _thinking_desc(settings: Settings) -> str:
-    return f"budget={settings.llm_thinking_budget}"
+    desc = f"budget={settings.llm_thinking_budget}"
+    if settings.llm_provider in ("claude", "claude_code"):
+        desc += f" llm_claude_thinking={settings.llm_claude_thinking} effort={settings.llm_claude_effort}"
+    return desc
 
 
 def _print_plan(samples: list[Path], settings: Settings, mode: str = "raw") -> None:
@@ -201,7 +219,8 @@ def _print_plan(samples: list[Path], settings: Settings, mode: str = "raw") -> N
     out_price = settings.price_text_output_per_mtok_micros
     pipeline = mode == "pipeline"
     per_sample = 2 if pipeline else 1  # pipeline: first attempt + at most one retry
-    print(f"model: {settings.gemini_text_model if settings.llm_provider == 'gemini' else 'mock-v1'}")
+    print(f"provider: {settings.llm_provider}  model: {settings.llm_model}  "
+          f"timeout: {settings.llm_timeout_seconds}s")
     print(f"thinking: {_thinking_desc(settings)}  temperature: {settings.llm_temperature}")
     if pipeline:
         print(f"mode: pipeline  samples: {len(samples)}  generate calls: at most "
@@ -432,17 +451,26 @@ def _print_pipeline_summary(s: dict[str, Any]) -> None:
               f"tpw_raw={a.get('tokens_per_word_raw')} issues={issues or '(none)'}")
 
 
+def _build_inner(settings: Settings) -> tuple[LLMProvider, RecordingClient | None]:
+    """Provider named by settings.llm_provider; the Gemini one records its raw responses."""
+    if settings.llm_provider == "mock":
+        return MockLLMProvider(), None
+    if settings.llm_provider == "claude":
+        return ClaudeLLMProvider(settings), None
+    if settings.llm_provider == "claude_code":
+        return ClaudeCodeLLMProvider(settings), None
+    # Kept alive for the whole run (README "Ghi chu google-genai": GC'd client bug).
+    models_client = RecordingClient(_build_client(settings))
+    return GeminiLLMProvider(settings, client=models_client), models_client
+
+
 async def _confirmed_pipeline(
-    samples: list[Path], settings: Settings, mock: bool, force: ForceCode | None
+    samples: list[Path], settings: Settings, force: ForceCode | None
 ) -> None:
-    models_client: RecordingClient | None = None
-    inner: LLMProvider
-    if mock:
-        inner = MockLLMProvider()
-    else:
-        # Kept alive for the whole run (README "Ghi chu google-genai": GC'd client bug).
-        models_client = RecordingClient(_build_client(settings))
-        inner = GeminiLLMProvider(settings, client=models_client)
+    inner, models_client = _build_inner(settings)
+    if isinstance(inner, ClaudeLLMProvider | ClaudeCodeLLMProvider):
+        # Same startup check as the service (credentials / CLI): fail before any sample.
+        await inner.verify_model()
     llm = RecordingLLM(inner, models_client.models if models_client else None)
     out_dir = OUT_DIR / datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -496,19 +524,22 @@ async def _confirmed(samples: list[Path], settings: Settings) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--confirm", action="store_true", help="really call Gemini")
+    parser.add_argument("--confirm", action="store_true", help="really call the provider")
     parser.add_argument("--sample", type=Path, action="append", help="sample request JSON")
     parser.add_argument("--mode", choices=["raw", "pipeline"], default="raw")
-    parser.add_argument("--provider", choices=["gemini", "mock"], default="gemini",
-                        help="mock: MockLLMProvider, no key and no network (pipeline mode only)")
+    parser.add_argument("--provider", choices=["gemini", "mock", "claude", "claude_code"],
+                        default="gemini",
+                        help="mock: no key, no network. Only gemini supports --mode raw")
     parser.add_argument("--force", choices=[c.value for c in ForceCode],
                         help="mock only: the request's __force flag (e.g. INVALID_OUTPUT_ONCE)")
-    parser.add_argument("--model", help="overrides GEMINI_TEXT_MODEL")
+    parser.add_argument("--model", help="overrides GEMINI_TEXT_MODEL / LLM_CLAUDE_MODEL")
     parser.add_argument("--thinking-budget", type=int, help="overrides LLM_THINKING_BUDGET")
+    parser.add_argument("--timeout", type=float,
+                        help="overrides LLM_TIMEOUT_SECONDS for this run only")
     args = parser.parse_args()
 
-    if args.provider == "mock" and args.mode != "pipeline":
-        parser.error("--provider mock needs --mode pipeline")
+    if args.provider != "gemini" and args.mode != "pipeline":
+        parser.error(f"--provider {args.provider} needs --mode pipeline")
     if args.force and args.provider != "mock":
         parser.error("--force needs --provider mock (the real provider rejects __force)")
     settings = _build_settings(args)
@@ -518,10 +549,9 @@ def main() -> None:
         print("\nplan only (no network). Re-run with --confirm to call the provider.")
         return
     if args.mode == "pipeline":
-        mock = args.provider == "mock"
-        print(f"\n--confirm: running the pipeline ({'mock' if mock else 'Gemini'})")
+        print(f"\n--confirm: running the pipeline ({args.provider})")
         force = ForceCode(args.force) if args.force else None
-        asyncio.run(_confirmed_pipeline(samples, settings, mock, force))
+        asyncio.run(_confirmed_pipeline(samples, settings, force))
         return
     print("\n--confirm: calling Gemini now")
     asyncio.run(_confirmed(samples, settings))

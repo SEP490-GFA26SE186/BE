@@ -33,11 +33,16 @@ Danh sách dưới đây là bản **M1–M3** (khớp `app/config.py` và `.env
 
 ```
 INTERNAL_TOKEN=
-LLM_PROVIDER=mock                  # mock | gemini
+LLM_PROVIDER=mock                  # mock | gemini | claude | claude_code (claude*: README "Claude")
 TTS_PROVIDER=mock                  # mock (vieneu: M5)
 GEMINI_API_KEY=
 GEMINI_TEXT_MODEL=                 # bắt buộc khi LLM_PROVIDER=gemini; kiểm lúc khởi động
-LLM_TIMEOUT_SECONDS=45             # 2 x 45 + overhead < AI_TIMEOUT_MS_STORY_TEXT của Node (docs 01, README)
+ANTHROPIC_API_KEY=                 # claude: tuỳ chọn, trống = SDK tự tìm (env, profile `ant auth login`)
+LLM_CLAUDE_MODEL=                  # bắt buộc khi LLM_PROVIDER=claude | claude_code
+LLM_CLAUDE_THINKING=               # trống = không gửi; disabled | adaptive | between_tools (chỉ API)
+LLM_CLAUDE_EFFORT=                 # trống = không gửi; low | medium | high | xhigh | max
+LLM_CLAUDE_CLI_PATH=               # claude_code: trống = `claude` trong PATH
+LLM_TIMEOUT_SECONDS=150            # 2 x 150 + overhead < AI_TIMEOUT_MS_STORY_TEXT của Node (docs 01, README)
 LLM_TEMPERATURE=                   # trống = mặc định SDK / model
 LLM_RETRY_TEMPERATURE=             # trống = không gửi (mặc định, xem docs 01)
 LLM_THINKING_BUDGET=0              # 0 = tắt thinking; > 0 = budget cố định CỘNG THÊM vào trần token

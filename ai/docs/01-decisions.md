@@ -28,6 +28,17 @@
 
 **Độ dài**
 - Đếm theo **tiếng** (tách khoảng trắng). Mỗi trang mục tiêu 40–60, tối đa 70, tối thiểu 20.
+- **Mục tiêu cũng do backend gửi** (2026-10-15, người dùng chốt): `limits.page_target_min_words` /
+  `page_target_max_words` trong `platform_settings` -> request -> prompt ("nhắm khoảng 40–60, không dưới
+  20, không quá 70"). Lý do: khi prompt chỉ nói "20 đến 70", cả Gemini lẫn Claude viết 29–35 tiếng một
+  trang. Validator vẫn chỉ cưỡng chế min/max; mục tiêu không phải luật. Service và Node kiểm
+  `min <= target_min <= target_max <= max`.
+
+**Chuyện thật phụ huynh kể** *(2026-10-15, người dùng chốt)*
+- Truyện **giữ diễn biến chính** (ai làm gì, theo thứ tự nào) để trẻ nhận ra chuyện của mình; chỉ làm
+  nhẹ chi tiết nguy hiểm / đáng sợ, và khi làm nhẹ vẫn giữ hành động và cảm xúc. Thay câu cũ "làm cảm
+  hứng, không chép nguyên văn" — với câu đó, Claude bỏ hẳn việc "ném đồ chơi vào tường" của
+  `conflict_strong`.
 - Mỗi câu tối đa 15 tiếng. Giới hạn cho câu hỏi, phương án, gợi ý, phản hồi: xem docs 03.
 - Con số do backend gửi trong request; service không viết cứng.
 
@@ -90,6 +101,29 @@ dùng sinh ảnh (spec §2.1).
 - Chất lượng (ghi nhận, không phải lỗi): mỗi trang 29–32 tiếng — trên mức tối thiểu 20 nhưng dưới
   mục tiêu 40–60. Validator M2 chỉ cưỡng chế min/max; prompt có thể cần nhấn mục tiêu.
 
+**Chữ — Claude là provider chính** *(2026-10-15, người dùng chốt; thay Gemini)*
+- **Production: `LLM_PROVIDER=claude`** (Anthropic API, `ANTHROPIC_API_KEY` trong container, tính tiền
+  theo token). **Máy dev: `claude_code`** (CLI `claude` đang đăng nhập qua `claude-agent-sdk`) — không
+  bao giờ phục vụ phụ huynh thật (gói subscription cho dùng cá nhân); image Docker không cài SDK.
+- `GeminiLLMProvider` **giữ lại** trong code như một lựa chọn cấu hình, không còn là hướng chính.
+  Không có dự phòng tự động giữa hai provider (quyết định riêng nếu cần).
+- **Cấu hình đã đo được** (`claude_code`, alias `sonnet` -> `claude-sonnet-5-5`):
+  `LLM_CLAUDE_EFFORT=low`, `LLM_CLAUDE_THINKING` để trống (thinking không tắt được trên model này qua
+  CLI), `LLM_THINKING_BUDGET=12000` (8000 trước 2026-10-16) làm phần dự trữ cộng vào trần. Production dùng id đầy đủ
+  `LLM_CLAUDE_MODEL=claude-sonnet-5-5`. Model, effort, thinking đều là cấu hình, không viết cứng.
+- **Số đo 2026-10-15** (mỗi mẫu một lần, `out/try_story/20261015-2144*`): `story_request` 8 trang 26 s,
+  `custom_long` 20 trang 56,5 s; cả hai 1 lần gọi, `STOP`, validator 0 issue, 4 cảnh, đúng khung.
+  Tiếng/trang trung bình 31,6 và 35,5 (min 28, max 39). `conflict_strong` 8 trang: 37 s, 1 lần gọi,
+  `STOP`, **không bị chặn**, 0 issue. Token ra gồm cả thinking (CLI không tách), nên
+  `TOKENS_PER_WORD` cho Claude **chưa đo được**.
+- **Số đo sau khi prompt nhắm 40–60 tiếng và giữ diễn biến chính** (2026-10-15/16, mỗi mẫu một lần,
+  `LLM_THINKING_BUDGET=8000`): `story_request` 48 s, 46,0 tiếng/trang; `conflict_strong` 49 s, 44,5
+  tiếng/trang, giữ cảnh ném đồ chơi; `custom_long` 20 trang **90,5 s**, 45,8 tiếng/trang, **14.205 /
+  14.698 token** (97% trần). Cả ba: 1 lần gọi, `STOP`, 0 issue. Dự trữ thinking nâng lên 12000.
+- Không gửi nhiệt độ (anthropic 1.x bỏ tham số; model trả 400). Không bật refusal fallback phía server:
+  truyện bị từ chối phải ra `SAFETY_BLOCKED`, không lặng lẽ chạy lại trên model khác. Chi tiết: README
+  "Claude".
+
 **Kiến trúc service `ai` + hợp đồng với Node** *(spec `docs/superpowers/specs/2026-09-28-ai-core-m1-m3-design.md`;
 số mục trong ngoặc là số mục của spec đó)*
 - **BullMQ + Redis dùng thật** (§3.6): BullMQ là hàng đợi thực thi, nằm hoàn toàn ở Node
@@ -114,7 +148,11 @@ số mục trong ngoặc là số mục của spec đó)*
   trong Redis, base64 vài MB mỗi ảnh sẽ làm phình Redis. Request ảnh/TTS có `storage_prefix` (chuỗi
   opaque do Node đặt, có kiểm ký tự); ảnh cảnh đọc chân dung lại bằng `portrait_key`.
 - **Ngân sách thời gian** (§3.8): `AI_TIMEOUT_MS_<JOB>` (Node) > 2 x `LLM_TIMEOUT_SECONDS` + overhead.
-  `LLM_TIMEOUT_SECONDS = 45`; timeout Node theo loại job: truyện 120s, chân dung / cảnh 90s, TTS 30s.
+  `LLM_TIMEOUT_SECONDS = 150`; timeout Node theo loại job: truyện 320s, chân dung / cảnh 90s, TTS 30s.
+  (Người dùng chốt nâng đồng loạt, không làm timeout theo độ dài truyện: 45s / 120s -> 90s / 200s
+  (2026-10-15, 20 trang ~57s) -> 150s / 320s (2026-10-16, 20 trang 90,5s, 14.205 / 14.698 token sau khi
+  prompt nhắm 40–60 tiếng). **Biên an toàn tạm**: đo adapter API với `LLM_CLAUDE_THINKING=between_tools`
+  rồi hạ lại nếu nhanh hơn.)
   Không cưỡng chế được bằng code (hai process) — ghi ở `README.md` và `BE/docs/contracts/ai-service.md`.
 - **Hai tầng retry** (§3.9): BullMQ (3 lần, lỗi nhất thời) + nội bộ service (1 lần, output sai khung).
   Phân loại bằng `retryable` trong thân lỗi; `NON_RETRYABLE` ở `app/errors.py` phải khớp
@@ -140,6 +178,10 @@ số mục trong ngoặc là số mục của spec đó)*
 
 ## Đang mở — dừng lại hỏi nếu đụng tới
 
+- **Adapter `claude` (API) chưa chạy thật lần nào** — việc kế tiếp: đo 20 trang với
+  `LLM_CLAUDE_THINKING=between_tools` để quyết có hạ timeout 150s / 320s không. (chưa có key / profile `ant auth login`). Số đo ở
+  trên là của `claude_code`; API có thể khác (tắt thinking được bằng `between_tools`, tốc độ, giá).
+
 - Chọn bộ phân loại an toàn ảnh cụ thể cho model mã nguồn mở.
 - Server ComfyUI có GPU đặt ở đâu.
 - Model ảnh mã nguồn mở chính cho chân dung và cho cảnh (không dùng Gemini cho ảnh; xem
@@ -155,8 +197,8 @@ số mục trong ngoặc là số mục của spec đó)*
   - Sau đó người dùng dừng spike và cấm gọi thật thêm cho đến khi có lệnh mới. 503 không bị tính phí.
   - (Số liệu đối chiếu từ `ai/out/try_story/*/summary.json`: 11 summary; thư mục `20260930-224139`
     rỗng, không có summary - coi là lời gọi thứ 8 của đợt đầu.)
-  - Model chọn gì vẫn là câu hỏi mở cho người dùng (giữ `gemini-3.8-flash` làm mặc định cấu hình
-    trong lúc chờ; lùi `gemini-3.7-flash` / `gemini-2.5-flash` hay thêm model dự phòng).
+  - **Đã chốt 2026-10-15: chuyển sang Claude** (mục "Chữ — Claude là provider chính"). Spike Gemini
+    không làm tiếp; giữ lại làm lịch sử.
 - **Chưa đo được** (spike tạm dừng): sample xung đột mạnh (`conflict_strong`, giật đồ chơi / ngã /
   khóc to / hét - chưa có kết luận an toàn) và truyện `custom` 20 trang (`custom_long`, chưa biết có
   bị cắt không). Cần thêm vài lời gọi thật trước M2 (spec §2.1).

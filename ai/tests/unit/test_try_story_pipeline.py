@@ -72,3 +72,31 @@ async def test_tokens_per_word_excludes_thinking(script, settings, tmp_path) -> 
     assert row["tokens_per_word"] == round((base["text_output_tokens"] - 100) / words, 3)
     assert row["tokens_per_word_raw"] == base["tokens_per_word_raw"]
     assert row["tokens_per_word"] < row["tokens_per_word_raw"]
+
+
+@pytest.mark.parametrize("provider", ["claude", "claude_code"])
+def test_claude_settings_take_model_and_timeout(script, monkeypatch, tmp_path, provider) -> None:
+    from argparse import Namespace
+
+    monkeypatch.setattr(script, "AI_DIR", tmp_path)  # never read the real ai/.env
+    args = Namespace(provider=provider, model="m-1", thinking_budget=None, timeout=300.0)
+    settings = script._build_settings(args)
+    assert settings.llm_provider == provider
+    assert settings.llm_claude_model == "m-1"
+    assert settings.gemini_text_model is None
+    assert settings.llm_timeout_seconds == 300.0
+
+
+@pytest.mark.parametrize(
+    ("provider", "cls_name"),
+    [("claude", "ClaudeLLMProvider"), ("claude_code", "ClaudeCodeLLMProvider")],
+)
+def test_build_inner_picks_the_claude_provider(script, provider, cls_name) -> None:
+    from app.config import Settings
+
+    settings = Settings(
+        _env_file=None, internal_token="t", llm_provider=provider, llm_claude_model="m"
+    )
+    inner, models_client = script._build_inner(settings)
+    assert type(inner).__name__ == cls_name
+    assert models_client is None

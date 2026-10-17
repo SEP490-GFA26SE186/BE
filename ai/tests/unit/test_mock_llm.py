@@ -124,6 +124,8 @@ def test_build_valid_output_respects_tight_limits() -> None:
         limits=make_limits(
             page_min_words=5,
             page_max_words=8,
+            page_target_min_words=6,
+            page_target_max_words=7,
             sentence_max_words=3,
             question_max_words=2,
             option_max_words=1,

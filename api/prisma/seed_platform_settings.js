@@ -48,6 +48,8 @@ export const platformSettingsData = [
   },
   { key: 'limits.page_min_words', value: 20 },
   { key: 'limits.page_max_words', value: 70 },
+  { key: 'limits.page_target_min_words', value: 40 },
+  { key: 'limits.page_target_max_words', value: 60 },
   { key: 'limits.sentence_max_words', value: 15 },
   { key: 'limits.question_max_words', value: 15 },
   { key: 'limits.option_max_words', value: 12 },

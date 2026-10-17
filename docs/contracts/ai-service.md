@@ -22,7 +22,7 @@ Client ──> api (Express)          KHÔNG gọi service ai trực tiếp
              │  POST /v1/story/generate | /v1/images/portrait | /v1/images/scene | /v1/tts/synthesize
              │  header X-Internal-Token
              ↓
-           ai (FastAPI)  ──> provider (Gemini cho chữ / mock; ảnh, TTS: mock tới M4b/M5)
+           ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh, TTS: mock tới M4b/M5)
              │             └──> Supabase Storage (ảnh / audio — service upload, trả key)
              ↓
            worker ghi kết quả vào DB (persistPlan.js) + chốt / hoàn credit
@@ -92,7 +92,8 @@ Do `api/src/modules/stories/lib/aiRequest.js` `buildAiRequest` dựng từ DB:
   "tone": "gentle",
   "pages": ["p1", "p2", "…"],
   "checkpoints": [{ "id": "k2", "type": "perspective", "after": "p4", "target": "{NV2}" }],
-  "limits": { "page_min_words": 20, "page_max_words": 70, "sentence_max_words": 15,
+  "limits": { "page_min_words": 20, "page_max_words": 70,
+              "page_target_min_words": 40, "page_target_max_words": 60, "sentence_max_words": 15,
               "question_max_words": 15, "option_max_words": 12, "hint_max_words": 20,
               "feedback_max_words": 25, "max_scenes": 4 },
   "forbidden_terms": ["<tên thật>"],
@@ -287,13 +288,15 @@ Bất biến ba tầng — **không cưỡng chế được bằng code** (hai p
 AI_TIMEOUT_MS_<JOB> (Node)  >  2 × LLM_TIMEOUT_SECONDS (ai)  +  overhead
 ```
 
-`LLM_TIMEOUT_SECONDS = 45` là trần **một** lời gọi Gemini; service thử lại nội bộ tối đa 1 lần nên
-tệ nhất ~90s trong service. Node phải chờ lâu hơn thế, nếu không: Node abort → `TIMEOUT` (retryable)
-→ BullMQ chạy lại từ đầu → ba lần sinh truyện đầy đủ bị vứt đi mà tiền Gemini vẫn mất.
+`LLM_TIMEOUT_SECONDS = 150` là trần **một** lời gọi LLM; service thử lại nội bộ tối đa 1 lần nên
+tệ nhất ~300s trong service. Node phải chờ lâu hơn thế, nếu không: Node abort → `TIMEOUT` (retryable)
+→ BullMQ chạy lại từ đầu → ba lần sinh truyện đầy đủ bị vứt đi mà tiền provider vẫn mất.
+(Lịch sử: 45s / 120s -> 90s / 200s (2026-10-15) -> 150s / 320s (2026-10-16): truyện `custom` 20 trang đo
+được 90,5s một lời gọi trên Claude qua CLI sau khi prompt nhắm 40–60 tiếng/trang. Biên an toàn tạm.)
 
 | Job | Endpoint | Node timeout mặc định | Biến ghi đè (Node) |
 |---|---|---|---|
-| `story_text` | `/v1/story/generate` | 120 000 ms | `AI_TIMEOUT_MS_STORY_TEXT` |
+| `story_text` | `/v1/story/generate` | 320 000 ms | `AI_TIMEOUT_MS_STORY_TEXT` |
 | `character_portrait` | `/v1/images/portrait` | 90 000 ms | `AI_TIMEOUT_MS_CHARACTER_PORTRAIT` |
 | `scene_image` | `/v1/images/scene` | 90 000 ms | `AI_TIMEOUT_MS_SCENE_IMAGE` |
 | `narration` | `/v1/tts/synthesize` | 30 000 ms | `AI_TIMEOUT_MS_NARRATION` |
