@@ -6,6 +6,10 @@ import { ApiError } from '../../utils/index.js';
 import bookshelfService from '../bookshelf/bookshelf.service.js';
 import { eqSkillsFromStats, formatChild, summarizeUsage, vnDate } from './lib/childFormat.js';
 
+// Supabase o xa: moi truy van vai tram ms, mac dinh 5 s cua Prisma khong du cho 4-5 truy van
+// (giong TX_OPTIONS cua module stories).
+const TX_OPTIONS = { timeout: 20000 };
+
 // Khong co goi dang hoat dong -> han muc cua goi Mien phi (plans.max_children).
 const DEFAULT_FREE_MAX_CHILDREN = 2;
 
@@ -93,7 +97,7 @@ const createChild = async (parentId, data) => {
       });
     }
     return loadFormatted(tx, child.id);
-  });
+  }, TX_OPTIONS);
 };
 
 const getChildren = async (parentId) => {
@@ -127,7 +131,7 @@ const updateChild = async (parentId, childId, data) => {
       });
     }
     return loadFormatted(tx, childId);
-  });
+  }, TX_OPTIONS);
 };
 
 const deleteChild = async (parentId, childId) => {
@@ -141,7 +145,7 @@ const deleteChild = async (parentId, childId) => {
       where: { childId, type: 'kid_session', consumedAt: null },
       data: { consumedAt: now },
     });
-  });
+  }, TX_OPTIONS);
   return { message: 'Xóa hồ sơ bé thành công' };
 };
 
@@ -151,7 +155,7 @@ const updateChildAvatar = async (parentId, childId, { appearance, portraitImageK
   return prisma.$transaction(async (tx) => {
     await applyCharacter(tx, { parentId, childId, name: child.name, appearance, portraitImageKey });
     return (await loadFormatted(tx, childId)).character;
-  });
+  }, TX_OPTIONS);
 };
 
 const getChildUsage = async (parentId, childId, dateStr) => {
