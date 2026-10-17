@@ -1,5 +1,8 @@
 // Dinh dang truyen tra ve client. Ham thuan, khong DB.
 // Chu giu dang token {NVn}; `characters` la bang token -> ten de frontend thay khi hien thi.
+// Moi `...Key` (storage) di kem `...Url` co chu ky de client hien / phat (null = chua co file).
+
+import { assetUrl } from '../../../clients/assetUrl.js';
 
 const tokenNumber = (token) => Number(/\d+/.exec(token)?.[0] ?? Number.MAX_SAFE_INTEGER);
 const byKey = (key) => (a, b) => a[key] - b[key];
@@ -61,6 +64,7 @@ export function formatStoryDetail(story) {
       sceneOrder: s.sceneOrder,
       description: s.description,
       imageKey: s.imageKey,
+      imageUrl: assetUrl(s.imageKey),
       backgroundId: s.backgroundId,
       imageStatus: s.imageStatus,
     })),
@@ -71,6 +75,7 @@ export function formatStoryDetail(story) {
       contentText: p.contentText,
       origin: p.origin,
       audioKey: p.audioKey,
+      audioUrl: assetUrl(p.audioKey),
       audioStatus: p.audioStatus,
     })),
     checkpoints: (story.checkpoints ?? [])

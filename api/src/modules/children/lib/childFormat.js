@@ -1,6 +1,8 @@
 // Ham thuan cho module children (rev8): dinh dang ho so be, thoi gian dung may, diem EQ. Khong DB.
 // Hinh dang tra ve khop src/services/childService.js ben Web (mock da viet theo rev8).
 
+import { assetUrl } from '../../../clients/assetUrl.js';
+
 /** Duoi so cau duoc cham nay thi chua du du lieu de cham diem mot nang luc. */
 export const EQ_MIN_ITEMS = 5;
 
@@ -24,7 +26,7 @@ export function ageOf(birthDate, now = new Date()) {
 function formatCharacter(character) {
   if (!character || character.deletedAt) return null;
   const { id, name, appearance, portraitImageKey, portraitStatus } = character;
-  return { id, name, appearance, portraitImageKey, portraitStatus };
+  return { id, name, appearance, portraitImageKey, portraitImageUrl: assetUrl(portraitImageKey), portraitStatus };
 }
 
 /** child_profiles + include { character, _count: { bookshelfItems, playSessions(completed) } } -> ho so cho client. */

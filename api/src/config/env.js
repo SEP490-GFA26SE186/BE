@@ -33,6 +33,13 @@ const env = {
     attempts: parseInt(process.env.AI_JOB_ATTEMPTS, 10) || 3,
     concurrency: parseInt(process.env.AI_WORKER_CONCURRENCY, 10) || 3,
   },
+  // Ky link xem anh / audio cho client (src/clients/assetUrl.js). Phai cung tai khoan + folder voi ai/.
+  // CHI container api can (worker khong tra link cho ai).
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+    folder: process.env.CLOUDINARY_FOLDER || 'storyweaver',
+  },
   brevo: {
     apiKey: process.env.BREVO_API_KEY,
     senderEmail: process.env.BREVO_SENDER_EMAIL || 'no-reply@storyweaver.ai',

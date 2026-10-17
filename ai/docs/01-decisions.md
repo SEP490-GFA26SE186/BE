@@ -185,8 +185,10 @@ số mục trong ngoặc là số mục của spec đó)*
 
 ## Đang mở — dừng lại hỏi nếu đụng tới
 
-- **Cloudinary chưa chạy với tài khoản thật** (chưa có key). Phía Node chưa có link tải cho client:
-  file `authenticated` cần link có chữ ký, có hạn — Node ký (cùng thuật toán), không đi qua `ai`.
+- **Cloudinary chưa chạy với tài khoản thật** (chưa có key). Link cho client: Node ký "signed delivery
+  URL" (`api/src/clients/assetUrl.js`, không gọi mạng, đi qua CDN) và trả `...Url` cạnh mỗi `...Key`.
+  Link **không hết hạn** (hết hạn cần token auth — gói trả phí); muốn có hạn thì đổi sang
+  `private_download_url` có `expires_at` (đi qua API, không qua CDN).
 
 - **Adapter `claude` (API) chưa chạy thật lần nào** — việc kế tiếp: đo 20 trang với
   `LLM_CLAUDE_THINKING=between_tools` để quyết có hạ timeout 150s / 320s không. (chưa có key / profile `ant auth login`). Số đo ở

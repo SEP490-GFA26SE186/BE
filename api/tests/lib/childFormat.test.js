@@ -34,7 +34,7 @@ test('formatChild: dung hinh dang Web (character, khong bedtime, tuoi)', () => {
     age: 6,
     dailyScreenTimeMinutes: 30,
     preferredVoice: null,
-    character: { id: 'ch1', name: 'Bin', appearance: 'tóc ngắn', portraitImageKey: null, portraitStatus: 'none' },
+    character: { id: 'ch1', name: 'Bin', appearance: 'tóc ngắn', portraitImageKey: null, portraitImageUrl: null, portraitStatus: 'none' },
     booksCount: 3,
     completedSessionsCount: 5,
     createdAt: new Date('2026-10-01T00:00:00Z'),

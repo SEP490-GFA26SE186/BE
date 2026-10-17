@@ -1,5 +1,6 @@
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
+import { assetUrl } from '../../clients/assetUrl.js';
 
 // Default free quota if user has no paid subscription
 const DEFAULT_FREE_MAX_CHARACTERS = 5;
@@ -18,6 +19,7 @@ const formatCharacterResponse = (character) => {
     name: character.name,
     appearance: character.appearance,
     portraitImageKey: character.portraitImageKey,
+    portraitImageUrl: assetUrl(character.portraitImageKey),
     genPrompt: character.genPrompt,
     genSeed: character.genSeed !== null && character.genSeed !== undefined ? character.genSeed.toString() : null,
     portraitStatus: character.portraitStatus,

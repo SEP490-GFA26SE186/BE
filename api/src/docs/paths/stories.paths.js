@@ -58,6 +58,7 @@ const storyDetailExample = {
       sceneOrder: 1,
       description: 'Sân chơi trước nhà',
       imageKey: null,
+      imageUrl: null, // link Cloudinary co chu ky khi da co anh
       backgroundId: null,
       imageStatus: 'none',
     },
@@ -70,6 +71,7 @@ const storyDetailExample = {
       contentText: '{NV1} đang chơi xe cứu hỏa thì {NV2} gọi vào ăn cơm.',
       origin: 'ai',
       audioKey: null,
+      audioUrl: null,
       audioStatus: 'none',
     },
   ],

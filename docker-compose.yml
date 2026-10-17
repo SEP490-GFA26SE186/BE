@@ -43,6 +43,11 @@ services:
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
       BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-StoryWeaver AI}
+      # Ky link xem anh / audio cho client (api/src/clients/assetUrl.js). Cung tai khoan + folder voi ai.
+      # Khong can CLOUDINARY_API_KEY: link giao file chi ky bang secret.
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-storyweaver}
       # CO Y khong co AI_SERVICE_URL: moi yeu cau sinh noi dung phai qua queue.
     ports:
       - "3000:3000"

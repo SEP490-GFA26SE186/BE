@@ -269,7 +269,8 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 | `INTERNAL_TOKEN` | — | ✓ | ✓ |
 | `AI_TIMEOUT_MS_<JOB>`, `AI_JOB_ATTEMPTS`, `AI_WORKER_CONCURRENCY` | — | ✓ | — |
 | `LLM_PROVIDER`, `TTS_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `LLM_*`, `TOKENS_PER_WORD`, `PRICE_TEXT_*` | — | — | ✓ |
-| `CLOUDINARY_*`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_FOLDER` | ✓ | — | ✓ |
+| `CLOUDINARY_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
 
 Hai ô đáng chú ý:
 
