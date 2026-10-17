@@ -58,8 +58,13 @@ curl -s localhost:8000/v1/images/scene -H "X-Internal-Token: $TOKEN"   -H 'Conte
 curl -s localhost:8000/v1/tts/synthesize -H "X-Internal-Token: $TOKEN"   -H 'Content-Type: application/json'   -d '{"request_id":"r2","storage_prefix":"stories/demo/audio","text":"Chào bé.","voice_id":"default","__force":"TIMEOUT"}'
 ```
 
-Khi chưa đặt `SUPABASE_*` thì dùng `LocalStorage`: file ghi vào `/tmp/storyweaver-storage` (mất khi container bị xoá); đặt
-`SUPABASE_URL` + `SUPABASE_SERVICE_KEY` để dùng Supabase Storage. `/health` báo `storage_backend`.
+Đủ 3 biến `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` thì dùng Cloudinary (file upload dạng
+`authenticated`, không có link công khai; thư mục gốc `CLOUDINARY_FOLDER`, mặc định `storyweaver`). Không có thì
+`SUPABASE_URL` + `SUPABASE_SERVICE_KEY` để dùng Supabase Storage. Không có cả hai thì dùng `LocalStorage`: file ghi vào
+`/tmp/storyweaver-storage` (mất khi container bị xoá). `/health` báo `storage_backend`.
+
+Cloudinary gọi thẳng REST API bằng httpx (không cài SDK), ký request đúng cách SDK chính thức làm (`private_download_url`
+cho tải về). **Chưa chạy thử với tài khoản Cloudinary thật** — mới có test respx.
 
 ## Bất biến ngân sách thời gian (§3.8)
 

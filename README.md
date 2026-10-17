@@ -239,7 +239,7 @@ Client ──> api (Express)          KHÔNG gọi ai/ trực tiếp
              │  (ảnh: /v1/images/portrait, /v1/images/scene; giọng: /v1/tts/synthesize)
              ↓
            ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh + TTS: mock)
-             │             └──> Supabase Storage (ảnh / audio — ai upload, trả key)
+             │             └──> Cloudinary / Supabase Storage (ảnh / audio — ai upload, trả key)
              ↓
            worker ghi kết quả vào DB + chốt / hoàn credit
 ```
@@ -269,7 +269,7 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 | `INTERNAL_TOKEN` | — | ✓ | ✓ |
 | `AI_TIMEOUT_MS_<JOB>`, `AI_JOB_ATTEMPTS`, `AI_WORKER_CONCURRENCY` | — | ✓ | — |
 | `LLM_PROVIDER`, `TTS_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `LLM_*`, `TOKENS_PER_WORD`, `PRICE_TEXT_*` | — | — | ✓ |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
+| `CLOUDINARY_*`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
 
 Hai ô đáng chú ý:
 

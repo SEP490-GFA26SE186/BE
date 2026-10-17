@@ -52,7 +52,12 @@ class Settings(BaseSettings):
     image_profile_portrait: str = "mock"
     image_profile_scene: str = "mock"
 
-    # Empty = LocalStorage (see app/storage/__init__.py).
+    # Storage backend by credentials (app/storage/__init__.py): Cloudinary if all three
+    # CLOUDINARY_* are set, else Supabase, else LocalStorage.
+    cloudinary_cloud_name: str | None = None
+    cloudinary_api_key: str | None = None
+    cloudinary_api_secret: SecretStr | None = None
+    cloudinary_folder: str = "storyweaver"
     supabase_url: str | None = None
     supabase_service_key: SecretStr | None = None
     supabase_bucket: str = "story-assets"

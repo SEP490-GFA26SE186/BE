@@ -168,6 +168,13 @@ số mục trong ngoặc là số mục của spec đó)*
   (7) `__force` cấp cao nhất, chỉ ở mock; (8) `OUTPUT_SCHEMA_INVALID` / `OUTPUT_TRUNCATED` có trong
   registry nhưng được orchestrator dựng ở bước parse.
 
+**Lưu file ảnh / audio — Cloudinary** *(2026-10-17, người dùng chốt)*
+- Thêm `CloudinaryStorage` bên cạnh Supabase / Local; chọn theo credential (đủ `CLOUDINARY_*` ->
+  Cloudinary). Gọi REST bằng httpx, không SDK (cùng lý do với Supabase).
+- Upload `type=authenticated` vì file là của trẻ (tên thật, chuyện thật): không có link công khai.
+  `public_id` = `CLOUDINARY_FOLDER` + key, bỏ đuôi với ảnh / audio. Audio vào `resource_type=video`.
+- DB dev chuyển sang Postgres local (`docker-compose.localdb.yml`), Supabase vẫn là DB dùng chung.
+
 **Chi phí** *(backend làm)*
 - Chỉ bán gói; mỗi gói cấp credit theo tháng. Mỗi loại `ai_request_type` có đơn giá credit.
 - Service chỉ trả `usage`; không biết credit, không trừ tiền.
@@ -177,6 +184,9 @@ số mục trong ngoặc là số mục của spec đó)*
 - Service **không** nhận, không tính, không trả điểm.
 
 ## Đang mở — dừng lại hỏi nếu đụng tới
+
+- **Cloudinary chưa chạy với tài khoản thật** (chưa có key). Phía Node chưa có link tải cho client:
+  file `authenticated` cần link có chữ ký, có hạn — Node ký (cùng thuật toán), không đi qua `ai`.
 
 - **Adapter `claude` (API) chưa chạy thật lần nào** — việc kế tiếp: đo 20 trang với
   `LLM_CLAUDE_THINKING=between_tools` để quyết có hạ timeout 150s / 320s không. (chưa có key / profile `ant auth login`). Số đo ở

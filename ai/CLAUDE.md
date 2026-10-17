@@ -62,7 +62,7 @@ app/
     llm/      base.py  mock.py  gemini.py  claude.py  claude_code.py   # claude*: README "Claude"
     image/    base.py  mock.py         # M4: port.py registry.py adapters/ decorators/ safety/
     tts/      base.py  mock.py         # M5: vieneu.py
-  storage/    __init__.py  local.py  supabase.py
+  storage/    __init__.py  local.py  supabase.py  cloudinary.py
   core/
     story.py  prompt.py  mapping.py  usage.py
     text_utils.py  guards.py

@@ -24,7 +24,17 @@ def build_key(prefix: str, request_id: str, n: int, ext: str) -> str:
 
 
 @lru_cache
-def _make_storage(url: str | None, service_key: str | None, bucket: str) -> Storage:
+def _make_storage(
+    url: str | None,
+    service_key: str | None,
+    bucket: str,
+    cloudinary: tuple[str, str, str, str] | None = None,
+) -> Storage:
+    if cloudinary:
+        from app.storage.cloudinary import CloudinaryStorage
+
+        return CloudinaryStorage(*cloudinary)
+
     if url and service_key:
         from app.storage.supabase import SupabaseStorage
 
@@ -33,10 +43,29 @@ def _make_storage(url: str | None, service_key: str | None, bucket: str) -> Stor
     from app.storage.local import LocalStorage
 
     logger.warning(
-        "SUPABASE_URL/SUPABASE_SERVICE_KEY chua duoc dat — dung LocalStorage. "
+        "CLOUDINARY_* / SUPABASE_URL+SUPABASE_SERVICE_KEY chua duoc dat — dung LocalStorage. "
         "File se nam trong container va MAT khi container bi xoa."
     )
     return LocalStorage()
+
+
+def storage_backend_name(settings: Settings) -> str:
+    """Backend `get_storage` would pick, without building it (for /health)."""
+    if _cloudinary_credentials(settings):
+        return "cloudinary"
+    return "supabase" if settings.supabase_url and settings.supabase_service_key else "local"
+
+
+def _cloudinary_credentials(settings: Settings) -> tuple[str, str, str, str] | None:
+    secret = settings.cloudinary_api_secret
+    if not (settings.cloudinary_cloud_name and settings.cloudinary_api_key and secret):
+        return None
+    return (
+        settings.cloudinary_cloud_name,
+        settings.cloudinary_api_key,
+        secret.get_secret_value(),  # SecretStr: unwrap at the boundary
+        settings.cloudinary_folder,
+    )
 
 
 def get_storage(settings: Settings) -> Storage:
@@ -46,4 +75,5 @@ def get_storage(settings: Settings) -> Storage:
         settings.supabase_url,
         key.get_secret_value() if key else None,  # SecretStr: unwrap at the boundary
         settings.supabase_bucket,
+        _cloudinary_credentials(settings),
     )
