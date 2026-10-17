@@ -59,40 +59,6 @@ const updatePlanSchema = z.object({
   }),
 });
 
-const createCreditPackSchema = z.object({
-  body: z.object({
-    name: z
-      .string({ required_error: 'Credit pack name is required' })
-      .min(2, 'Name must be at least 2 characters')
-      .max(120, 'Name cannot exceed 120 characters'),
-    credits: z
-      .number({ required_error: 'Credits amount is required' })
-      .int('Credits must be an integer')
-      .positive('Credits must be greater than 0'),
-    bonusCredits: z
-      .number()
-      .int('Bonus credits must be an integer')
-      .nonnegative('Bonus credits cannot be negative')
-      .default(0)
-      .optional(),
-    priceVnd: z
-      .number({ required_error: 'Price in VND is required' })
-      .int('Price must be an integer')
-      .nonnegative('Price cannot be negative'),
-    isActive: z.boolean().optional(),
-  }),
-});
-
-const updateCreditPackSchema = z.object({
-  body: z.object({
-    name: z.string().min(2).max(120).optional(),
-    credits: z.number().int().positive().optional(),
-    bonusCredits: z.number().int().nonnegative().optional(),
-    priceVnd: z.number().int().nonnegative().optional(),
-    isActive: z.boolean().optional(),
-  }),
-});
-
 const subscribeFreeSchema = z.object({
   body: z.object({
     planId: z.string().uuid('Invalid plan ID format').optional(),
@@ -102,7 +68,5 @@ const subscribeFreeSchema = z.object({
 export default {
   createPlanSchema,
   updatePlanSchema,
-  createCreditPackSchema,
-  updateCreditPackSchema,
   subscribeFreeSchema,
 };

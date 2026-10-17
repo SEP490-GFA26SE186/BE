@@ -40,30 +40,6 @@ const DEFAULT_PLANS = [
   },
 ];
 
-const DEFAULT_CREDIT_PACKS = [
-  {
-    name: 'Gói Khởi Đầu (Starter 50 Xu)',
-    credits: 50,
-    bonusCredits: 0,
-    priceVnd: 50000n,
-    isActive: true,
-  },
-  {
-    name: 'Gói Phổ Biến (Standard 150 + 20 Xu Thưởng)',
-    credits: 150,
-    bonusCredits: 20,
-    priceVnd: 150000n,
-    isActive: true,
-  },
-  {
-    name: 'Gói Siêu Cấp (Pro 500 + 100 Xu Thưởng)',
-    credits: 500,
-    bonusCredits: 100,
-    priceVnd: 450000n,
-    isActive: true,
-  },
-];
-
 // ==========================================
 // 1. PLANS SERVICE
 // ==========================================
@@ -158,86 +134,6 @@ const deletePlan = async (id) => {
   }
 
   return prisma.plan.update({
-    where: { id },
-    data: { isActive: false },
-  });
-};
-
-// ==========================================
-// 2. CREDIT PACKS SERVICE
-// ==========================================
-
-const getCreditPacks = async () => {
-  let packs = await prisma.creditPack.findMany({
-    orderBy: { priceVnd: 'asc' },
-  });
-
-  if (packs.length === 0) {
-    for (const packData of DEFAULT_CREDIT_PACKS) {
-      await prisma.creditPack.create({
-        data: packData,
-      });
-    }
-
-    packs = await prisma.creditPack.findMany({
-      orderBy: { priceVnd: 'asc' },
-    });
-  }
-
-  return packs;
-};
-
-const getCreditPackById = async (id) => {
-  const pack = await prisma.creditPack.findUnique({
-    where: { id },
-  });
-
-  if (!pack) {
-    throw new ApiError(404, 'Credit pack not found');
-  }
-
-  return pack;
-};
-
-const createCreditPack = async (data) => {
-  return prisma.creditPack.create({
-    data: {
-      ...data,
-      priceVnd: BigInt(data.priceVnd),
-    },
-  });
-};
-
-const updateCreditPack = async (id, data) => {
-  const pack = await prisma.creditPack.findUnique({
-    where: { id },
-  });
-
-  if (!pack) {
-    throw new ApiError(404, 'Credit pack not found');
-  }
-
-  const updateData = { ...data };
-  if (updateData.priceVnd !== undefined) {
-    updateData.priceVnd = BigInt(updateData.priceVnd);
-  }
-
-  return prisma.creditPack.update({
-    where: { id },
-    data: updateData,
-  });
-};
-
-const deleteCreditPack = async (id) => {
-  const pack = await prisma.creditPack.findUnique({
-    where: { id },
-  });
-
-  if (!pack) {
-    throw new ApiError(404, 'Credit pack not found');
-  }
-
-  return prisma.creditPack.update({
     where: { id },
     data: { isActive: false },
   });
@@ -469,11 +365,6 @@ export default {
   createPlan,
   updatePlan,
   deletePlan,
-  getCreditPacks,
-  getCreditPackById,
-  createCreditPack,
-  updateCreditPack,
-  deleteCreditPack,
   getMySubscription,
   subscribeFreePlan,
   cancelMySubscription,

@@ -111,50 +111,6 @@ const updateKeyword = catchAsync(async (req, res) => {
 });
 
 // =============================================================================
-// Granular Template Management Controllers
-// =============================================================================
-
-const addTemplateStage = catchAsync(async (req, res) => {
-  const stage = await contentLibraryService.addTemplateStage(req.params.id, req.body);
-  ApiResponse.created(res, stage, 'Thêm phân đoạn cho kịch bản mẫu thành công');
-});
-
-const updateTemplateStage = catchAsync(async (req, res) => {
-  const updated = await contentLibraryService.updateTemplateStage(req.params.stageId, req.body);
-  ApiResponse.success(res, updated, 'Cập nhật phân đoạn kịch bản mẫu thành công');
-});
-
-const deleteTemplateStage = catchAsync(async (req, res) => {
-  const result = await contentLibraryService.deleteTemplateStage(req.params.stageId);
-  ApiResponse.success(res, result, result.message);
-});
-
-const addOrUpdateTemplateSlots = catchAsync(async (req, res) => {
-  const slots = await contentLibraryService.addOrUpdateTemplateSlots(req.params.id, req.body.slots);
-  ApiResponse.success(res, slots, 'Cập nhật danh sách vị trí nhân vật thành công');
-});
-
-const deleteTemplateSlot = catchAsync(async (req, res) => {
-  const result = await contentLibraryService.deleteTemplateSlot(req.params.id, req.params.slotKey);
-  ApiResponse.success(res, result, result.message);
-});
-
-const addTemplateChoice = catchAsync(async (req, res) => {
-  const choice = await contentLibraryService.addTemplateChoice(req.params.stageId, req.body);
-  ApiResponse.created(res, choice, 'Thêm lựa chọn rẽ nhánh kèm tín hiệu cảm xúc thành công');
-});
-
-const updateTemplateChoice = catchAsync(async (req, res) => {
-  const updated = await contentLibraryService.updateTemplateChoice(req.params.choiceId, req.body);
-  ApiResponse.success(res, updated, 'Cập nhật lựa chọn rẽ nhánh thành công');
-});
-
-const deleteTemplateChoice = catchAsync(async (req, res) => {
-  const result = await contentLibraryService.deleteTemplateChoice(req.params.choiceId);
-  ApiResponse.success(res, result, result.message);
-});
-
-// =============================================================================
 // Stats Controller
 // =============================================================================
 
@@ -182,13 +138,5 @@ export default {
   deleteChecklistItem,
   bulkImportKeywords,
   updateKeyword,
-  addTemplateStage,
-  updateTemplateStage,
-  deleteTemplateStage,
-  addOrUpdateTemplateSlots,
-  deleteTemplateSlot,
-  addTemplateChoice,
-  updateTemplateChoice,
-  deleteTemplateChoice,
   getContentLibraryStats,
 };
