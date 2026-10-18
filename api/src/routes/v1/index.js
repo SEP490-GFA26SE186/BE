@@ -8,8 +8,9 @@ import bookshelfRoutes from '../../modules/bookshelf/bookshelf.routes.js';
 import readingSessionsRoutes from '../../modules/reading-sessions/reading-sessions.routes.js';
 import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
 import moderationRoutes from '../../modules/moderation/moderation.routes.js';
-import { plansRouter, creditPacksRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
+import { plansRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
 import storiesRoutes from '../../modules/stories/stories.routes.js';
+import paymentsRoutes from '../../modules/payments/payments.routes.js';
 import walletsRoutes from '../../modules/wallets/wallets.routes.js';
 
 import contentLibraryRouter, {
@@ -18,7 +19,6 @@ import contentLibraryRouter, {
   checklistItemsRouter,
   topicsRouter,
 } from '../../modules/content-library/content-library.routes.js';
-import notificationsRoutes from '../../modules/notifications/notifications.routes.js';
 import reportsRoutes from '../../modules/reports/reports.routes.js';
 import platformRoutes from '../../modules/platform/platform.routes.js';
 
@@ -51,17 +51,16 @@ router.use('/bookshelf', bookshelfRoutes);
 router.use('/reading-sessions', readingSessionsRoutes);
 router.use('/marketplace', marketplaceRoutes);
 router.use('/moderation', moderationRoutes);
-router.use('/notifications', notificationsRoutes);
 router.use('/reports', reportsRoutes);
 router.use('/admin', platformRoutes);
 router.use('/platform', platformRoutes);
 router.use('/plans', plansRouter);
-router.use('/credit-packs', creditPacksRouter);
 router.use('/subscriptions', subscriptionsRouter);
 router.use('/wallets', walletsRoutes);
 router.use('/cart', cartRouter);
 router.use('/orders', ordersRouter);
 router.use('/entitlements', entitlementsRouter);
+router.use('/payments', paymentsRoutes);
 
 export default router;
 

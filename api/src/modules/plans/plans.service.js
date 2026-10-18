@@ -1,14 +1,14 @@
 import prisma from '../../config/prisma.js';
 import { ApiError } from '../../utils/index.js';
+import walletsService from '../wallets/wallets.service.js';
 
 const DEFAULT_PLANS = [
   {
     code: 'FREE',
     name: 'Gói Trải Nghiệm (Free Explorer)',
-    period: 'month',
+    durationMonths: 1,
     priceVnd: 0n,
-    aiStoryQuota: 2,
-    aiImageQuota: 4,
+    creditsPerMonth: 20,
     maxChildren: 2,
     maxCharacters: 5,
     canSell: false,
@@ -17,10 +17,9 @@ const DEFAULT_PLANS = [
   {
     code: 'MONTHLY_PRO',
     name: 'Gói Gia Đình Tiêu Chuẩn (Family Storyteller Monthly)',
-    period: 'month',
+    durationMonths: 1,
     priceVnd: 99000n,
-    aiStoryQuota: 20,
-    aiImageQuota: 50,
+    creditsPerMonth: 200,
     maxChildren: 5,
     maxCharacters: 20,
     canSell: true,
@@ -29,10 +28,9 @@ const DEFAULT_PLANS = [
   {
     code: 'YEARLY_PRO',
     name: 'Gói Gia Đình Cao Cấp (Family Storyteller Annual)',
-    period: 'year',
+    durationMonths: 12,
     priceVnd: 990000n,
-    aiStoryQuota: 300,
-    aiImageQuota: 650,
+    creditsPerMonth: 200,
     maxChildren: 10,
     maxCharacters: 50,
     canSell: true,
@@ -40,29 +38,50 @@ const DEFAULT_PLANS = [
   },
 ];
 
-const DEFAULT_CREDIT_PACKS = [
-  {
-    name: 'Gói Khởi Đầu (Starter 50 Xu)',
-    credits: 50,
-    bonusCredits: 0,
-    priceVnd: 50000n,
-    isActive: true,
-  },
-  {
-    name: 'Gói Phổ Biến (Standard 150 + 20 Xu Thưởng)',
-    credits: 150,
-    bonusCredits: 20,
-    priceVnd: 150000n,
-    isActive: true,
-  },
-  {
-    name: 'Gói Siêu Cấp (Pro 500 + 100 Xu Thưởng)',
-    credits: 500,
-    bonusCredits: 100,
-    priceVnd: 450000n,
-    isActive: true,
-  },
-];
+const addMonths = (date, months) => {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+};
+
+/**
+ * Kich hoat mot subscription moi va cap credit thang dau.
+ * Goi trong transaction (don 0d, webhook payOS, goi Mien phi).
+ * @param {Object} tx - Prisma transaction client
+ * @param {Object} params - { userId, plan, orderItemId }
+ */
+const activateSubscription = async (tx, { userId, plan, orderItemId = null }) => {
+  const now = new Date();
+
+  // Moi phu huynh chi co 1 subscription active (partial unique) -> dong goi cu truoc
+  await tx.subscription.updateMany({
+    where: { parentId: userId, status: 'active' },
+    data: { status: 'cancelled' },
+  });
+
+  const subscription = await tx.subscription.create({
+    data: {
+      parentId: userId,
+      planId: plan.id,
+      orderItemId,
+      periodStart: now,
+      periodEnd: addMonths(now, plan.durationMonths),
+      nextCreditGrantAt: addMonths(now, 1),
+      status: 'active',
+    },
+    include: { plan: true },
+  });
+
+  if (plan.creditsPerMonth > 0) {
+    await walletsService.grantSubscriptionCredits(tx, {
+      userId,
+      subscriptionId: subscription.id,
+      credits: plan.creditsPerMonth,
+    });
+  }
+
+  return subscription;
+};
 
 // ==========================================
 // 1. PLANS SERVICE
@@ -88,6 +107,18 @@ const getPlans = async () => {
   }
 
   return plans;
+};
+
+/**
+ * Goi Mien phi dang hoat dong (uu tien code FREE). Seed goi mac dinh neu bang plans rong.
+ * @returns {Promise<Object|null>}
+ */
+const getFreePlan = async () => {
+  const byCode = await prisma.plan.findUnique({ where: { code: 'FREE' } });
+  if (byCode?.isActive) return byCode;
+
+  const plans = await getPlans();
+  return plans.find((p) => p.isActive && p.priceVnd === 0n) || null;
 };
 
 const getPlanById = async (id) => {
@@ -164,87 +195,7 @@ const deletePlan = async (id) => {
 };
 
 // ==========================================
-// 2. CREDIT PACKS SERVICE
-// ==========================================
-
-const getCreditPacks = async () => {
-  let packs = await prisma.creditPack.findMany({
-    orderBy: { priceVnd: 'asc' },
-  });
-
-  if (packs.length === 0) {
-    for (const packData of DEFAULT_CREDIT_PACKS) {
-      await prisma.creditPack.create({
-        data: packData,
-      });
-    }
-
-    packs = await prisma.creditPack.findMany({
-      orderBy: { priceVnd: 'asc' },
-    });
-  }
-
-  return packs;
-};
-
-const getCreditPackById = async (id) => {
-  const pack = await prisma.creditPack.findUnique({
-    where: { id },
-  });
-
-  if (!pack) {
-    throw new ApiError(404, 'Credit pack not found');
-  }
-
-  return pack;
-};
-
-const createCreditPack = async (data) => {
-  return prisma.creditPack.create({
-    data: {
-      ...data,
-      priceVnd: BigInt(data.priceVnd),
-    },
-  });
-};
-
-const updateCreditPack = async (id, data) => {
-  const pack = await prisma.creditPack.findUnique({
-    where: { id },
-  });
-
-  if (!pack) {
-    throw new ApiError(404, 'Credit pack not found');
-  }
-
-  const updateData = { ...data };
-  if (updateData.priceVnd !== undefined) {
-    updateData.priceVnd = BigInt(updateData.priceVnd);
-  }
-
-  return prisma.creditPack.update({
-    where: { id },
-    data: updateData,
-  });
-};
-
-const deleteCreditPack = async (id) => {
-  const pack = await prisma.creditPack.findUnique({
-    where: { id },
-  });
-
-  if (!pack) {
-    throw new ApiError(404, 'Credit pack not found');
-  }
-
-  return prisma.creditPack.update({
-    where: { id },
-    data: { isActive: false },
-  });
-};
-
-// ==========================================
-// 3. SUBSCRIPTIONS SERVICE
+// 2. SUBSCRIPTIONS SERVICE
 // ==========================================
 
 const getMySubscription = async (userId) => {
@@ -276,8 +227,7 @@ const getMySubscription = async (userId) => {
       name: 'Gói Trải Nghiệm Miễn Phí',
       maxChildren: 2,
       maxCharacters: 5,
-      aiStoryQuota: 2,
-      aiImageQuota: 4,
+      creditsPerMonth: 0,
       canSell: false,
     };
 
@@ -292,30 +242,7 @@ const getMySubscription = async (userId) => {
     };
   }
 
-  // Count AI usage in this subscription cycle
-  const storyAiUsageCount = await prisma.aiRequest.count({
-    where: {
-      userId,
-      quotaSource: 'plan',
-      requestType: 'story_text',
-      createdAt: {
-        gte: activeSubscription.periodStart,
-        lte: activeSubscription.periodEnd,
-      },
-    },
-  });
-
-  const imageAiUsageCount = await prisma.aiRequest.count({
-    where: {
-      userId,
-      quotaSource: 'plan',
-      requestType: { in: ['story_image', 'character_portrait'] },
-      createdAt: {
-        gte: activeSubscription.periodStart,
-        lte: activeSubscription.periodEnd,
-      },
-    },
-  });
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
 
   return {
     hasActiveSubscription: true,
@@ -323,10 +250,7 @@ const getMySubscription = async (userId) => {
     currentUsage: {
       childrenCount,
       charactersCount,
-      storyAiUsed: storyAiUsageCount,
-      storyAiRemaining: Math.max(0, activeSubscription.plan.aiStoryQuota - storyAiUsageCount),
-      imageAiUsed: imageAiUsageCount,
-      imageAiRemaining: Math.max(0, activeSubscription.plan.aiImageQuota - imageAiUsageCount),
+      creditBalance: wallet?.creditBalance ?? 0,
     },
     effectivePlan: activeSubscription.plan,
   };
@@ -356,43 +280,19 @@ const subscribeFreePlan = async (userId, planId) => {
       throw new ApiError(400, 'Invalid free plan selected');
     }
   } else {
-    freePlan = await prisma.plan.findUnique({ where: { code: 'FREE' } });
-    if (!freePlan) {
-      const plans = await getPlans();
-      freePlan = plans.find((p) => p.priceVnd === 0n);
-    }
+    freePlan = await getFreePlan();
   }
 
   if (!freePlan) {
     throw new ApiError(404, 'Free tier plan is not available');
   }
 
-  // Set period for 30 days
-  const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-  // If there's an existing free subscription, update it; otherwise create
+  // Goi Mien phi dang chay thi giu nguyen, khong cap credit lai
   if (activeSub) {
-    return prisma.subscription.update({
-      where: { id: activeSub.id },
-      data: {
-        periodStart: now,
-        periodEnd,
-        status: 'active',
-      },
-      include: { plan: true },
-    });
+    return activeSub;
   }
 
-  return prisma.subscription.create({
-    data: {
-      parentId: userId,
-      planId: freePlan.id,
-      periodStart: now,
-      periodEnd,
-      status: 'active',
-    },
-    include: { plan: true },
-  });
+  return prisma.$transaction((tx) => activateSubscription(tx, { userId, plan: freePlan }));
 };
 
 const cancelMySubscription = async (userId) => {
@@ -469,11 +369,8 @@ export default {
   createPlan,
   updatePlan,
   deletePlan,
-  getCreditPacks,
-  getCreditPackById,
-  createCreditPack,
-  updateCreditPack,
-  deleteCreditPack,
+  getFreePlan,
+  activateSubscription,
   getMySubscription,
   subscribeFreePlan,
   cancelMySubscription,

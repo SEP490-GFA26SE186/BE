@@ -81,7 +81,6 @@ const createStory = async (user, data) => {
     title,
     length = 'medium',
     situation,
-    coverImageKey,
     useAiImage = false,
     useTts = true,
     autoInitializePages = true,
@@ -136,7 +135,6 @@ const createStory = async (user, data) => {
         length,
         situation: situation || null,
         title,
-        coverImageKey: coverImageKey || null,
         useAiImage: Boolean(useAiImage),
         useTts: Boolean(useTts),
         status: 'draft',
@@ -258,7 +256,6 @@ const getStories = async (user, filter = {}) => {
       title: s.title,
       length: s.length,
       situation: s.situation,
-      coverImageKey: s.coverImageKey,
       kind: s.kind,
       status: s.status,
       useAiImage: s.useAiImage,
@@ -363,7 +360,6 @@ const getStoryById = async (user, storyId) => {
     title: story.title,
     length: story.length,
     situation: story.situation,
-    coverImageKey: story.coverImageKey,
     kind: story.kind,
     status: story.status,
     useAiImage: story.useAiImage,
@@ -415,7 +411,6 @@ const updateStory = async (user, storyId, data) => {
     where: { id: story.id },
     data: {
       ...(data.title !== undefined && { title: data.title }),
-      ...(data.coverImageKey !== undefined && { coverImageKey: data.coverImageKey }),
       ...(data.useAiImage !== undefined && { useAiImage: data.useAiImage }),
       ...(data.useTts !== undefined && { useTts: data.useTts }),
       ...(data.status !== undefined && { status: data.status }),
@@ -744,10 +739,100 @@ const reviewStory = async (user, storyId) => {
 };
 
 /**
+ * Sao chep canh, trang, diem dung va phuong an tu truyen nguon sang truyen dich (trong transaction).
+ * Chu van giu token {NVx}; ten nhan vat do story_characters cua truyen dich quyet dinh.
+ * @param {Object} tx - Prisma transaction client
+ * @param {Object} params
+ * @param {string} params.sourceStoryId
+ * @param {string} params.targetStoryId
+ * @param {Function} [params.transformText] - bien doi chu (vd: go ten rieng khi dang ban)
+ * @param {boolean} [params.keepAudio] - giu file doc khi ten nhan vat khong doi
+ */
+const cloneStoryContent = async (tx, { sourceStoryId, targetStoryId, transformText = (t) => t, keepAudio = false }) => {
+  const scenes = await tx.storyScene.findMany({
+    where: { storyId: sourceStoryId },
+    orderBy: { sceneOrder: 'asc' },
+  });
+
+  const sceneIdMap = new Map();
+  for (const sc of scenes) {
+    const newScene = await tx.storyScene.create({
+      data: {
+        storyId: targetStoryId,
+        sceneOrder: sc.sceneOrder,
+        description: sc.description,
+        imageKey: sc.imageKey,
+        backgroundId: sc.backgroundId,
+        imageStatus: sc.imageStatus,
+      },
+    });
+    sceneIdMap.set(sc.id, newScene.id);
+  }
+
+  const pages = await tx.storyPage.findMany({
+    where: { storyId: sourceStoryId },
+    orderBy: { pageOrder: 'asc' },
+    include: { checkpoint: { include: { options: { orderBy: { optionOrder: 'asc' } } } } },
+  });
+
+  const audio = (key, status) =>
+    keepAudio ? { key, status } : { key: null, status: 'none' };
+
+  for (const page of pages) {
+    const pageAudio = audio(page.audioKey, page.audioStatus);
+    const clonedPage = await tx.storyPage.create({
+      data: {
+        storyId: targetStoryId,
+        sceneId: sceneIdMap.get(page.sceneId),
+        pageOrder: page.pageOrder,
+        contentText: transformText(page.contentText),
+        aiOriginalText: transformText(page.aiOriginalText),
+        origin: page.origin,
+        audioKey: pageAudio.key,
+        audioStatus: pageAudio.status,
+      },
+    });
+
+    const cp = page.checkpoint;
+    if (!cp) continue;
+
+    const clonedCp = await tx.storyCheckpoint.create({
+      data: {
+        storyId: targetStoryId,
+        afterPageId: clonedPage.id,
+        type: cp.type,
+        targetToken: cp.targetToken,
+        question: transformText(cp.question),
+        answerEmotion: cp.answerEmotion,
+        hint: transformText(cp.hint),
+        origin: cp.origin,
+        questionAudioKey: keepAudio ? cp.questionAudioKey : null,
+        hintAudioKey: keepAudio ? cp.hintAudioKey : null,
+      },
+    });
+
+    for (const opt of cp.options) {
+      await tx.checkpointOption.create({
+        data: {
+          checkpointId: clonedCp.id,
+          optionOrder: opt.optionOrder,
+          text: transformText(opt.text),
+          role: opt.role,
+          isCorrect: opt.isCorrect,
+          feedback: transformText(opt.feedback),
+          textAudioKey: keepAudio ? opt.textAudioKey : null,
+          feedbackAudioKey: keepAudio ? opt.feedbackAudioKey : null,
+        },
+      });
+    }
+  }
+};
+
+/**
  * Create a published clone of a private story with de-personalization
  * @param {Object} user - Authenticated parent/seller
  * @param {string} storyId - Source private story ID
- * @param {Object} options - Publish options (optional title, cover)
+ * @param {Object} options - Publish options (optional title, nameReplacements)
  * @returns {Promise<Object>} De-personalized published story ready for marketplace listing
  */
 const publishStoryVersion = async (user, storyId, options = {}) => {
@@ -833,17 +918,16 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
 
   // Perform cloning inside a database transaction
   const publishedStory = await prisma.$transaction(async (tx) => {
-    // 1. Create published story
+    // 1. Create published story. Khong chep situation: do la chuyen that cua gia dinh
     const clonedStory = await tx.story.create({
       data: {
         ownerId: user.id,
         kind: 'published',
         topicId: sourceStory.topicId,
         length: sourceStory.length,
-        situation: sourceStory.situation,
+        situation: null,
         sourceStoryId: sourceStory.id,
-        title: options.title || sourceStory.title,
-        coverImageKey: options.coverImageKey || sourceStory.coverImageKey,
+        title: depersonalizeText(options.title || sourceStory.title),
         useAiImage: sourceStory.useAiImage,
         useTts: sourceStory.useTts,
         status: 'ready',
@@ -871,85 +955,13 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
       });
     }
 
-    // 3. Clone scenes
-    const scenes = await prisma.storyScene.findMany({
-      where: { storyId: sourceStory.id },
-      orderBy: { sceneOrder: 'asc' },
+    // 3. Clone scenes, pages, checkpoints. Audio doc ten that nen bo, se sinh lai
+    await cloneStoryContent(tx, {
+      sourceStoryId: sourceStory.id,
+      targetStoryId: clonedStory.id,
+      transformText: depersonalizeText,
+      keepAudio: false,
     });
-
-    const oldSceneIdToNewSceneId = new Map();
-    for (const sc of scenes) {
-      const newScene = await tx.storyScene.create({
-        data: {
-          storyId: clonedStory.id,
-          sceneOrder: sc.sceneOrder,
-          description: sc.description,
-          imageKey: sc.imageKey,
-          backgroundId: sc.backgroundId,
-          imageStatus: sc.imageStatus,
-        },
-      });
-      oldSceneIdToNewSceneId.set(sc.id, newScene.id);
-    }
-
-    // 4. Clone pages and checkpoints
-    const pages = await prisma.storyPage.findMany({
-      where: { storyId: sourceStory.id },
-      orderBy: { pageOrder: 'asc' },
-      include: {
-        checkpoint: {
-          include: { options: true },
-        },
-      },
-    });
-
-    for (const page of pages) {
-      const dePersonalizedContent = depersonalizeText(page.contentText);
-      const newSceneId = oldSceneIdToNewSceneId.get(page.sceneId);
-
-      const clonedPage = await tx.storyPage.create({
-        data: {
-          storyId: clonedStory.id,
-          sceneId: newSceneId || Array.from(oldSceneIdToNewSceneId.values())[0],
-          pageOrder: page.pageOrder,
-          contentText: dePersonalizedContent,
-          aiOriginalText: page.aiOriginalText,
-          origin: page.origin,
-          audioKey: null,
-          audioStatus: 'none',
-        },
-      });
-
-      // Clone checkpoint if page had one
-      if (page.checkpoint) {
-        const cp = page.checkpoint;
-        const clonedCp = await tx.storyCheckpoint.create({
-          data: {
-            storyId: clonedStory.id,
-            afterPageId: clonedPage.id,
-            type: cp.type,
-            targetToken: cp.targetToken,
-            question: depersonalizeText(cp.question),
-            answerEmotion: cp.answerEmotion,
-            hint: depersonalizeText(cp.hint),
-            origin: cp.origin,
-          },
-        });
-
-        for (const opt of cp.options) {
-          await tx.checkpointOption.create({
-            data: {
-              checkpointId: clonedCp.id,
-              optionOrder: opt.optionOrder,
-              text: depersonalizeText(opt.text),
-              role: opt.role,
-              isCorrect: opt.isCorrect,
-              feedback: depersonalizeText(opt.feedback),
-            },
-          });
-        }
-      }
-    }
 
     return clonedStory;
   });
@@ -958,6 +970,7 @@ const publishStoryVersion = async (user, storyId, options = {}) => {
 };
 
 export default {
+  cloneStoryContent,
   createStory,
   getStories,
   getStoryById,

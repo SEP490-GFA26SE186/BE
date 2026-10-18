@@ -1,5 +1,8 @@
 import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
+import plansService from '../plans/plans.service.js';
+import storiesService from '../stories/stories.service.js';
+import payosService from '../../services/payos.service.js';
 
 // =============================================================================
 // HELPERS
@@ -15,25 +18,126 @@ const generatePayosOrderCode = () => {
   return BigInt(`${tsPart}${randPart}`);
 };
 
+const DEFAULT_COMMISSION_PERCENT = 30;
+const DEFAULT_HOLDING_DAYS = 7;
+
+const ORDER_INCLUDE = {
+  items: {
+    include: {
+      listing: {
+        select: {
+          id: true,
+          title: true,
+          coverImageKey: true,
+          sellerId: true,
+          seller: { select: { displayName: true } },
+        },
+      },
+      plan: true,
+    },
+  },
+};
+
 /**
- * Create a user notification safely without failing main transaction
+ * Doc mot setting dang so trong platform_settings (value jsonb: 30 hoac { value: 30 })
+ * @param {Object} client - prisma hoac tx
+ * @param {string} key
+ * @param {number} fallback
+ * @returns {Promise<number>}
  */
-const createNotification = async (tx, { userId, type, title, body, refType, refId }) => {
-  try {
-    const client = tx || prisma;
-    await client.notification.create({
+const getNumericSetting = async (client, key, fallback) => {
+  const setting = await client.platformSetting.findUnique({ where: { key } });
+  const raw = setting?.value;
+  const value = typeof raw === 'object' && raw !== null ? raw.value : raw;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+/**
+ * Cap quyen loi cho mot don vua chuyen sang paid (don 0d hoac webhook payOS).
+ * Phai chay trong cung transaction voi buoc chuyen trang thai don.
+ *  - listing: entitlement; truyen tra phi cong doanh thu treo (earning_pending) cho nguoi ban
+ *  - plan: kich hoat goi + cap credit thang dau
+ * @param {Object} tx - Prisma transaction client
+ * @param {Object} order - don kem items (ORDER_INCLUDE)
+ * @returns {Promise<Object>} { skippedListings } - truyen nguoi mua da so huu tu truoc (can hoan tien tay)
+ */
+const fulfillOrder = async (tx, order) => {
+  const holdingDays = await getNumericSetting(tx, 'holding_days', DEFAULT_HOLDING_DAYS);
+  const skippedListings = [];
+
+  for (const item of order.items) {
+    if (item.itemType === 'plan' && item.planId) {
+      await plansService.activateSubscription(tx, {
+        userId: order.buyerId,
+        plan: item.plan,
+        orderItemId: item.id,
+      });
+      continue;
+    }
+
+    if (item.itemType !== 'listing' || !item.listingId) continue;
+
+    // Partial unique (parent_id, listing_id) WHERE revoked_at IS NULL: hai don song song cung mot truyen
+    const owned = await tx.entitlement.findFirst({
+      where: { parentId: order.buyerId, listingId: item.listingId, revokedAt: null },
+    });
+    if (owned) {
+      skippedListings.push(item.listingId);
+      continue;
+    }
+
+    await tx.entitlement.create({
       data: {
-        userId,
-        type,
-        title,
-        body,
-        refType: refType || null,
-        refId: refId || null,
+        parentId: order.buyerId,
+        listingId: item.listingId,
+        orderItemId: item.id,
       },
     });
-  } catch (err) {
-    console.error('Failed to create notification:', err);
+
+    const isPaid = item.unitPriceVnd > 0n;
+    await tx.listing.update({
+      where: { id: item.listingId },
+      data: isPaid ? { purchaseCount: { increment: 1 } } : { freeClaimCount: { increment: 1 } },
+    });
+
+    if (!isPaid || !item.sellerAmountVnd) continue;
+
+    const sellerId = item.listing.sellerId;
+    await tx.sellerProfile.update({
+      where: { userId: sellerId },
+      data: { totalSales: { increment: 1 } },
+    });
+
+    await tx.wallet.upsert({ where: { userId: sellerId }, update: {}, create: { userId: sellerId } });
+    const sellerWallet = await tx.wallet.update({
+      where: { userId: sellerId },
+      data: { earningPendingVnd: { increment: item.sellerAmountVnd } },
+    });
+
+    await tx.walletLedger.create({
+      data: {
+        userId: sellerId,
+        walletType: 'earning',
+        entryType: 'earning_pending',
+        amount: item.sellerAmountVnd,
+        balanceAfter: sellerWallet.earningPendingVnd,
+        // Cron chuyen sang kha dung khi qua available_at
+        availableAt: new Date(Date.now() + holdingDays * 24 * 60 * 60 * 1000),
+        idempotencyKey: `earning-pending-${item.id}`,
+        refType: 'order_item',
+        refId: item.id,
+      },
+    });
   }
+
+  // Bo cac truyen vua mua khoi gio hang
+  const listingIds = order.items.filter((i) => i.listingId).map((i) => i.listingId);
+  if (listingIds.length > 0) {
+    await tx.cartItem.deleteMany({ where: { parentId: order.buyerId, listingId: { in: listingIds } } });
+  }
+
+  return { skippedListings };
 };
 
 // =============================================================================
@@ -61,7 +165,6 @@ const getCart = async (userId) => {
             select: {
               id: true,
               title: true,
-              coverImageKey: true,
             },
           },
         },
@@ -129,7 +232,7 @@ const addToCart = async (userId, listingId) => {
       listing: {
         include: {
           priceTier: true,
-          publishedStory: { select: { title: true, coverImageKey: true } },
+          publishedStory: { select: { title: true } },
         },
       },
     },
@@ -183,6 +286,15 @@ const clearCart = async (userId) => {
  */
 const createOrder = async (userId, { fromCart, itemType, itemId }) => {
   let itemsToOrder = [];
+  const commissionPercent = await getNumericSetting(prisma, 'commission_rate', DEFAULT_COMMISSION_PERCENT);
+  const listingItem = (listingId, unitPriceVnd) => ({
+    itemType: 'listing',
+    listingId,
+    unitPriceVnd,
+    // SNAPSHOT ty le chia luc mua; nguoi ban nhan phan con lai sau hoa hong
+    sellerShareRate: (100 - commissionPercent) / 100,
+    sellerAmountVnd: (unitPriceVnd * BigInt(100 - commissionPercent)) / 100n,
+  });
 
   if (fromCart) {
     const cartItems = await prisma.cartItem.findMany({
@@ -217,17 +329,7 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         throw ApiError.badRequest(`Bạn đã sở hữu truyện "${item.listing.title}" rồi`);
       }
 
-      const unitPriceVnd = item.listing.priceTier.priceVnd;
-      // 70% for seller, 30% for platform
-      const sellerAmountVnd = (unitPriceVnd * 70n) / 100n;
-
-      itemsToOrder.push({
-        itemType: 'listing',
-        listingId: item.listingId,
-        unitPriceVnd,
-        sellerShareRate: 0.7,
-        sellerAmountVnd,
-      });
+      itemsToOrder.push(listingItem(item.listingId, item.listing.priceTier.priceVnd));
     }
   } else {
     // Direct buy
@@ -251,16 +353,7 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         throw ApiError.badRequest('Bạn đã sở hữu truyện này rồi');
       }
 
-      const unitPriceVnd = listing.priceTier.priceVnd;
-      const sellerAmountVnd = (unitPriceVnd * 70n) / 100n;
-
-      itemsToOrder.push({
-        itemType: 'listing',
-        listingId: itemId,
-        unitPriceVnd,
-        sellerShareRate: 0.7,
-        sellerAmountVnd,
-      });
+      itemsToOrder.push(listingItem(itemId, listing.priceTier.priceVnd));
     } else if (itemType === 'plan') {
       const plan = await prisma.plan.findUnique({
         where: { id: itemId },
@@ -277,167 +370,79 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         sellerShareRate: null,
         sellerAmountVnd: null,
       });
-    } else if (itemType === 'credit_pack') {
-      const pack = await prisma.creditPack.findUnique({
-        where: { id: itemId },
-      });
-
-      if (!pack || !pack.isActive) {
-        throw ApiError.badRequest('Gói nạp Credit không tồn tại hoặc đã ngừng cung cấp');
-      }
-
-      itemsToOrder.push({
-        itemType: 'credit_pack',
-        creditPackId: itemId,
-        unitPriceVnd: pack.priceVnd,
-        creditsGranted: pack.credits,
-        bonusGranted: pack.bonusCredits,
-        sellerShareRate: null,
-        sellerAmountVnd: null,
-      });
     }
   }
 
   // Calculate totals
   const subtotalVnd = itemsToOrder.reduce((sum, item) => sum + item.unitPriceVnd, 0n);
   const totalVnd = subtotalVnd;
-  const payosOrderCode = generatePayosOrderCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+  const isFree = totalVnd === 0n;
 
-  return prisma.$transaction(async (tx) => {
-    const isFree = totalVnd === 0n;
-
-    const order = await tx.order.create({
+  const order = await prisma.$transaction(async (tx) => {
+    const created = await tx.order.create({
       data: {
         buyerId: userId,
         subtotalVnd,
         discountVnd: 0n,
         totalVnd,
         status: isFree ? 'paid' : 'pending',
-        payosOrderCode,
+        // Don 0d khong di qua payOS
+        payosOrderCode: isFree ? null : generatePayosOrderCode(),
         paidAt: isFree ? new Date() : null,
-        expiresAt,
+        expiresAt: isFree ? null : expiresAt,
         items: {
           create: itemsToOrder.map((item) => ({
             itemType: item.itemType,
             listingId: item.listingId || null,
             planId: item.planId || null,
-            creditPackId: item.creditPackId || null,
             unitPriceVnd: item.unitPriceVnd,
-            creditsGranted: item.creditsGranted || null,
-            bonusGranted: item.bonusGranted || null,
-            sellerShareRate: item.sellerShareRate || null,
-            sellerAmountVnd: item.sellerAmountVnd || null,
+            sellerShareRate: item.sellerShareRate ?? null,
+            sellerAmountVnd: item.sellerAmountVnd ?? null,
             status: 'active',
           })),
         },
       },
-      include: {
-        items: {
-          include: {
-            listing: {
-              select: {
-                id: true,
-                title: true,
-                coverImageKey: true,
-                seller: { select: { displayName: true } },
-              },
-            },
-            plan: true,
-            creditPack: true,
-          },
-        },
-      },
+      include: ORDER_INCLUDE,
     });
 
-    // If order is free (0 VND), immediately fulfill entitlements/benefits!
+    // Don 0d: cap quyen ngay. Don tra phi: cho webhook payOS
     if (isFree) {
-      for (const item of order.items) {
-        if (item.itemType === 'listing' && item.listingId) {
-          await tx.entitlement.create({
-            data: {
-              parentId: userId,
-              listingId: item.listingId,
-              source: 'free_claim',
-              orderItemId: item.id,
-            },
-          });
-
-          await tx.listing.update({
-            where: { id: item.listingId },
-            data: {
-              freeClaimCount: { increment: 1 },
-            },
-          });
-        } else if (item.itemType === 'plan' && item.planId) {
-          const plan = await tx.plan.findUnique({ where: { id: item.planId } });
-          const days = plan?.period === 'year' ? 365 : 30;
-          await tx.subscription.create({
-            data: {
-              parentId: userId,
-              planId: item.planId,
-              orderItemId: item.id,
-              periodStart: new Date(),
-              periodEnd: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
-              status: 'active',
-            },
-          });
-        } else if (item.itemType === 'credit_pack' && item.creditPackId) {
-          const totalCredits = (item.creditsGranted || 0) + (item.bonusGranted || 0);
-          let wallet = await tx.wallet.findUnique({ where: { userId } });
-          if (!wallet) {
-            wallet = await tx.wallet.create({
-              data: {
-                userId,
-                creditBalance: 0,
-                earningPendingVnd: 0n,
-                earningAvailableVnd: 0n,
-                earningLockedVnd: 0n,
-              },
-            });
-          }
-
-          const newBalance = wallet.creditBalance + totalCredits;
-          await tx.wallet.update({
-            where: { userId },
-            data: { creditBalance: newBalance },
-          });
-
-          await tx.walletLedger.create({
-            data: {
-              userId,
-              walletType: 'credit',
-              entryType: 'credit_topup',
-              amount: BigInt(totalCredits),
-              balanceAfter: BigInt(newBalance),
-              idempotencyKey: `order-${order.id}-${item.id}`,
-              refType: 'order',
-              refId: order.id,
-            },
-          });
-        }
-      }
-
-      if (fromCart) {
-        await tx.cartItem.deleteMany({ where: { parentId: userId } });
-      }
-
-      await createNotification(tx, {
-        userId,
-        type: 'order_completed',
-        title: 'Đơn hàng hoàn tất',
-        body: `Đơn hàng #${order.payosOrderCode} miễn phí đã được kích hoạt thành công.`,
-        refType: 'order',
-        refId: order.id,
-      });
-    } else {
-      if (fromCart) {
-        await tx.cartItem.deleteMany({ where: { parentId: userId } });
-      }
+      await fulfillOrder(tx, created);
     }
 
-    return order;
+    return created;
   });
+
+  if (isFree) {
+    return { order, checkoutUrl: null };
+  }
+
+  if (!payosService.isConfigured()) {
+    console.warn(`payOS chua cau hinh: don ${order.id} nam o pending, khong co link thanh toan`);
+    return { order, checkoutUrl: null };
+  }
+
+  try {
+    const link = await payosService.createPaymentLink({
+      orderCode: order.payosOrderCode,
+      amount: order.totalVnd,
+      // Tai khoan ngan hang chua lien ket payOS chi nhan mo ta toi da 9 ky tu
+      description: `SW${String(order.payosOrderCode).slice(-6)}`,
+      expiresAt,
+    });
+
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { payosPaymentLinkId: link.paymentLinkId },
+      include: ORDER_INCLUDE,
+    });
+    return { order: updated, checkoutUrl: link.checkoutUrl };
+  } catch (err) {
+    console.error('Failed to create payOS payment link:', err.message);
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'failed' } });
+    throw new ApiError(502, 'Không tạo được link thanh toán, vui lòng thử lại');
+  }
 };
 
 /**
@@ -474,7 +479,6 @@ const getMyOrders = async (userId, filter = {}) => {
               },
             },
             plan: true,
-            creditPack: true,
           },
         },
       },
@@ -519,7 +523,6 @@ const getOrderById = async (user, orderId) => {
             },
           },
           plan: true,
-          creditPack: true,
         },
       },
     },
@@ -591,7 +594,6 @@ const getMyEntitlements = async (userId) => {
             select: {
               id: true,
               title: true,
-              coverImageKey: true,
               topicId: true,
               topic: {
                 select: {
@@ -610,10 +612,12 @@ const getMyEntitlements = async (userId) => {
 };
 
 /**
- * Personalize an owned story into parent's private collection & bookshelf
+ * Personalize an owned story into parent's private collection & bookshelf.
+ * Tao truyen private tu ban published: gan nhan vat gia dinh vao token {NVx},
+ * token khong gan giu ten chung (alias) cua nguoi ban.
  * @param {string} userId
  * @param {string} entitlementId
- * @param {Object} payload - { title, childId, characters: [{ slotKey, characterId }] }
+ * @param {Object} payload - { title, childId, characters: [{ token, characterId }] }
  */
 const personalizeEntitlement = async (userId, entitlementId, { title, childId, characters = [] }) => {
   const entitlement = await prisma.entitlement.findFirst({
@@ -626,15 +630,7 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
       listing: {
         include: {
           publishedStory: {
-            include: {
-              pages: {
-                include: {
-                  choices: true,
-                },
-                orderBy: { pageOrder: 'asc' },
-              },
-              storyCharacters: true,
-            },
+            include: { storyCharacters: true },
           },
         },
       },
@@ -646,7 +642,7 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
   }
 
   const publishedStory = entitlement.listing?.publishedStory;
-  if (!publishedStory) {
+  if (!publishedStory || publishedStory.deletedAt) {
     throw ApiError.notFound('Không tìm thấy dữ liệu truyện gốc để nhân bản');
   }
 
@@ -660,16 +656,26 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
     }
   }
 
-  // Validate characters if provided
-  for (const c of characters) {
-    if (c.characterId) {
-      const char = await prisma.character.findFirst({
-        where: { id: c.characterId, parentId: userId, deletedAt: null },
-      });
-      if (!char) {
-        throw ApiError.notFound(`Không tìm thấy nhân vật gia đình (id: ${c.characterId})`);
-      }
+  // Validate character bindings: token phai co trong truyen, nhan vat thuoc gia dinh
+  const tokens = new Set(publishedStory.storyCharacters.map((sc) => sc.token));
+  const characterByToken = new Map();
+  for (const binding of characters) {
+    const token = binding.token || binding.slotKey;
+    if (!tokens.has(token)) {
+      throw ApiError.badRequest(`Truyện không có nhân vật ${token}`);
     }
+    if (characterByToken.has(token)) {
+      throw ApiError.badRequest(`Nhân vật ${token} được gán nhiều lần`);
+    }
+    if (!binding.characterId) continue;
+
+    const char = await prisma.character.findFirst({
+      where: { id: binding.characterId, parentId: userId, deletedAt: null },
+    });
+    if (!char) {
+      throw ApiError.notFound(`Không tìm thấy nhân vật gia đình (id: ${binding.characterId})`);
+    }
+    characterByToken.set(token, char.id);
   }
 
   return prisma.$transaction(async (tx) => {
@@ -680,93 +686,36 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
         kind: 'private',
         topicId: publishedStory.topicId,
         sourceStoryId: publishedStory.id,
+        length: publishedStory.length,
         title: title || publishedStory.title,
-        coverImageKey: publishedStory.coverImageKey,
         useAiImage: publishedStory.useAiImage,
         useTts: publishedStory.useTts,
         status: 'ready',
+        // Noi dung da qua kiem duyet tren cho -> dua len gia sach duoc ngay
         reviewedAt: new Date(),
       },
     });
 
-    // 2. Bind characters
-    if (characters.length > 0) {
-      for (const charBinding of characters) {
-        await tx.storyCharacter.create({
-          data: {
-            storyId: newStory.id,
-            slotKey: charBinding.slotKey,
-            characterId: charBinding.characterId || null,
-          },
-        });
-      }
-    } else {
-      // Default: copy existing slots with empty bindings
-      for (const sc of publishedStory.storyCharacters) {
-        await tx.storyCharacter.create({
-          data: {
-            storyId: newStory.id,
-            slotKey: sc.slotKey,
-            characterId: null,
-          },
-        });
-      }
-    }
-
-    // 3. Two-phase clone of pages and choices to preserve branching
-    const oldChoiceIdToNewChoiceId = new Map();
-    const createdPagesWithOldChoices = [];
-
-    // Phase A: Create pages and choices
-    for (const page of publishedStory.pages) {
-      const newPage = await tx.storyPage.create({
+    // 2. Bind characters: dung mot trong character_id / alias_name
+    for (const sc of publishedStory.storyCharacters) {
+      const characterId = characterByToken.get(sc.token) || null;
+      await tx.storyCharacter.create({
         data: {
           storyId: newStory.id,
-          stageId: page.stageId,
-          pageKind: page.pageKind,
-          pageOrder: page.pageOrder,
-          contentText: page.contentText,
-          aiOriginalText: page.aiOriginalText,
-          origin: page.origin,
-          backgroundId: page.backgroundId,
-          imageKey: page.imageKey,
-          audioKey: page.audioKey,
-          imageStatus: 'completed',
-          audioStatus: page.audioKey ? 'completed' : 'none',
+          token: sc.token,
+          characterId,
+          aliasName: characterId ? null : sc.aliasName,
+          isMain: sc.isMain,
         },
       });
-
-      if (page.fromChoiceId) {
-        createdPagesWithOldChoices.push({
-          newPageId: newPage.id,
-          oldFromChoiceId: page.fromChoiceId,
-        });
-      }
-
-      for (const choice of page.choices) {
-        const newChoice = await tx.storyChoice.create({
-          data: {
-            pageId: newPage.id,
-            choiceOrder: choice.choiceOrder,
-            choiceText: choice.choiceText,
-            choiceTypeId: choice.choiceTypeId,
-            audioKey: choice.audioKey,
-          },
-        });
-        oldChoiceIdToNewChoiceId.set(choice.id, newChoice.id);
-      }
     }
 
-    // Phase B: Link consequence branch points
-    for (const item of createdPagesWithOldChoices) {
-      const mappedChoiceId = oldChoiceIdToNewChoiceId.get(item.oldFromChoiceId);
-      if (mappedChoiceId) {
-        await tx.storyPage.update({
-          where: { id: item.newPageId },
-          data: { fromChoiceId: mappedChoiceId },
-        });
-      }
-    }
+    // 3. Clone scenes, pages, checkpoints. Doi ten nhan vat thi file doc cu khong con dung
+    await storiesService.cloneStoryContent(tx, {
+      sourceStoryId: publishedStory.id,
+      targetStoryId: newStory.id,
+      keepAudio: characterByToken.size === 0,
+    });
 
     // 4. Place on child bookshelf if specified
     if (childId) {
@@ -792,6 +741,7 @@ const personalizeEntitlement = async (userId, entitlementId, { title, childId, c
       storyId: newStory.id,
       title: newStory.title,
       childId: childId || null,
+      needsNarration: characterByToken.size > 0 && newStory.useTts,
     };
   });
 };
@@ -804,6 +754,7 @@ export {
   clearCart,
   // Orders
   createOrder,
+  fulfillOrder,
   getMyOrders,
   getOrderById,
   cancelOrder,

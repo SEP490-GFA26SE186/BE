@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const ORDER_STATUSES = ['pending', 'paid', 'cancelled', 'expired'];
-const ORDER_ITEM_TYPES = ['listing', 'plan', 'credit_pack'];
+const ORDER_ITEM_TYPES = ['listing', 'plan'];
 
 // =============================================================================
 // Cart Validations
@@ -69,10 +69,14 @@ const personalizeEntitlement = z.object({
     childId: z.string().uuid('Invalid child ID format').optional(),
     characters: z
       .array(
-        z.object({
-          slotKey: z.string().trim().min(1).max(30),
-          characterId: z.string().uuid('Invalid character ID format').nullable().optional(),
-        })
+        z
+          .object({
+            token: z.string().trim().min(1).max(10).optional(),
+            // Ten cu, giu de tuong thich FE
+            slotKey: z.string().trim().min(1).max(10).optional(),
+            characterId: z.string().uuid('Invalid character ID format').nullable().optional(),
+          })
+          .refine((c) => c.token || c.slotKey, 'token is required')
       )
       .default([]),
   }),

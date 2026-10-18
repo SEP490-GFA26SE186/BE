@@ -1,33 +1,10 @@
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import bookshelfService from '../bookshelf/bookshelf.service.js';
+import reportsService from '../reports/reports.service.js';
 
 // Default free quota if user has no paid subscription
 const DEFAULT_FREE_MAX_CHILDREN = 2;
-
-/**
- * Helper: Parse "HH:mm" or "HH:mm:ss" string to UTC Date object for PostgreSQL Time field
- * @param {string|null} timeStr
- * @returns {Date|null}
- */
-const parseTimeToDate = (timeStr) => {
-  if (!timeStr) return null;
-  const [hours, minutes, seconds = 0] = timeStr.split(':').map(Number);
-  return new Date(Date.UTC(1970, 0, 1, hours, minutes, seconds));
-};
-
-/**
- * Helper: Format Date object to "HH:mm" string
- * @param {Date|null} dateObj
- * @returns {string|null}
- */
-const formatTimeToHHMM = (dateObj) => {
-  if (!dateObj) return null;
-  const d = new Date(dateObj);
-  const h = String(d.getUTCHours()).padStart(2, '0');
-  const m = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-};
 
 /**
  * Helper: Calculate age from birth date
@@ -47,37 +24,13 @@ const calculateAge = (birthDate) => {
 };
 
 /**
- * Helper: Check if current time in VN timezone (UTC+7) is bedtime
- * @param {Date|null} bedtimeStart
- * @param {Date|null} bedtimeEnd
- * @returns {boolean}
- */
-const checkIsBedtimeNow = (bedtimeStart, bedtimeEnd) => {
-  if (!bedtimeStart || !bedtimeEnd) return false;
-  const now = new Date();
-  const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-  const curMinutes = vnTime.getUTCHours() * 60 + vnTime.getUTCMinutes();
-
-  const startD = new Date(bedtimeStart);
-  const startMinutes = startD.getUTCHours() * 60 + startD.getUTCMinutes();
-
-  const endD = new Date(bedtimeEnd);
-  const endMinutes = endD.getUTCHours() * 60 + endD.getUTCMinutes();
-
-  if (startMinutes <= endMinutes) {
-    return curMinutes >= startMinutes && curMinutes <= endMinutes;
-  }
-  // Overnight: e.g. 21:00 to 06:00
-  return curMinutes >= startMinutes || curMinutes <= endMinutes;
-};
-
-/**
  * Helper: Format child profile database record for client response
  * @param {Object} child
  * @returns {Object}
  */
 const formatChildResponse = (child) => {
-  const selfChar = child.characters && child.characters.length > 0 ? child.characters[0] : null;
+  // Nhan vat dai dien cua tre (characters.child_id unique)
+  const selfChar = child.character && !child.character.deletedAt ? child.character : null;
 
   return {
     id: child.id,
@@ -86,9 +39,6 @@ const formatChildResponse = (child) => {
     birthDate: child.birthDate ? child.birthDate.toISOString().split('T')[0] : null,
     age: calculateAge(child.birthDate),
     dailyScreenTimeMinutes: child.dailyScreenTimeMinutes,
-    bedtimeStart: formatTimeToHHMM(child.bedtimeStart),
-    bedtimeEnd: formatTimeToHHMM(child.bedtimeEnd),
-    isBedtimeNow: checkIsBedtimeNow(child.bedtimeStart, child.bedtimeEnd),
     preferredVoice: child.preferredVoice,
     avatar: selfChar
       ? {
@@ -156,8 +106,6 @@ const createChild = async (parentId, data) => {
         name: data.name.trim(),
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
         dailyScreenTimeMinutes: data.dailyScreenTimeMinutes ?? 30,
-        bedtimeStart: parseTimeToDate(data.bedtimeStart),
-        bedtimeEnd: parseTimeToDate(data.bedtimeEnd),
         preferredVoice: data.preferredVoice?.trim() || null,
       },
     });
@@ -168,8 +116,7 @@ const createChild = async (parentId, data) => {
         parentId,
         childId: child.id,
         name: data.name.trim(),
-        role: 'self',
-        appearance: data.appearance?.trim() || null,
+        appearance: data.appearance?.trim() || '', // characters.appearance NOT NULL
         portraitImageKey: data.portraitImageKey?.trim() || null,
         portraitStatus: data.portraitImageKey ? 'ready' : 'none',
       },
@@ -179,10 +126,7 @@ const createChild = async (parentId, data) => {
     const result = await tx.childProfile.findUnique({
       where: { id: child.id },
       include: {
-        characters: {
-          where: { role: 'self', deletedAt: null },
-          take: 1,
-        },
+        character: true,
         _count: {
           select: {
             bookshelfItems: true,
@@ -211,10 +155,7 @@ const getChildren = async (parentId) => {
       createdAt: 'asc',
     },
     include: {
-      characters: {
-        where: { role: 'self', deletedAt: null },
-        take: 1,
-      },
+      character: true,
       _count: {
         select: {
           bookshelfItems: true,
@@ -241,10 +182,7 @@ const getChildById = async (parentId, childId) => {
       deletedAt: null,
     },
     include: {
-      characters: {
-        where: { role: 'self', deletedAt: null },
-        take: 1,
-      },
+      character: true,
       _count: {
         select: {
           bookshelfItems: true,
@@ -285,8 +223,6 @@ const updateChild = async (parentId, childId, data) => {
   if (data.name !== undefined) updatePayload.name = data.name.trim();
   if (data.birthDate !== undefined) updatePayload.birthDate = data.birthDate ? new Date(data.birthDate) : null;
   if (data.dailyScreenTimeMinutes !== undefined) updatePayload.dailyScreenTimeMinutes = data.dailyScreenTimeMinutes;
-  if (data.bedtimeStart !== undefined) updatePayload.bedtimeStart = parseTimeToDate(data.bedtimeStart);
-  if (data.bedtimeEnd !== undefined) updatePayload.bedtimeEnd = parseTimeToDate(data.bedtimeEnd);
   if (data.preferredVoice !== undefined) updatePayload.preferredVoice = data.preferredVoice?.trim() || null;
 
   return prisma.$transaction(async (tx) => {
@@ -298,7 +234,7 @@ const updateChild = async (parentId, childId, data) => {
     // If name or avatar info changed, synchronize with the self character
     if (data.name || data.appearance !== undefined || data.portraitImageKey !== undefined) {
       const selfChar = await tx.character.findFirst({
-        where: { childId, role: 'self', deletedAt: null },
+        where: { childId, deletedAt: null },
       });
 
       if (selfChar) {
@@ -306,7 +242,7 @@ const updateChild = async (parentId, childId, data) => {
           where: { id: selfChar.id },
           data: {
             ...(data.name && { name: data.name.trim() }),
-            ...(data.appearance !== undefined && { appearance: data.appearance ? data.appearance.trim() : null }),
+            ...(data.appearance !== undefined && { appearance: data.appearance ? data.appearance.trim() : '' }),
             ...(data.portraitImageKey !== undefined && {
               portraitImageKey: data.portraitImageKey ? data.portraitImageKey.trim() : null,
               portraitStatus: data.portraitImageKey ? 'ready' : 'none',
@@ -319,10 +255,7 @@ const updateChild = async (parentId, childId, data) => {
     const fullChild = await tx.childProfile.findUnique({
       where: { id: childId },
       include: {
-        characters: {
-          where: { role: 'self', deletedAt: null },
-          take: 1,
-        },
+        character: true,
         _count: {
           select: {
             bookshelfItems: true,
@@ -363,7 +296,7 @@ const deleteChild = async (parentId, childId) => {
 
     // Soft delete associated self character
     await tx.character.updateMany({
-      where: { childId, role: 'self', deletedAt: null },
+      where: { childId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
 
@@ -400,7 +333,7 @@ const updateChildAvatar = async (parentId, childId, { appearance, portraitImageK
   }
 
   let selfChar = await prisma.character.findFirst({
-    where: { childId, role: 'self', deletedAt: null },
+    where: { childId, deletedAt: null },
   });
 
   if (!selfChar) {
@@ -409,8 +342,7 @@ const updateChildAvatar = async (parentId, childId, { appearance, portraitImageK
         parentId,
         childId,
         name: child.name,
-        role: 'self',
-        appearance: appearance ? appearance.trim() : null,
+        appearance: appearance ? appearance.trim() : '',
         portraitImageKey: portraitImageKey ? portraitImageKey.trim() : null,
         portraitStatus: portraitImageKey ? 'ready' : 'none',
       },
@@ -419,7 +351,7 @@ const updateChildAvatar = async (parentId, childId, { appearance, portraitImageK
     selfChar = await prisma.character.update({
       where: { id: selfChar.id },
       data: {
-        ...(appearance !== undefined && { appearance: appearance ? appearance.trim() : null }),
+        ...(appearance !== undefined && { appearance: appearance ? appearance.trim() : '' }),
         ...(portraitImageKey !== undefined && {
           portraitImageKey: portraitImageKey ? portraitImageKey.trim() : null,
           portraitStatus: portraitImageKey ? 'ready' : 'none',
@@ -456,8 +388,9 @@ const getChildUsage = async (parentId, childId, dateStr) => {
     throw ApiError.notFound('Child profile not found');
   }
 
-  // Today in YYYY-MM-DD
-  const targetDateStr = dateStr || new Date().toISOString().split('T')[0];
+  // Hom nay theo gio Viet Nam (usage_date la cot generated theo Asia/Ho_Chi_Minh)
+  const targetDateStr =
+    dateStr || new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().split('T')[0];
   const targetDate = new Date(targetDateStr);
 
   const sessions = await prisma.childUsageSession.findMany({
@@ -484,7 +417,6 @@ const getChildUsage = async (parentId, childId, dateStr) => {
     usedSeconds: totalDurationSeconds,
     remainingMinutes,
     isLimitReached,
-    isBedtimeNow: checkIsBedtimeNow(child.bedtimeStart, child.bedtimeEnd),
     sessionsCount: sessions.length,
     sessions: sessions.map((s) => ({
       id: s.id,
@@ -515,17 +447,23 @@ const logUsageSession = async (parentId, childId, { startedAt, endedAt, duration
     throw ApiError.notFound('Child profile not found');
   }
 
-  const start = startedAt ? new Date(startedAt) : new Date(Date.now() - durationSeconds * 1000);
-  const end = endedAt ? new Date(endedAt) : new Date();
-  const usageDate = new Date(start.toISOString().split('T')[0]);
+  const end = endedAt
+    ? new Date(endedAt)
+    : startedAt
+      ? new Date(new Date(startedAt).getTime() + durationSeconds * 1000)
+      : new Date();
+  const start = startedAt ? new Date(startedAt) : new Date(end.getTime() - durationSeconds * 1000);
 
+  if (end <= start) {
+    throw ApiError.badRequest('endedAt must be after startedAt');
+  }
+
+  // duration_seconds va usage_date la cot GENERATED trong DB, khong duoc ghi
   const session = await prisma.childUsageSession.create({
     data: {
       childId,
       startedAt: start,
       endedAt: end,
-      durationSeconds,
-      usageDate,
     },
   });
 
@@ -533,101 +471,14 @@ const logUsageSession = async (parentId, childId, { startedAt, endedAt, duration
 };
 
 /**
- * Get aggregated EQ assessment report for child (Radar Chart data)
+ * Get EQ report for child (Radar Chart data) - dung chung voi /reports/eq/children/:childId
  * @param {string} parentId
  * @param {string} childId
  * @param {Object} filter - { startDate, endDate }
  * @returns {Promise<Object>}
  */
-const getChildEqReport = async (parentId, childId, filter = {}) => {
-  const child = await prisma.childProfile.findFirst({
-    where: { id: childId, parentId, deletedAt: null },
-  });
-
-  if (!child) {
-    throw ApiError.notFound('Child profile not found');
-  }
-
-  // 1. Get all 5 CASEL competencies
-  const allSkills = await prisma.eqSkill.findMany({
-    orderBy: { displayOrder: 'asc' },
-  });
-
-  // 2. Fetch play sessions with EQ scores
-  const playSessionWhere = {
-    childId,
-    status: 'completed',
-  };
-
-  if (filter.startDate || filter.endDate) {
-    playSessionWhere.completedAt = {};
-    if (filter.startDate) playSessionWhere.completedAt.gte = new Date(filter.startDate);
-    if (filter.endDate) {
-      const endD = new Date(filter.endDate);
-      endD.setHours(23, 59, 59, 999);
-      playSessionWhere.completedAt.lte = endD;
-    }
-  }
-
-  const playSessions = await prisma.playSession.findMany({
-    where: playSessionWhere,
-    include: {
-      answers: true,
-      story: {
-        select: {
-          id: true,
-          title: true,
-          topic: {
-            select: {
-              skill: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // 3. Aggregate score deltas per skill
-  const skillScores = {};
-  allSkills.forEach((s) => {
-    skillScores[s.id] = {
-      skillId: s.id,
-      caselCode: s.caselCode,
-      nameVi: s.nameVi,
-      nameEn: s.nameEn,
-      description: s.description,
-      displayOrder: s.displayOrder,
-      score: 0,
-      sessionsCount: 0,
-    };
-  });
-
-  playSessions.forEach((ps) => {
-    (ps.answers || []).forEach((ans) => {
-      if (ans.skillId && skillScores[ans.skillId]) {
-        skillScores[ans.skillId].score += Number(ans.score);
-        skillScores[ans.skillId].sessionsCount += 1;
-      }
-    });
-  });
-
-  const skillsArray = Object.values(skillScores);
-  const totalScore = skillsArray.reduce((acc, curr) => acc + curr.score, 0);
-
-  const skillsWithPercentage = skillsArray.map((item) => ({
-    ...item,
-    percentage: totalScore > 0 ? Math.round((item.score / totalScore) * 100) : 20,
-  }));
-
-  return {
-    childId: child.id,
-    childName: child.name,
-    age: calculateAge(child.birthDate),
-    totalCompletedStories: playSessions.length,
-    totalEqScore: totalScore,
-    skills: skillsWithPercentage,
-  };
-};
+const getChildEqReport = (parentId, childId, filter = {}) =>
+  reportsService.getChildEqReport(parentId, childId, filter);
 
 /**
  * Get comprehensive child dashboard overview
@@ -649,7 +500,6 @@ const getChildOverview = async (parentId, childId) => {
         select: {
           id: true,
           title: true,
-          coverImageKey: true,
         },
       },
     },
@@ -662,7 +512,6 @@ const getChildOverview = async (parentId, childId) => {
       usedMinutes: todayUsage.usedMinutes,
       remainingMinutes: todayUsage.remainingMinutes,
       isLimitReached: todayUsage.isLimitReached,
-      isBedtimeNow: todayUsage.isBedtimeNow,
     },
     readingStats: {
       booksInBookshelf: child.booksCount,
@@ -671,8 +520,9 @@ const getChildOverview = async (parentId, childId) => {
       lastReadAt: lastSession?.startedAt || null,
     },
     eqRadar: {
-      totalScore: eqReport.totalEqScore,
-      skills: eqReport.skills,
+      skills: eqReport.radarMetrics,
+      focusSkill: eqReport.summary.focusSkill,
+      strongestSkill: eqReport.summary.strongestSkill,
     },
   };
 };

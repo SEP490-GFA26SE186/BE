@@ -175,7 +175,6 @@ const getListings = async (query) => {
           select: {
             id: true,
             title: true,
-            coverImageKey: true,
             topic: {
               select: {
                 id: true,
@@ -197,7 +196,7 @@ const getListings = async (query) => {
     id: l.id,
     title: l.title,
     description: l.description,
-    coverImageKey: l.coverImageKey || l.publishedStory.coverImageKey,
+    coverImageKey: l.coverImageKey,
     hasAiContent: l.hasAiContent,
     purchaseCount: l.purchaseCount,
     freeClaimCount: l.freeClaimCount,
@@ -259,7 +258,6 @@ const getListingById = async (listingId, currentUser) => {
         select: {
           id: true,
           title: true,
-          coverImageKey: true,
           useAiImage: true,
           useTts: true,
           topic: {
@@ -310,7 +308,7 @@ const getListingById = async (listingId, currentUser) => {
     id: listing.id,
     title: listing.title,
     description: listing.description,
-    coverImageKey: listing.coverImageKey || listing.publishedStory.coverImageKey,
+    coverImageKey: listing.coverImageKey,
     status: listing.status,
     hasAiContent: listing.hasAiContent,
     purchaseCount: listing.purchaseCount,
@@ -406,7 +404,7 @@ const createListing = async (user, data) => {
       publishedStoryId: story.id,
       title: data.title.trim(),
       description: data.description?.trim() || null,
-      coverImageKey: data.coverImageKey || story.coverImageKey,
+      coverImageKey: data.coverImageKey || null,
       priceTierId: priceTier.id,
       hasAiContent: data.hasAiContent || false,
       status: 'submitted',
@@ -444,7 +442,7 @@ const getMyListings = async (user) => {
         select: { label: true, priceVnd: true },
       },
       publishedStory: {
-        select: { id: true, title: true, coverImageKey: true },
+        select: { id: true, title: true },
       },
     },
   });

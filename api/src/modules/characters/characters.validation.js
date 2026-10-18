@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-const CHARACTER_ROLES = ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'];
-const GENERATION_STATUSES = ['none', 'queued', 'generating', 'ready', 'failed'];
 
 const createCharacter = z.object({
   body: z.object({
@@ -10,11 +8,6 @@ const createCharacter = z.object({
       .trim()
       .min(1, 'Character name cannot be empty')
       .max(100, 'Character name must not exceed 100 characters'),
-    role: z.enum(CHARACTER_ROLES, {
-      errorMap: () => ({
-        message: 'Invalid character role (allowed: self, sibling, parent, relative, pet, toy)',
-      }),
-    }),
     appearance: z
       .string({ required_error: 'Character appearance description is required' })
       .trim()
@@ -49,13 +42,6 @@ const updateCharacter = z.object({
       .min(1, 'Character name cannot be empty')
       .max(100, 'Character name must not exceed 100 characters')
       .optional(),
-    role: z
-      .enum(CHARACTER_ROLES, {
-        errorMap: () => ({
-          message: 'Invalid character role (allowed: self, sibling, parent, relative, pet, toy)',
-        }),
-      })
-      .optional(),
     appearance: z
       .string()
       .trim()
@@ -77,23 +63,11 @@ const updateCharacter = z.object({
       .max(1000, 'Generation prompt must not exceed 1000 characters')
       .nullable()
       .optional(),
-    portraitStatus: z
-      .enum(GENERATION_STATUSES, {
-        errorMap: () => ({
-          message: 'Invalid portrait status (allowed: none, queued, generating, ready, failed)',
-        }),
-      })
-      .optional(),
   }),
 });
 
 const getCharacters = z.object({
   query: z.object({
-    role: z
-      .enum(CHARACTER_ROLES, {
-        errorMap: () => ({ message: 'Invalid role filter' }),
-      })
-      .optional(),
     childId: z
       .string()
       .uuid('Invalid child ID format')

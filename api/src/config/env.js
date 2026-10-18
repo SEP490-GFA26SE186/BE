@@ -27,6 +27,16 @@ const env = {
     attempts: parseInt(process.env.AI_JOB_ATTEMPTS, 10) || 3,
     concurrency: parseInt(process.env.AI_WORKER_CONCURRENCY, 10) || 3,
   },
+  payos: {
+    // De trong ca ba key -> khong tao link thanh toan (dev); don tra phi nam o pending
+    clientId: process.env.PAYOS_CLIENT_ID,
+    apiKey: process.env.PAYOS_API_KEY,
+    checksumKey: process.env.PAYOS_CHECKSUM_KEY,
+    apiUrl: process.env.PAYOS_API_URL || 'https://api-merchant.payos.vn',
+    // Trang FE nhan nguoi dung sau khi thanh toan / huy
+    returnUrl: process.env.PAYOS_RETURN_URL || `${process.env.CORS_ORIGIN || 'http://localhost:3001'}/payment/success`,
+    cancelUrl: process.env.PAYOS_CANCEL_URL || `${process.env.CORS_ORIGIN || 'http://localhost:3001'}/payment/cancel`,
+  },
   brevo: {
     apiKey: process.env.BREVO_API_KEY,
     senderEmail: process.env.BREVO_SENDER_EMAIL || 'no-reply@storyweaver.ai',

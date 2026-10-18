@@ -131,7 +131,6 @@ const getReviewQueue = async (query = {}) => {
           select: {
             id: true,
             title: true,
-            coverImageKey: true,
             _count: { select: { pages: true } },
             topic: {
               select: {
@@ -748,27 +747,6 @@ const decideStrikeAppeal = async (adminUser, appealId, { status, decisionNote })
         }
       }
     }
-
-    // 3. Send notification to the seller
-    const notifTitle =
-      status === 'approved'
-        ? 'Khiếu nại gậy cảnh cáo được chấp thuận'
-        : 'Khiếu nại gậy cảnh cáo bị từ chối';
-    const notifBody =
-      status === 'approved'
-        ? `Đơn khiếu nại gậy cảnh cáo của bạn đã được Quản trị viên chấp thuận và gỡ bỏ gậy.${decisionNote ? ' Lời nhắn: ' + decisionNote : ''}`
-        : `Đơn khiếu nại gậy cảnh cáo của bạn đã bị từ chối.${decisionNote ? ' Lý do: ' + decisionNote : ''}`;
-
-    await tx.notification.create({
-      data: {
-        userId: appeal.strike.sellerId,
-        type: status === 'approved' ? 'STRIKE_APPEAL_APPROVED' : 'STRIKE_APPEAL_REJECTED',
-        title: notifTitle,
-        body: notifBody,
-        refType: 'strike_appeal',
-        refId: appeal.id,
-      },
-    });
 
     return {
       appeal: updatedAppeal,

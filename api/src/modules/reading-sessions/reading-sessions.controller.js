@@ -29,18 +29,27 @@ const getSession = async (req, res, next) => {
   }
 };
 
-const submitChoice = async (req, res, next) => {
+const updateProgress = async (req, res, next) => {
   try {
-    const result = await readingSessionsService.submitChoice(
-      req.user,
-      req.params.sessionId,
-      req.body,
-    );
+    const result = await readingSessionsService.updateProgress(req.user, req.params.sessionId, req.body);
     res.status(StatusCodes.OK).json({
       success: true,
-      message: result.isCompleted
-        ? 'Choice recorded and story completed with EQ assessment'
-        : 'Choice recorded and proceeded to next page',
+      message: 'Reading progress saved successfully',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const submitAnswer = async (req, res, next) => {
+  try {
+    const result = await readingSessionsService.submitAnswer(req.user, req.params.sessionId, req.body);
+    res.status(result.alreadyAnswered ? StatusCodes.OK : StatusCodes.CREATED).json({
+      success: true,
+      message: result.alreadyAnswered
+        ? 'Checkpoint was already answered in this session'
+        : 'Checkpoint answer recorded successfully',
       data: result,
     });
   } catch (error) {
@@ -50,11 +59,7 @@ const submitChoice = async (req, res, next) => {
 
 const completeSession = async (req, res, next) => {
   try {
-    const result = await readingSessionsService.completeSession(
-      req.user,
-      req.params.sessionId,
-      req.body || {},
-    );
+    const result = await readingSessionsService.completeSession(req.user, req.params.sessionId);
     res.status(StatusCodes.OK).json({
       success: true,
       message: 'Reading session completed successfully',
@@ -87,7 +92,8 @@ const getChildHistory = async (req, res, next) => {
 export default {
   startSession,
   getSession,
-  submitChoice,
+  updateProgress,
+  submitAnswer,
   completeSession,
   getChildHistory,
 };

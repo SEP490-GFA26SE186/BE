@@ -43,13 +43,12 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Marketplace', description: 'Chợ truyện cộng đồng: hồ sơ tác giả, đăng bán, nhận miễn phí và đánh giá sản phẩm' },
     { name: 'Moderation', description: 'Kiểm duyệt an toàn nội dung, từ khóa cấm, duyệt tác phẩm và báo cáo vi phạm' },
     { name: 'Plans & Subscriptions', description: 'Gói thành viên, định mức tạo truyện/chân dung AI và quyền lợi tài khoản' },
-    { name: 'Credit Packs', description: 'Gói nạp xu (Credit Packs) bổ sung lượt tạo AI linh hoạt' },
     { name: 'Wallets & Financials', description: 'Ví xu phụ huynh, số dư thu nhập tác giả (Seller Wallet), sổ cái giao dịch và yêu cầu rút tiền' },
-    { name: 'Notifications', description: 'Hệ thống thông báo đẩy cho người dùng (kết quả duyệt, mua hàng, gậy cảnh cáo, biến động số dư)' },
     { name: 'Reports & Supervision', description: 'Báo cáo EQ biểu đồ radar, tiến trình học tập và giám sát nền tảng' },
     { name: 'Platform & Audit Logs', description: 'Cài đặt tham số hệ thống và nhật ký kiểm toán quản trị' },
     { name: 'Cart', description: 'Giỏ hàng mua sắm truyện chợ cộng đồng' },
-    { name: 'Orders', description: 'Đơn hàng mua gói Subscription, nạp Credit hoặc mua truyện' },
+    { name: 'Orders', description: 'Đơn hàng mua gói Subscription hoặc mua truyện' },
+    { name: 'Payments', description: 'Cổng thanh toán payOS (webhook)' },
     { name: 'Entitlements', description: 'Quyền sở hữu truyện chợ đã mua & cá nhân hóa vào giá sách' },
   ],
   components: {
@@ -117,8 +116,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           name: { type: 'string', example: 'Bé Bo' },
           birthDate: { type: 'string', format: 'date', nullable: true, example: '2019-05-10' },
           dailyScreenTimeMinutes: { type: 'integer', example: 30 },
-          bedtimeStart: { type: 'string', nullable: true, example: '21:00' },
-          bedtimeEnd: { type: 'string', nullable: true, example: '06:00' },
           preferredVoice: { type: 'string', nullable: true, example: 'northern_female' },
           createdAt: { type: 'string', format: 'date-time', example: '2026-09-24T10:00:00.000Z' },
           updatedAt: { type: 'string', format: 'date-time', example: '2026-09-24T10:00:00.000Z' },
@@ -131,7 +128,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           parentId: { type: 'string', format: 'uuid', example: 'd3b07384-d113-49d6-a246-24b5d2757279' },
           childId: { type: 'string', format: 'uuid', nullable: true, example: '76693be8-831c-41a7-bdaa-6e07fc5c6457' },
           name: { type: 'string', example: 'Bé Miu' },
-          role: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'], example: 'self' },
+          isChildAvatar: { type: 'boolean', example: true, description: 'Nhân vật đại diện cho một bé (childId khác null)' },
           appearance: { type: 'string', example: 'Bé gái 5 tuổi tóc búi hai bên, đeo nơ hồng, mắt to tròn tinh nghịch' },
           portraitImageKey: { type: 'string', nullable: true, example: 'https://storage.supabase.co/.../miu_portrait.png' },
           genPrompt: { type: 'string', nullable: true, example: 'Portrait of Bé Miu...' },
@@ -239,7 +236,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       post: {
         tags: ['Auth'],
         summary: '[Public] Đăng ký tài khoản phụ huynh mới',
-        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTạo tài khoản mới, khởi tạo ví tiền và tự động gửi email xác thực qua Brevo.',
+        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nTạo tài khoản mới, khởi tạo ví, đăng ký gói Miễn phí và cấp credit tháng đầu (`wallet_ledger.credit_grant`), rồi gửi email xác thực qua Brevo.',
         security: [],
         requestBody: {
           required: true,
@@ -838,8 +835,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                   name: { type: 'string', example: 'Bé Bo', description: 'Tên hoặc biệt danh của bé' },
                   birthDate: { type: 'string', format: 'date', example: '2019-05-10', description: 'Ngày sinh (YYYY-MM-DD)' },
                   dailyScreenTimeMinutes: { type: 'integer', example: 30, description: 'Thời gian màn hình tối đa trong ngày (phút)' },
-                  bedtimeStart: { type: 'string', example: '21:00', description: 'Giờ bắt đầu đi ngủ (HH:mm)' },
-                  bedtimeEnd: { type: 'string', example: '06:00', description: 'Giờ kết thúc đi ngủ (HH:mm)' },
                   preferredVoice: { type: 'string', example: 'northern_female', description: 'Giọng đọc AI ưa thích' },
                 },
               },
@@ -942,8 +937,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                   name: { type: 'string', example: 'Bé Bo Đẹp Trai' },
                   birthDate: { type: 'string', format: 'date', example: '2019-05-10' },
                   dailyScreenTimeMinutes: { type: 'integer', example: 45 },
-                  bedtimeStart: { type: 'string', example: '21:30' },
-                  bedtimeEnd: { type: 'string', example: '06:30' },
                   preferredVoice: { type: 'string', example: 'southern_female' },
                 },
               },
@@ -1175,21 +1168,15 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['name', 'role', 'appearance'],
+                required: ['name', 'appearance'],
                 properties: {
                   name: { type: 'string', example: 'Bé Miu', description: 'Tên nhân vật' },
-                  role: {
-                    type: 'string',
-                    enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'],
-                    example: 'self',
-                    description: 'Vai trò trong truyện',
-                  },
                   appearance: {
                     type: 'string',
                     example: 'Bé gái 5 tuổi, tóc ngắn ngang vai màu đen cài nơ đỏ, mắt to tròn hay cười, mặc váy hoa',
                     description: 'Mô tả ngoại hình thuần văn bản (không tải ảnh thật của trẻ)',
                   },
-                  childId: { type: 'string', format: 'uuid', description: 'Liên kết tới hồ sơ bé (nếu role là self/sibling)' },
+                  childId: { type: 'string', format: 'uuid', description: 'Nhân vật đại diện cho bé này. Mỗi bé tối đa 1 nhân vật đại diện (409 nếu đã có)' },
                   portraitImageKey: { type: 'string', description: 'URL hoặc key ảnh chân dung (nếu có sẵn)' },
                 },
               },
@@ -1220,21 +1207,15 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           },
           400: { description: 'Dữ liệu không hợp lệ hoặc hồ sơ bé liên kết không đúng' },
           403: { description: 'Đã đạt giới hạn tối đa số nhân vật theo gói cước hiện tại' },
+          409: { description: 'Bé đã có nhân vật đại diện' },
         },
       },
       get: {
         tags: ['Characters'],
         summary: '[Parent] Lấy danh sách nhân vật của phụ huynh',
-        description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách nhân vật gia đình của phụ huynh (hỗ trợ lọc theo vai trò role hoặc theo bé childId).',
+        description: '**Quyền truy cập:** `parent` | `admin`.\nLấy danh sách nhân vật gia đình của phụ huynh (hỗ trợ lọc theo bé childId).',
         security: [{ BearerAuth: [] }],
         parameters: [
-          {
-            name: 'role',
-            in: 'query',
-            required: false,
-            schema: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'] },
-            description: 'Lọc theo vai trò nhân vật',
-          },
           {
             name: 'childId',
             in: 'query',
@@ -1333,11 +1314,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 type: 'object',
                 properties: {
                   name: { type: 'string', example: 'Bé Miu Siêu Quậy' },
-                  role: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'] },
                   appearance: { type: 'string', example: 'Tóc ngắn ngang vai cài nơ xanh, áo len sọc vàng' },
                   childId: { type: 'string', format: 'uuid', nullable: true },
-                  portraitImageKey: { type: 'string', nullable: true },
-                  portraitStatus: { type: 'string', enum: ['none', 'queued', 'generating', 'ready', 'failed'] },
+                  portraitImageKey: { type: 'string', nullable: true, description: 'Có ảnh -> portraitStatus = ready; null -> none' },
                 },
               },
             },
@@ -1764,7 +1743,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       post: {
         tags: ['Reading Sessions'],
         summary: '[Parent | Kid Session] Bắt đầu hoặc tiếp tục phiên đọc truyện tương tác',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nKhởi động phiên đọc truyện cho bé. Nếu đã có phiên dở dang (`in_progress`) sẽ tự động tiếp tục trang đang đọc; nếu chọn `isReplay: true` sẽ bắt đầu lại từ trang đầu tiên.',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nKhởi động phiên đọc truyện cho bé. Truyện phải `ready`, đã được phụ huynh xem lại (`reviewedAt`) và nằm trên kệ sách của bé (truyện riêng của phụ huynh được tự động thêm lên kệ). Nếu có phiên dở dang (`in_progress`) sẽ tiếp tục; `isReplay: true` bỏ phiên dở dang và bắt đầu lại. Chỉ lần chơi đầu tiên (`isFirstPlay`) được tính điểm EQ.\n\nTrả về toàn bộ nội dung truyện (trang, cảnh, điểm dừng ngay sau trang, phương án) đã thay token `{NVx}` bằng tên nhân vật, kèm các câu trả lời đã ghi.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1784,7 +1763,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           201: { description: 'Khởi động phiên đọc truyện thành công' },
-          400: { description: 'Truyện chưa có nội dung trang' },
+          400: { description: 'Truyện chưa sẵn sàng hoặc chưa có trang' },
+          403: { description: 'Truyện không nằm trên kệ sách của bé' },
           404: { description: 'Không tìm thấy hồ sơ bé hoặc câu chuyện' },
         },
       },
@@ -1794,7 +1774,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       get: {
         tags: ['Reading Sessions'],
         summary: '[Parent | Kid Session] Lấy trạng thái chi tiết phiên đọc truyện',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thông tin trang hiện tại, các lựa chọn rẽ nhánh, tiến độ và lịch sử các quyết định đã chọn trong phiên.',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nTrả về phiên, nội dung truyện, các câu trả lời điểm dừng đã ghi và điểm theo năng lực của riêng lần chơi này (`eqSummary`).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1812,11 +1792,11 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    '/reading-sessions/{sessionId}/choice': {
-      post: {
+    '/reading-sessions/{sessionId}/progress': {
+      patch: {
         tags: ['Reading Sessions'],
-        summary: '[Kid Session | Parent] Bé chọn phương án xử lý tình huống cảm xúc',
-        description: '**Quyền truy cập:** `kid_session` hoặc `parent`.\nGhi nhận lựa chọn của bé tại nhánh rẽ tình huống. Hệ thống sẽ điều hướng đến trang hệ quả tương ứng, hoặc hoàn thành truyện và tự động tính toán chỉ số EQ.',
+        summary: '[Parent | Kid Session] Lưu vị trí trang đang đọc',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLưu `currentPageId` để lần sau mở lại đúng trang.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1833,29 +1813,27 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['pageId', 'choiceId'],
+                required: ['pageId'],
                 properties: {
-                  pageId: { type: 'string', format: 'uuid', description: 'ID trang hiện tại' },
-                  choiceId: { type: 'string', format: 'uuid', description: 'ID nhánh rẽ bé lựa chọn' },
-                  timeToDecideMs: { type: 'integer', example: 3500, description: 'Thời gian bé suy nghĩ (mili-giây)' },
+                  pageId: { type: 'string', format: 'uuid', description: 'ID trang bé đang xem' },
                 },
               },
             },
           },
         },
         responses: {
-          200: { description: 'Ghi nhận lựa chọn thành công và trả về trang tiếp theo hoặc kết quả EQ' },
-          400: { description: 'Phiên đọc đã kết thúc hoặc sai ID trang' },
-          404: { description: 'Không tìm thấy lựa chọn tương ứng' },
+          200: { description: 'Lưu tiến độ thành công' },
+          400: { description: 'Phiên đọc không còn ở trạng thái in_progress' },
+          404: { description: 'Trang không thuộc truyện của phiên' },
         },
       },
     },
 
-    '/reading-sessions/{sessionId}/complete': {
+    '/reading-sessions/{sessionId}/answers': {
       post: {
         tags: ['Reading Sessions'],
-        summary: '[Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nĐánh dấu kết thúc phiên đọc truyện, tổng hợp điểm số 5 năng lực EQ chuẩn CASEL và tự động tích lũy thời gian sử dụng màn hình của bé.',
+        summary: '[Kid Session | Parent] Ghi câu trả lời của bé tại một điểm dừng',
+        description: '**Quyền truy cập:** `kid_session` hoặc `parent`.\nCâu cảm xúc (`emotion_self`, `emotion_other`) gửi `firstEmotion` (+ `finalEmotion` nếu chọn lại sau gợi ý, `attempts = 2`). Câu phương án (`perspective`, `problem_solving`) gửi `firstOptionId` (+ `finalOptionId`). `problem_solving` và `reflection` chỉ được chọn một lần.\n\nĐiểm chấm theo **lần chọn đầu** và chốt lại (snapshot): cảm xúc đúng 1 / sai 0; perspective đúng 1 / sai 0; problem_solving constructive 1, avoidant 0.5, impulsive 0; reflection và câu bỏ qua không có điểm. Chỉ lần chơi đầu mới cộng vào `eq_competency_stats`. Gửi lại cùng điểm dừng sẽ trả về câu trả lời đã lưu (`alreadyAnswered: true`).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1867,18 +1845,51 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           },
         ],
         requestBody: {
-          required: false,
+          required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
+                required: ['checkpointId'],
                 properties: {
-                  durationSeconds: { type: 'integer', example: 120, description: 'Thời lượng phiên đọc (giây)' },
+                  checkpointId: { type: 'string', format: 'uuid' },
+                  firstEmotion: { type: 'string', enum: ['happy', 'sad', 'angry', 'scared', 'neutral'] },
+                  firstOptionId: { type: 'string', format: 'uuid' },
+                  finalEmotion: { type: 'string', enum: ['happy', 'sad', 'angry', 'scared', 'neutral'] },
+                  finalOptionId: { type: 'string', format: 'uuid' },
+                  attempts: { type: 'integer', minimum: 1, maximum: 2, default: 1 },
+                  skipped: { type: 'boolean', default: false },
+                  timeToFirstMs: { type: 'integer', example: 3500, description: 'Thời gian tới lần chọn đầu (ms)' },
+                  questionReplays: { type: 'integer', example: 0, description: 'Số lần bé nghe lại câu hỏi' },
                 },
               },
             },
           },
         },
+        responses: {
+          201: { description: 'Ghi câu trả lời thành công' },
+          200: { description: 'Điểm dừng đã được trả lời trước đó trong phiên này' },
+          400: { description: 'Dữ liệu không khớp kiểu điểm dừng hoặc phiên đã kết thúc' },
+          404: { description: 'Không tìm thấy điểm dừng trong truyện' },
+        },
+      },
+    },
+
+    '/reading-sessions/{sessionId}/complete': {
+      post: {
+        tags: ['Reading Sessions'],
+        summary: '[Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nĐánh dấu kết thúc phiên đọc và trả về điểm theo năng lực của lần chơi này. Thời gian dùng màn hình ghi riêng qua `POST /children/{id}/usage`.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'sessionId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ID phiên đọc truyện',
+          },
+        ],
         responses: {
           200: { description: 'Hoàn thành phiên đọc và tạo báo cáo EQ thành công' },
           404: { description: 'Không tìm thấy phiên đọc' },
@@ -1890,7 +1901,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       get: {
         tags: ['Reading Sessions'],
         summary: '[Parent | Kid Session] Xem lịch sử các phiên đọc truyện của bé',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLấy danh sách các câu chuyện bé đã đọc, số lượng lựa chọn cảm xúc đã đưa ra và điểm số EQ đạt được qua từng phiên.',
+        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLấy danh sách các phiên đọc của bé, số câu trả lời điểm dừng và điểm theo năng lực của từng phiên.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -2500,14 +2511,13 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['code', 'name', 'period', 'priceVnd', 'aiStoryQuota', 'aiImageQuota', 'maxChildren', 'maxCharacters'],
+                required: ['code', 'name', 'durationMonths', 'priceVnd', 'creditsPerMonth', 'maxChildren', 'maxCharacters'],
                 properties: {
                   code: { type: 'string', example: 'FAMILY_VIP' },
                   name: { type: 'string', example: 'Gói Gia Đình VIP' },
-                  period: { type: 'string', enum: ['month', 'year'], example: 'month' },
+                  durationMonths: { type: 'integer', example: 1, description: '1 = gói tháng, 12 = gói năm' },
                   priceVnd: { type: 'integer', example: 199000 },
-                  aiStoryQuota: { type: 'integer', example: 50 },
-                  aiImageQuota: { type: 'integer', example: 100 },
+                  creditsPerMonth: { type: 'integer', example: 200, description: 'Credit cấp mỗi tháng, kể cả gói năm' },
                   maxChildren: { type: 'integer', example: 5 },
                   maxCharacters: { type: 'integer', example: 25 },
                   canSell: { type: 'boolean', example: true },
@@ -2552,8 +2562,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 properties: {
                   name: { type: 'string' },
                   priceVnd: { type: 'integer' },
-                  aiStoryQuota: { type: 'integer' },
-                  aiImageQuota: { type: 'integer' },
+                  durationMonths: { type: 'integer' },
+                  creditsPerMonth: { type: 'integer' },
                   maxChildren: { type: 'integer' },
                   maxCharacters: { type: 'integer' },
                   canSell: { type: 'boolean' },
@@ -2577,102 +2587,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         ],
         responses: {
           200: { description: 'Vô hiệu hóa gói thành viên thành công' },
-        },
-      },
-    },
-
-    /* =========================================================================
-     * CREDIT PACKS
-     * ========================================================================= */
-    '/credit-packs': {
-      get: {
-        tags: ['Credit Packs'],
-        summary: '[Public] Xem danh sách các gói nạp xu',
-        description: '**Quyền truy cập:** Mọi người dùng.\nDanh sách các gói xu kèm số xu thưởng tặng thêm để người dùng bổ sung lượt tạo AI ngoài định mức gói tháng.',
-        responses: {
-          200: { description: 'Lấy danh sách gói nạp xu thành công' },
-        },
-      },
-      post: {
-        tags: ['Credit Packs'],
-        summary: '[Admin] Tạo mới gói nạp xu',
-        description: '**Quyền truy cập:** `admin`.\nTạo gói nạp xu mới với số xu cơ bản và số xu thưởng thêm.',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['name', 'credits', 'priceVnd'],
-                properties: {
-                  name: { type: 'string', example: 'Gói Tiết Kiệm (300 Xu + 50 Xu)' },
-                  credits: { type: 'integer', example: 300 },
-                  bonusCredits: { type: 'integer', example: 50 },
-                  priceVnd: { type: 'integer', example: 300000 },
-                  isActive: { type: 'boolean', example: true },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Tạo gói nạp xu thành công' },
-        },
-      },
-    },
-
-    '/credit-packs/{id}': {
-      get: {
-        tags: ['Credit Packs'],
-        summary: '[Public] Xem chi tiết gói nạp xu',
-        description: '**Quyền truy cập:** Mọi người dùng.',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Lấy chi tiết gói nạp xu thành công' },
-          404: { description: 'Không tìm thấy gói nạp xu' },
-        },
-      },
-      put: {
-        tags: ['Credit Packs'],
-        summary: '[Admin] Cập nhật thông tin gói nạp xu',
-        description: '**Quyền truy cập:** `admin`.\nChỉnh sửa số xu, xu thưởng hoặc đơn giá gói nạp.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  credits: { type: 'integer' },
-                  bonusCredits: { type: 'integer' },
-                  priceVnd: { type: 'integer' },
-                  isActive: { type: 'boolean' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật gói nạp xu thành công' },
-        },
-      },
-      delete: {
-        tags: ['Credit Packs'],
-        summary: '[Admin] Vô hiệu hóa gói nạp xu',
-        description: '**Quyền truy cập:** `admin`.\nChuyển trạng thái gói nạp sang không hoạt động (`isActive = false`).',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Vô hiệu hóa gói nạp xu thành công' },
         },
       },
     },
@@ -2931,7 +2845,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 properties: {
                   topicId: { type: 'string', format: 'uuid', example: '11111111-2222-3333-4444-555555555555', description: 'ID chủ đề bài học' },
                   title: { type: 'string', example: 'Chiếc xe cứu hỏa của Bo' },
-                  coverImageKey: { type: 'string', nullable: true, example: 'stories/covers/cover-1.jpg' },
                   useAiImage: { type: 'boolean', default: false },
                   useTts: { type: 'boolean', default: true },
                   autoInitializePages: { type: 'boolean', default: true },
@@ -3004,7 +2917,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 type: 'object',
                 properties: {
                   title: { type: 'string', example: 'Chiếc xe cứu hỏa của Bo (bản sửa)' },
-                  coverImageKey: { type: 'string', nullable: true },
                   useAiImage: { type: 'boolean' },
                   useTts: { type: 'boolean' },
                   status: { type: 'string', enum: ['draft', 'generating', 'ready'] },
@@ -3216,14 +3128,13 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 type: 'object',
                 properties: {
                   title: { type: 'string', example: 'Bài học chia sẻ đồ chơi của bạn Thỏ' },
-                  coverImageKey: { type: 'string' },
                   nameReplacements: {
                     type: 'array',
-                    description: 'Tùy chọn danh sách tên nhân vật thay thế theo từng slotKey hoặc theo tên riêng cũ. Nếu không cung cấp, hệ thống sẽ tự động dùng defaultName của kịch bản.',
+                    description: 'Tên chung thay cho nhân vật gia đình, theo token `{NVx}` hoặc theo tên riêng cũ. Không cung cấp thì dùng aliasName sẵn có hoặc tên nhân vật. Bản đăng bán không chép `situation` và bỏ file đọc (sẽ sinh lại).',
                     items: {
                       type: 'object',
                       properties: {
-                        slotKey: { type: 'string', example: 'main_child' },
+                        token: { type: 'string', example: '{NV1}' },
                         fromName: { type: 'string', example: 'Bé Bo' },
                         customName: { type: 'string', example: 'Bé Thỏ Thông Thái' },
                       },
@@ -3713,75 +3624,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     },
 
     // =========================================================================
-    // Notifications (Hệ thống thông báo đẩy)
-    // =========================================================================
-    '/notifications': {
-      get: {
-        tags: ['Notifications'],
-        summary: 'Lấy danh sách thông báo của tài khoản',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'unreadOnly', in: 'query', schema: { type: 'boolean' }, description: 'Chỉ lấy thông báo chưa đọc (true/false)' },
-          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
-        ],
-        responses: {
-          200: { description: 'Danh sách thông báo phân trang kèm số lượng chưa đọc' },
-        },
-      },
-    },
-
-    '/notifications/unread-count': {
-      get: {
-        tags: ['Notifications'],
-        summary: 'Lấy nhanh số lượng thông báo chưa đọc (cho huy hiệu badge icon)',
-        security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'Số lượng thông báo chưa đọc' },
-        },
-      },
-    },
-
-    '/notifications/read-all': {
-      patch: {
-        tags: ['Notifications'],
-        summary: 'Đánh dấu tất cả thông báo là đã đọc',
-        security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'Đã đánh dấu đọc tất cả' },
-        },
-      },
-    },
-
-    '/notifications/{id}/read': {
-      patch: {
-        tags: ['Notifications'],
-        summary: 'Đánh dấu một thông báo cụ thể là đã đọc',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Đánh dấu đã đọc thành công' },
-        },
-      },
-    },
-
-    '/notifications/{id}': {
-      delete: {
-        tags: ['Notifications'],
-        summary: 'Xóa một thông báo',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Xóa thông báo thành công' },
-        },
-      },
-    },
-
-    // =========================================================================
     // Reports & Supervision
     // =========================================================================
     '/reports/eq/children/{childId}': {
@@ -4172,7 +4014,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       post: {
         tags: ['Orders'],
         summary: '[Parent] Tạo đơn hàng mới',
-        description: 'Tạo đơn hàng từ giỏ hàng (fromCart: true) hoặc mua trực tiếp một gói/truyện (itemType + itemId). Nếu tổng tiền = 0 (miễn phí), đơn hàng tự động hoàn tất và kích hoạt quyền lợi ngay lập tức.',
+        description: 'Tạo đơn hàng từ giỏ hàng (fromCart: true) hoặc mua trực tiếp một gói/truyện (itemType + itemId). Nếu tổng tiền = 0 (miễn phí), đơn hàng tự động hoàn tất và kích hoạt quyền lợi ngay lập tức. Đơn trả phí ở trạng thái `pending` và trả về `checkoutUrl` (trang thanh toán payOS, hết hạn sau 15 phút); quyền lợi được cấp khi payOS gọi webhook. Giỏ hàng chỉ bị xoá các truyện đã thanh toán xong. `checkoutUrl = null` khi đơn 0đ hoặc server chưa cấu hình payOS.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -4182,7 +4024,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                 type: 'object',
                 properties: {
                   fromCart: { type: 'boolean', example: true },
-                  itemType: { type: 'string', enum: ['listing', 'plan', 'credit_pack'], example: 'listing' },
+                  itemType: { type: 'string', enum: ['listing', 'plan'], example: 'listing' },
                   itemId: { type: 'string', format: 'uuid' },
                 },
               },
@@ -4190,8 +4032,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           },
         },
         responses: {
-          201: { description: 'Tạo đơn hàng thành công' },
+          201: { description: 'Tạo đơn hàng thành công: data = { order, checkoutUrl }' },
           400: { description: 'Dữ liệu đơn hàng không hợp lệ' },
+          502: { description: 'Không tạo được link thanh toán payOS (đơn chuyển failed)' },
         },
       },
     },
@@ -4258,11 +4101,40 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
+    '/payments/payos/webhook': {
+      post: {
+        tags: ['Payments'],
+        summary: '[payOS] Webhook kết quả thanh toán',
+        description: '**Gọi bởi payOS**, không dùng JWT: xác thực bằng chữ ký HMAC-SHA256 (`PAYOS_CHECKSUM_KEY`). Mọi lần gọi đều được ghi vào `webhook_logs`. Thanh toán thành công (`data.code = 00`), đúng số tiền và đơn đang `pending` thì đơn chuyển `paid`, rồi cấp quyền trong cùng transaction: entitlement truyện, doanh thu treo cho người bán (`earning_pending`, khả dụng sau `holding_days`), kích hoạt gói + credit. Webhook lặp lại không cấp hai lần. Luôn trả 200 khi đã ghi nhận; lý do từ chối nằm trong `webhook_logs.error_message`.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  code: { type: 'string', example: '00' },
+                  desc: { type: 'string', example: 'success' },
+                  success: { type: 'boolean', example: true },
+                  data: { type: 'object', description: 'orderCode, amount, reference, paymentLinkId, code, desc, ...' },
+                  signature: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đã ghi nhận: { success, processed, reason? }' },
+        },
+      },
+    },
+
     '/entitlements/{id}/personalize': {
       post: {
         tags: ['Entitlements'],
         summary: '[Parent] Cá nhân hóa truyện đã mua và đưa vào giá sách của con',
-        description: 'Gán các nhân vật gia đình của phụ huynh vào các slot nhân vật của câu truyện vừa mua, nhân bản thành một bản truyện private hoàn chỉnh và tự động đưa vào giá sách của bé.',
+        description: 'Gán nhân vật gia đình vào các token `{NVx}` của truyện đã mua và nhân bản thành truyện private (cảnh, trang, điểm dừng, phương án). Token không gán giữ tên chung của người bán. Nếu có gán nhân vật thì file đọc bị bỏ (`needsNarration: true`) vì tên đã đổi. Có `childId` thì tự đưa lên giá sách của bé.',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID quyền sở hữu (Entitlement ID)' },
@@ -4280,9 +4152,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
                     type: 'array',
                     items: {
                       type: 'object',
-                      required: ['slotKey'],
+                      required: ['token'],
                       properties: {
-                        slotKey: { type: 'string', example: 'main_character' },
+                        token: { type: 'string', example: '{NV1}' },
                         characterId: { type: 'string', format: 'uuid' },
                       },
                     },
@@ -4294,6 +4166,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           201: { description: 'Cá nhân hóa truyện thành công' },
+          400: { description: 'Token không có trong truyện hoặc gán trùng' },
           404: { description: 'Không tìm thấy quyền sở hữu hoặc truyện đã bị thu hồi' },
         },
       },

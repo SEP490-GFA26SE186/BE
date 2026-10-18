@@ -57,6 +57,40 @@ const getMyLedger = async (userId, query = {}) => {
   };
 };
 
+/**
+ * Cap credit thang cho mot subscription (ghi credit_grant vao ledger).
+ * Phai goi trong transaction cua noi tao/gia han subscription.
+ * @param {Object} tx - Prisma transaction client
+ * @param {Object} params - { userId, subscriptionId, credits, grantIndex }
+ */
+const grantSubscriptionCredits = async (tx, { userId, subscriptionId, credits, grantIndex = 0 }) => {
+  await tx.wallet.upsert({
+    where: { userId },
+    update: {},
+    create: { userId },
+  });
+
+  const wallet = await tx.wallet.update({
+    where: { userId },
+    data: { creditBalance: { increment: credits } },
+  });
+
+  await tx.walletLedger.create({
+    data: {
+      userId,
+      walletType: 'credit',
+      entryType: 'credit_grant',
+      amount: BigInt(credits),
+      balanceAfter: BigInt(wallet.creditBalance),
+      idempotencyKey: `sub-grant-${subscriptionId}-${grantIndex}`,
+      refType: 'subscription',
+      refId: subscriptionId,
+    },
+  });
+
+  return wallet;
+};
+
 // ==========================================
 // 2. ADMIN CREDIT GRANT
 // ==========================================
@@ -71,41 +105,45 @@ const adminGrantCredits = async (adminId, { userId, credits, reason }) => {
   }
 
   return prisma.$transaction(async (tx) => {
-    let wallet = await tx.wallet.findUnique({
+    await tx.wallet.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
     });
-
-    if (!wallet) {
-      wallet = await tx.wallet.create({
-        data: {
-          userId,
-          creditBalance: 0,
-          earningPendingVnd: 0n,
-          earningAvailableVnd: 0n,
-          earningLockedVnd: 0n,
-        },
-      });
-    }
-
-    const newBalance = wallet.creditBalance + credits;
 
     const updatedWallet = await tx.wallet.update({
       where: { userId },
-      data: {
-        creditBalance: newBalance,
-      },
+      data: { creditBalance: { increment: credits } },
     });
 
-    await tx.walletLedger.create({
+    // Enum ledger khong co loai rieng cho admin -> credit_grant, phan biet bang ref_type
+    const entry = await tx.walletLedger.create({
       data: {
         userId,
         walletType: 'credit',
-        entryType: 'credit_admin_grant',
+        entryType: 'credit_grant',
         amount: BigInt(credits),
-        balanceAfter: BigInt(newBalance),
+        balanceAfter: BigInt(updatedWallet.creditBalance),
         idempotencyKey: `admin-grant-${crypto.randomUUID()}`,
-        refType: reason ? `admin_grant:${reason.slice(0, 35)}` : 'admin_grant',
+        refType: 'admin_grant',
         refId: adminId,
+      },
+    });
+
+    // Ly do luu o nhat ky quan tri, khong nhet vao ref_type
+    await tx.adminAuditLog.create({
+      data: {
+        actorId: adminId,
+        action: 'wallet.grant_credits',
+        targetType: 'user',
+        targetId: userId,
+        beforeState: { creditBalance: updatedWallet.creditBalance - credits },
+        afterState: {
+          creditBalance: updatedWallet.creditBalance,
+          credits,
+          reason: reason || null,
+          ledgerEntryId: entry.id.toString(),
+        },
       },
     });
 
@@ -431,6 +469,7 @@ const processWithdrawal = async (adminId, withdrawalId, { status, bankTransactio
 export default {
   getMyWallet,
   getMyLedger,
+  grantSubscriptionCredits,
   adminGrantCredits,
   requestWithdrawal,
   getMyWithdrawals,

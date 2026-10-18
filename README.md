@@ -213,6 +213,7 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 | `DATABASE_URL`, `DIRECT_URL` | ✓ | ✓ | — |
 | `JWT_SECRET`, `JWT_*` | ✓ | — | — |
 | `BREVO_*`, `CORS_ORIGIN`, `APP_URL` | ✓ | — | — |
+| `PAYOS_*` (để trống = không tạo link thanh toán) | ✓ | — | — |
 | `REDIS_URL` | ✓ | ✓ | — |
 | `AI_SERVICE_URL` | **—** | ✓ | — |
 | `INTERNAL_TOKEN` | — | ✓ | ✓ |

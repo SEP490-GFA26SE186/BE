@@ -1,5 +1,6 @@
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
+import eqService from './eq.service.js';
 
 const PEDAGOGICAL_ADVICE = {
   self_awareness: {
@@ -29,169 +30,124 @@ const PEDAGOGICAL_ADVICE = {
   },
 };
 
+// Thang theo gio Viet Nam, dang YYYY-MM
+const toVnMonth = (date) =>
+  new Date(date.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 7);
+
 /**
- * Get comprehensive EQ report for a child
+ * Get comprehensive EQ report for a child.
+ * Diem nang luc (radar) tinh tren toan bo lich su tu eq_competency_stats;
+ * bieu do theo thang va thong ke cam xuc truy van checkpoint_answers trong khoang ngay.
  * @param {string} parentId
  * @param {string} childId
- * @param {Object} filter - { startDate, endDate }
+ * @param {Object} filter - { startDate, endDate } (YYYY-MM-DD)
  * @returns {Promise<Object>}
  */
 const getChildEqReport = async (parentId, childId, filter = {}) => {
   const child = await prisma.childProfile.findFirst({
     where: { id: childId, parentId, deletedAt: null },
-    include: {
-      characters: {
-        where: { role: 'self', deletedAt: null },
-        take: 1,
-      },
-    },
+    include: { character: { select: { portraitImageKey: true } } },
   });
 
   if (!child) {
     throw ApiError.notFound('Child profile not found or access denied');
   }
 
-  // 1. Get all 5 CASEL competencies
-  const allSkills = await prisma.eqSkill.findMany({
-    orderBy: { displayOrder: 'asc' },
-  });
+  // 1. Radar: diem moi nang luc tren toan bo lich su
+  const competencies = await eqService.getCompetencySummary(childId);
+  const scored = competencies.filter((c) => c.hasEnoughData);
+  const sorted = [...scored].sort((a, b) => a.score - b.score);
+  const focusSkill = sorted[0] || null;
+  const strongestSkill = sorted.length > 1 ? sorted[sorted.length - 1] : null;
 
-  // 2. Query completed play sessions in date range
-  const playSessionWhere = {
-    childId,
-    status: 'completed',
-  };
-
-  if (filter.startDate || filter.endDate) {
-    playSessionWhere.completedAt = {};
-    if (filter.startDate) playSessionWhere.completedAt.gte = new Date(filter.startDate);
-    if (filter.endDate) {
-      const endD = new Date(filter.endDate);
-      endD.setHours(23, 59, 59, 999);
-      playSessionWhere.completedAt.lte = endD;
-    }
-  }
-
-  const playSessions = await prisma.playSession.findMany({
-    where: playSessionWhere,
-    orderBy: { completedAt: 'asc' },
-    include: {
-      answers: true,
-      story: {
-        select: {
-          id: true,
-          title: true,
-          topic: {
-            select: {
-              skill: true,
-            },
-          },
-          checkpoints: {
-            select: {
-              answerEmotion: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // 3. Compute Radar metrics
-  const skillMap = {};
-  allSkills.forEach((s) => {
-    skillMap[s.id] = {
-      skillId: s.id,
-      caselCode: s.caselCode,
-      nameVi: s.nameVi,
-      nameEn: s.nameEn,
-      description: s.description,
-      score: 0,
-      sessionsCount: 0,
-    };
-  });
-
-  const emotionFrequencies = {};
-  let totalScore = 0;
-
-  playSessions.forEach((ps) => {
-    (ps.answers || []).forEach((ans) => {
-      if (ans.skillId && skillMap[ans.skillId]) {
-        const scoreVal = Number(ans.score);
-        skillMap[ans.skillId].score += scoreVal;
-        skillMap[ans.skillId].sessionsCount += 1;
-        totalScore += scoreVal;
-      }
-    });
-
-    // Collect emotion challenges encountered
-    if (ps.story?.checkpoints) {
-      ps.story.checkpoints.forEach((cp) => {
-        if (cp.answerEmotion) {
-          const emotion = cp.answerEmotion.trim();
-          emotionFrequencies[emotion] = (emotionFrequencies[emotion] || 0) + 1;
-        }
-      });
-    }
-  });
-
-  const skillsList = Object.values(skillMap).map((item) => ({
-    ...item,
-    percentage: totalScore > 0 ? Math.round((item.score / totalScore) * 100) : 20,
-    rating:
-      item.score >= 15
-        ? 'Xuất sắc'
-        : item.score >= 8
-          ? 'Tốt'
-          : item.score >= 3
-            ? 'Đang phát triển'
-            : 'Cần bồi dưỡng thêm',
-  }));
-
-  // Identify lowest and highest skill for pedagogical recommendation
-  const sortedSkills = [...skillsList].sort((a, b) => a.score - b.score);
-  const lowestSkill = sortedSkills[0];
-  const highestSkill = sortedSkills[sortedSkills.length - 1];
-
-  const recommendation = lowestSkill && PEDAGOGICAL_ADVICE[lowestSkill.caselCode]
+  const advice = focusSkill ? PEDAGOGICAL_ADVICE[focusSkill.caselCode] : null;
+  const recommendation = advice
     ? {
-        focusSkill: PEDAGOGICAL_ADVICE[lowestSkill.caselCode].skill,
-        caselCode: lowestSkill.caselCode,
-        advice: PEDAGOGICAL_ADVICE[lowestSkill.caselCode].advice,
-        suggestedActivities: PEDAGOGICAL_ADVICE[lowestSkill.caselCode].activities,
+        focusSkill: advice.skill,
+        caselCode: focusSkill.caselCode,
+        advice: advice.advice,
+        suggestedActivities: advice.activities,
       }
     : null;
 
-  // 4. Timeline progression (sessions chronologically)
-  let cumulative = 0;
-  const progressionTimeline = playSessions.map((ps) => {
-    cumulative += ps.eqScore ? ps.eqScore.scoreDelta : 0;
-    return {
-      date: ps.completedAt ? ps.completedAt.toISOString().split('T')[0] : ps.createdAt.toISOString().split('T')[0],
-      storyTitle: ps.story?.title || 'Truyện',
-      scoreDelta: ps.eqScore?.scoreDelta || 0,
-      cumulativeScore: cumulative,
-    };
+  // 2. Cau tra loi duoc tinh diem trong khoang ngay (chi lan choi dau, khong bo qua)
+  const answeredAt = {};
+  if (filter.startDate) answeredAt.gte = new Date(`${filter.startDate}T00:00:00+07:00`);
+  if (filter.endDate) answeredAt.lte = new Date(`${filter.endDate}T23:59:59.999+07:00`);
+
+  const answers = await prisma.checkpointAnswer.findMany({
+    where: {
+      session: { childId, isFirstPlay: true },
+      skipped: false,
+      ...(Object.keys(answeredAt).length > 0 && { answeredAt }),
+    },
+    orderBy: { answeredAt: 'asc' },
+    select: {
+      skillId: true,
+      score: true,
+      firstEmotion: true,
+      answeredAt: true,
+      checkpoint: { select: { type: true, answerEmotion: true } },
+    },
+  });
+
+  // 3. Bieu do theo thang, theo tung nang luc
+  const monthly = {};
+  for (const a of answers) {
+    if (!a.skillId || a.score === null) continue;
+    const month = toVnMonth(a.answeredAt);
+    const bucket = ((monthly[month] ||= {})[a.skillId] ||= { items: 0, scoreSum: 0 });
+    bucket.items += 1;
+    bucket.scoreSum += Number(a.score);
+  }
+  const skillById = Object.fromEntries(competencies.map((c) => [c.skillId, c]));
+  const monthlyProgress = Object.entries(monthly).map(([month, bySkill]) => ({
+    month,
+    skills: Object.entries(bySkill).map(([skillId, b]) => ({
+      skillId,
+      caselCode: skillById[skillId]?.caselCode,
+      nameVi: skillById[skillId]?.nameVi,
+      items: b.items,
+      score: Math.round((b.scoreSum / b.items) * 100),
+    })),
+  }));
+
+  // 4. Cam xuc: tre nhan dien dung bao nhieu lan o lan chon dau
+  const emotions = {};
+  for (const a of answers) {
+    const expected = a.checkpoint.answerEmotion;
+    if (!expected) continue;
+    const entry = (emotions[expected] ||= { emotion: expected, count: 0, correctFirstTry: 0 });
+    entry.count += 1;
+    if (a.firstEmotion === expected) entry.correctFirstTry += 1;
+  }
+
+  const completedStories = await prisma.playSession.count({
+    where: {
+      childId,
+      isFirstPlay: true,
+      status: 'completed',
+      ...(Object.keys(answeredAt).length > 0 && { completedAt: answeredAt }),
+    },
   });
 
   return {
     child: {
       id: child.id,
       name: child.name,
-      avatar: child.characters?.[0]?.portraitImageKey || null,
+      avatar: child.character?.portraitImageKey || null,
     },
     summary: {
-      totalStoriesCompleted: playSessions.length,
-      totalScore,
-      strongestSkill: highestSkill?.nameVi || null,
-      focusSkill: lowestSkill?.nameVi || null,
+      totalStoriesCompleted: completedStories,
+      scoredAnswers: answers.filter((a) => a.score !== null).length,
+      strongestSkill: strongestSkill?.nameVi || null,
+      focusSkill: focusSkill?.nameVi || null,
+      minItemsForScore: eqService.MIN_ITEMS_FOR_SCORE,
     },
-    radarMetrics: skillsList,
+    radarMetrics: competencies,
     recommendation,
-    emotionTriggers: Object.entries(emotionFrequencies).map(([name, count]) => ({
-      emotion: name,
-      count,
-    })),
-    progressionTimeline,
+    emotionRecognition: Object.values(emotions),
+    monthlyProgress,
   };
 };
 

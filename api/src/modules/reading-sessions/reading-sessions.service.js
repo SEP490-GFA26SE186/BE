@@ -1,5 +1,11 @@
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
+import eqService from '../reports/eq.service.js';
+
+const EMOTION_TYPES = ['emotion_self', 'emotion_other'];
+const OPTION_TYPES = ['perspective', 'problem_solving'];
+
+const SKILL_SELECT = { id: true, caselCode: true, nameVi: true, nameEn: true };
 
 /**
  * Verify child access permission for current user
@@ -29,357 +35,262 @@ const verifyChildAccess = async (user, childId) => {
   return child;
 };
 
+// =============================================================================
+// STORY CONTENT
+// =============================================================================
+
+const STORY_CONTENT_INCLUDE = {
+  topic: {
+    select: { id: true, title: true, skillId: true, skill: { select: SKILL_SELECT } },
+  },
+  storyCharacters: {
+    include: { character: { select: { name: true } } },
+  },
+  pages: {
+    orderBy: { pageOrder: 'asc' },
+    include: {
+      scene: { include: { background: { select: { id: true, imageKey: true } } } },
+      checkpoint: {
+        include: { options: { orderBy: { optionOrder: 'asc' } } },
+      },
+    },
+  },
+};
+
 /**
- * Format page output with choices and assets
- * @param {Object} page
- * @returns {Object} Formatted page
+ * Token {NVx} -> ten hien thi (nhan vat gia dinh hoac ten chung cua truyen published)
+ * @param {Array} storyCharacters
+ * @returns {Object}
  */
-const formatPage = (page) => {
-  if (!page) return null;
+const buildTokenNames = (storyCharacters = []) =>
+  Object.fromEntries(storyCharacters.map((sc) => [sc.token, sc.character?.name || sc.aliasName || sc.token]));
+
+const renderText = (text, names) => {
+  if (!text) return text;
+  return Object.entries(names).reduce((out, [token, name]) => out.split(token).join(name), text);
+};
+
+const formatCheckpoint = (checkpoint, names) => {
+  if (!checkpoint) return null;
   return {
-    id: page.id,
-    pageOrder: page.pageOrder,
-    pageKind: page.pageKind,
-    contentText: page.contentText,
-    imageKey: page.imageKey,
-    audioKey: page.audioKey,
-    imageStatus: page.imageStatus,
-    audioStatus: page.audioStatus,
-    background: page.background
-      ? {
-          id: page.background.id,
-          name: page.background.name,
-          category: page.background.category,
-          imageUrl: page.background.imageUrl,
-        }
-      : null,
-    choices: (page.choices || []).map((c) => ({
-      id: c.id,
-      choiceOrder: c.choiceOrder,
-      choiceText: c.choiceText,
-      audioKey: c.audioKey,
-      isProsocial: c.choiceType?.isProsocial ?? false,
-      typeCode: c.choiceType?.typeCode ?? null,
-      description: c.choiceType?.description ?? null,
+    id: checkpoint.id,
+    type: checkpoint.type,
+    targetToken: checkpoint.targetToken,
+    targetName: checkpoint.targetToken ? names[checkpoint.targetToken] || null : null,
+    question: renderText(checkpoint.question, names),
+    questionAudioKey: checkpoint.questionAudioKey,
+    hint: renderText(checkpoint.hint, names),
+    hintAudioKey: checkpoint.hintAudioKey,
+    // Frontend can de quyet dinh co doc goi y hay khong; diem van cham o server
+    answerEmotion: checkpoint.answerEmotion,
+    options: checkpoint.options.map((o) => ({
+      id: o.id,
+      optionOrder: o.optionOrder,
+      text: renderText(o.text, names),
+      textAudioKey: o.textAudioKey,
+      isCorrect: o.isCorrect,
+      feedback: renderText(o.feedback, names),
+      feedbackAudioKey: o.feedbackAudioKey,
     })),
   };
 };
 
-/**
- * Compute and store EQ assessment for a finished session
- * @param {string} sessionId
- * @returns {Promise<Object>} Computed EQ Assessment
- */
-const computeEqAssessment = async (sessionId) => {
-  const session = await prisma.playSession.findUnique({
-    where: { id: sessionId },
-    include: {
-      story: {
-        include: {
-          topic: {
-            include: { skill: true },
-          },
-        },
+const formatStoryContent = (story) => {
+  const names = buildTokenNames(story.storyCharacters);
+  return {
+    id: story.id,
+    title: renderText(story.title, names),
+    length: story.length,
+    useTts: story.useTts,
+    useAiImage: story.useAiImage,
+    topic: story.topic ? { id: story.topic.id, title: story.topic.title, skill: story.topic.skill } : null,
+    totalPages: story.pages.length,
+    pages: story.pages.map((p) => ({
+      id: p.id,
+      pageOrder: p.pageOrder,
+      contentText: renderText(p.contentText, names),
+      audioKey: p.audioKey,
+      scene: {
+        id: p.scene.id,
+        sceneOrder: p.scene.sceneOrder,
+        imageKey: p.scene.imageKey,
+        background: p.scene.background,
       },
-      decisions: {
-        include: {
-          choice: {
-            include: {
-              choiceType: {
-                include: {
-                  choiceSignals: {
-                    include: { skill: true },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
+      checkpoint: formatCheckpoint(p.checkpoint, names),
+    })),
+  };
+};
 
+// =============================================================================
+// SESSION FORMATTING
+// =============================================================================
+
+const formatAnswer = (a) => ({
+  id: a.id.toString(),
+  checkpointId: a.checkpointId,
+  firstEmotion: a.firstEmotion,
+  firstOptionId: a.firstOptionId,
+  finalEmotion: a.finalEmotion,
+  finalOptionId: a.finalOptionId,
+  attempts: a.attempts,
+  skipped: a.skipped,
+  timeToFirstMs: a.timeToFirstMs,
+  questionReplays: a.questionReplays,
+  skill: a.skill || null,
+  score: a.score === null ? null : Number(a.score),
+  answeredAt: a.answeredAt,
+});
+
+/**
+ * Tom tat diem cua rieng lan choi nay, theo nang luc
+ * @param {Array} answers - checkpoint_answers kem skill
+ * @returns {Array}
+ */
+const summarizeAnswers = (answers) => {
+  const bySkill = {};
+  for (const a of answers) {
+    if (a.skipped || a.score === null || !a.skill) continue;
+    const entry = (bySkill[a.skill.id] ||= { skill: a.skill, items: 0, scoreSum: 0 });
+    entry.items += 1;
+    entry.scoreSum += Number(a.score);
+  }
+  return Object.values(bySkill).map((e) => ({
+    skill: e.skill,
+    items: e.items,
+    score: Math.round((e.scoreSum / e.items) * 100),
+  }));
+};
+
+const formatSession = (session) => ({
+  id: session.id,
+  childId: session.childId,
+  storyId: session.storyId,
+  status: session.status,
+  isFirstPlay: session.isFirstPlay,
+  currentPageId: session.currentPageId,
+  startedAt: session.startedAt,
+  lastActivityAt: session.lastActivityAt,
+  completedAt: session.completedAt,
+});
+
+/**
+ * Load session + kiem tra quyen truy cap qua ho so tre
+ * @param {Object} user
+ * @param {string} sessionId
+ * @returns {Promise<Object>}
+ */
+const getAccessibleSession = async (user, sessionId) => {
+  const session = await prisma.playSession.findUnique({ where: { id: sessionId } });
   if (!session) {
     throw ApiError.notFound('Play session not found');
   }
+  await verifyChildAccess(user, session.childId);
+  return session;
+};
 
-  // Aggregate signals per EQ skill
-  const skillMap = {};
-  for (const decision of (session.decisions || [])) {
-    const choiceType = decision.choice?.choiceType;
-    if (!choiceType) continue;
-
-    const isProsocial = choiceType.isProsocial;
-    const signals = choiceType.choiceSignals || [];
-
-    // If specific CASEL skill signals are defined on template choice
-    if (signals.length > 0) {
-      for (const sig of signals) {
-        const skillId = sig.skillId;
-        if (!skillMap[skillId]) {
-          skillMap[skillId] = {
-            skill: sig.skill,
-            occurrences: 0,
-            prosocialChoices: 0,
-            deltaSum: 0,
-          };
-        }
-        skillMap[skillId].occurrences += 1;
-        if (isProsocial) skillMap[skillId].prosocialChoices += 1;
-        skillMap[skillId].deltaSum += sig.delta || 0;
-      }
-    } else if (session.story?.topic?.skillId) {
-      // Fallback: attribute to story EQ skill
-      const primarySkillId = session.story.topic.skillId;
-      if (!skillMap[primarySkillId]) {
-        skillMap[primarySkillId] = {
-          skill: session.story.topic.skill,
-          occurrences: 0,
-          prosocialChoices: 0,
-          deltaSum: 0,
-        };
-      }
-      skillMap[primarySkillId].occurrences += 1;
-      if (isProsocial) skillMap[primarySkillId].prosocialChoices += 1;
-    }
-  }
-
-  // Create or update assessment
-  const summaryVi =
-    session.decisions.length > 0
-      ? `Bé đã hoàn thành câu chuyện với ${session.decisions.length} quyết định tương tác cảm xúc.`
-      : 'Bé đã hoàn thành câu chuyện.';
-
-  const assessment = await prisma.eqAssessment.upsert({
+const getSessionAnswers = (sessionId) =>
+  prisma.checkpointAnswer.findMany({
     where: { sessionId },
-    update: {
-      summaryVi,
-      computedAt: new Date(),
-    },
-    create: {
-      sessionId,
-      summaryVi,
-      computedAt: new Date(),
-    },
+    orderBy: { answeredAt: 'asc' },
+    include: { skill: { select: SKILL_SELECT } },
   });
 
-  // Calculate scores (0 to 100) and save EqScores
-  const scoreEntries = [];
-  for (const [skillId, stats] of Object.entries(skillMap)) {
-    const score =
-      stats.occurrences > 0
-        ? Math.round((stats.prosocialChoices / stats.occurrences) * 100)
-        : 100;
-
-    const savedScore = await prisma.eqScore.upsert({
-      where: {
-        assessmentId_skillId: {
-          assessmentId: assessment.id,
-          skillId,
-        },
-      },
-      update: {
-        occurrences: stats.occurrences,
-        prosocialChoices: stats.prosocialChoices,
-        score,
-      },
-      create: {
-        assessmentId: assessment.id,
-        skillId,
-        occurrences: stats.occurrences,
-        prosocialChoices: stats.prosocialChoices,
-        score,
-      },
-      include: {
-        skill: {
-          select: {
-            id: true,
-            caselCode: true,
-            nameVi: true,
-            nameEn: true,
-          },
-        },
-      },
-    });
-
-    scoreEntries.push({
-      id: savedScore.id.toString(),
-      skill: savedScore.skill,
-      occurrences: savedScore.occurrences,
-      prosocialChoices: savedScore.prosocialChoices,
-      score: savedScore.score,
-    });
-  }
-
-  return {
-    id: assessment.id,
-    sessionId: assessment.sessionId,
-    summaryVi: assessment.summaryVi,
-    computedAt: assessment.computedAt,
-    scores: scoreEntries,
-  };
-};
+// =============================================================================
+// SERVICES
+// =============================================================================
 
 /**
  * Start or resume a reading session for a child
  * @param {Object} user - Authenticated user
  * @param {Object} payload - { childId, storyId, isReplay }
- * @returns {Promise<Object>} Session info and current page
+ * @returns {Promise<Object>} Session info, full story content and answers so far
  */
 const startSession = async (user, { childId, storyId, isReplay = false }) => {
   const child = await verifyChildAccess(user, childId);
 
   const story = await prisma.story.findFirst({
-    where: {
-      id: storyId,
-      deletedAt: null,
-    },
-    include: {
-      pages: {
-        orderBy: { pageOrder: 'asc' },
-        include: {
-          background: true,
-          choices: {
-            include: { choiceType: true },
-            orderBy: { choiceOrder: 'asc' },
-          },
-        },
-      },
-      topic: {
-        include: {
-          skill: {
-            select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-          },
-        },
-      },
-    },
+    where: { id: storyId, deletedAt: null },
+    include: STORY_CONTENT_INCLUDE,
   });
 
   if (!story) {
     throw ApiError.notFound('Story not found');
   }
 
+  if (story.status !== 'ready' || !story.reviewedAt) {
+    throw ApiError.badRequest('Story is not ready for reading yet');
+  }
+
   if (story.pages.length === 0) {
     throw ApiError.badRequest('Story has no content pages to read');
   }
 
-  const totalPages = story.pages.length;
-
-  // 1. Check for active in_progress session if not replay
-  if (!isReplay) {
-    const existingSession = await prisma.playSession.findFirst({
-      where: {
-        childId: child.id,
-        storyId: story.id,
-        status: 'in_progress',
-      },
-      include: {
-        currentPage: {
-          include: {
-            background: true,
-            choices: {
-              include: { choiceType: true },
-              orderBy: { choiceOrder: 'asc' },
-            },
-          },
-        },
-      },
-    });
-
-    if (existingSession) {
-      // Update lastActivityAt
-      await prisma.playSession.update({
-        where: { id: existingSession.id },
-        data: { lastActivityAt: new Date() },
-      });
-
-      const currentPage = existingSession.currentPage || story.pages[0];
-      return {
-        session: {
-          id: existingSession.id,
-          childId: child.id,
-          storyId: story.id,
-          status: existingSession.status,
-          isReplay: existingSession.isReplay,
-          startedAt: existingSession.startedAt,
-          lastActivityAt: new Date(),
-          isResumed: true,
-          totalPages,
-          currentPageOrder: currentPage.pageOrder,
-        },
-        story: {
-          id: story.id,
-          title: story.title,
-          coverImageKey: story.coverImageKey,
-          primarySkill: story.topic?.skill,
-        },
-        currentPage: formatPage(currentPage),
-      };
+  // Tre chi doc truyen tren gia sach cua minh; truyen rieng cua phu huynh duoc tu dong dua len gia
+  const onBookshelf = await prisma.bookshelfItem.findUnique({
+    where: { childId_storyId: { childId: child.id, storyId: story.id } },
+  });
+  if (!onBookshelf) {
+    if (story.ownerId !== child.parentId || story.kind !== 'private') {
+      throw ApiError.forbidden('Story is not on this child bookshelf');
     }
+    await prisma.bookshelfItem.create({ data: { childId: child.id, storyId: story.id } });
   }
 
-  // 2. Starting fresh or replay
-  if (isReplay) {
-    // Mark prior in_progress sessions as abandoned
+  // 1. Resume in-progress session unless replay requested
+  const existingSession = await prisma.playSession.findFirst({
+    where: { childId: child.id, storyId: story.id, status: 'in_progress' },
+    orderBy: { startedAt: 'desc' },
+  });
+
+  if (existingSession && !isReplay) {
+    const session = await prisma.playSession.update({
+      where: { id: existingSession.id },
+      data: { lastActivityAt: new Date() },
+    });
+    const answers = await getSessionAnswers(session.id);
+    return {
+      session: { ...formatSession(session), isResumed: true },
+      story: formatStoryContent(story),
+      answers: answers.map(formatAnswer),
+    };
+  }
+
+  if (existingSession) {
     await prisma.playSession.updateMany({
-      where: {
-        childId: child.id,
-        storyId: story.id,
-        status: 'in_progress',
-      },
+      where: { childId: child.id, storyId: story.id, status: 'in_progress' },
       data: { status: 'abandoned' },
     });
   }
 
-  const firstPage = story.pages[0];
-
-  const newSession = await prisma.playSession.create({
-    data: {
-      childId: child.id,
-      storyId: story.id,
-      status: 'in_progress',
-      isReplay,
-      currentPageId: firstPage.id,
-      startedAt: new Date(),
-      lastActivityAt: new Date(),
-    },
-  });
-
-  // Ensure story is placed onto child's bookshelf
-  await prisma.bookshelfItem.upsert({
-    where: {
-      childId_storyId: {
+  // 2. New session. Chi lan choi dau tien (ke ca da bo do) duoc tinh diem EQ
+  const createSession = (isFirstPlay) =>
+    prisma.playSession.create({
+      data: {
         childId: child.id,
         storyId: story.id,
+        isFirstPlay,
+        status: 'in_progress',
+        currentPageId: story.pages[0].id,
       },
-    },
-    update: {},
-    create: {
-      childId: child.id,
-      storyId: story.id,
-    },
+    });
+
+  const hasFirstPlay = await prisma.playSession.count({
+    where: { childId: child.id, storyId: story.id, isFirstPlay: true },
   });
 
+  let session;
+  try {
+    session = await createSession(hasFirstPlay === 0);
+  } catch (err) {
+    // Partial unique (child_id, story_id) WHERE is_first_play: request song song da tao truoc
+    if (err.code !== 'P2002') throw err;
+    session = await createSession(false);
+  }
+
   return {
-    session: {
-      id: newSession.id,
-      childId: child.id,
-      storyId: story.id,
-      status: newSession.status,
-      isReplay,
-      startedAt: newSession.startedAt,
-      lastActivityAt: newSession.lastActivityAt,
-      isResumed: false,
-      totalPages,
-      currentPageOrder: firstPage.pageOrder,
-    },
-    story: {
-      id: story.id,
-      title: story.title,
-      coverImageKey: story.coverImageKey,
-      primarySkill: story.topic?.skill,
-    },
-    currentPage: formatPage(firstPage),
+    session: { ...formatSession(session), isResumed: false },
+    story: formatStoryContent(story),
+    answers: [],
   };
 };
 
@@ -387,374 +298,221 @@ const startSession = async (user, { childId, storyId, isReplay = false }) => {
  * Get current state of a reading session
  * @param {Object} user - Authenticated user
  * @param {string} sessionId
- * @returns {Promise<Object>} Detailed session state
+ * @returns {Promise<Object>} Session, story content, answers and per-skill summary
  */
 const getSession = async (user, sessionId) => {
-  const session = await prisma.playSession.findUnique({
-    where: { id: sessionId },
-    include: {
-      child: {
-        select: { id: true, parentId: true, name: true },
-      },
-      story: {
-        select: {
-          id: true,
-          title: true,
-          coverImageKey: true,
-          _count: { select: { pages: true } },
-          topic: {
-            select: {
-              id: true,
-              title: true,
-              skill: {
-                select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-              },
-            },
-          },
-        },
-      },
-      currentPage: {
-        include: {
-          background: true,
-          choices: {
-            include: { choiceType: true },
-            orderBy: { choiceOrder: 'asc' },
-          },
-        },
-      },
-      decisions: {
-        orderBy: { decidedAt: 'asc' },
-        include: {
-          choice: {
-            include: {
-              choiceType: true,
-            },
-          },
-          page: {
-            select: {
-              id: true,
-              pageOrder: true,
-              pageKind: true,
-            },
-          },
-        },
-      },
-      eqAssessment: {
-        include: {
-          scores: {
-            include: {
-              skill: {
-                select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
+  const session = await getAccessibleSession(user, sessionId);
 
-  if (!session) {
-    throw ApiError.notFound('Play session not found');
-  }
-
-  await verifyChildAccess(user, session.child.id);
-
-  const totalPages = session.story._count.pages;
-  const currentPageOrder = session.currentPage?.pageOrder || 0;
+  const [story, answers] = await Promise.all([
+    prisma.story.findUnique({ where: { id: session.storyId }, include: STORY_CONTENT_INCLUDE }),
+    getSessionAnswers(session.id),
+  ]);
 
   return {
-    id: session.id,
-    child: {
-      id: session.child.id,
-      name: session.child.name,
-    },
-    story: {
-      id: session.story.id,
-      title: session.story.title,
-      coverImageKey: session.story.coverImageKey,
-      primarySkill: session.story.topic?.skill,
-    },
-    status: session.status,
-    isReplay: session.isReplay,
-    startedAt: session.startedAt,
-    lastActivityAt: session.lastActivityAt,
-    completedAt: session.completedAt,
-    totalPages,
-    currentPageOrder,
-    currentPage: formatPage(session.currentPage),
-    decisions: session.decisions.map((d) => ({
-      id: d.id.toString(),
-      pageId: d.pageId,
-      pageOrder: d.page.pageOrder,
-      choiceId: d.choiceId,
-      choiceText: d.choice.choiceText,
-      isProsocial: d.choice.choiceType.isProsocial,
-      timeToDecideMs: d.timeToDecideMs,
-      decidedAt: d.decidedAt,
-    })),
-    eqAssessment: session.eqAssessment
-      ? {
-          id: session.eqAssessment.id,
-          summaryVi: session.eqAssessment.summaryVi,
-          computedAt: session.eqAssessment.computedAt,
-          scores: session.eqAssessment.scores.map((s) => ({
-            id: s.id.toString(),
-            skill: s.skill,
-            occurrences: s.occurrences,
-            prosocialChoices: s.prosocialChoices,
-            score: s.score,
-          })),
-        }
-      : null,
+    session: formatSession(session),
+    story: formatStoryContent(story),
+    answers: answers.map(formatAnswer),
+    eqSummary: summarizeAnswers(answers),
   };
 };
 
 /**
- * Submit a child choice at a story branch
- * @param {Object} user - Authenticated user
+ * Save reading position (trang dang doc) de mo lai dung cho
+ * @param {Object} user
  * @param {string} sessionId
- * @param {Object} payload - { pageId, choiceId, timeToDecideMs }
- * @returns {Promise<Object>} Next page or session completion summary
+ * @param {Object} payload - { pageId }
+ * @returns {Promise<Object>}
  */
-const submitChoice = async (user, sessionId, { pageId, choiceId, timeToDecideMs }) => {
-  const session = await prisma.playSession.findUnique({
-    where: { id: sessionId },
-    include: {
-      child: true,
-      story: {
-        include: {
-          pages: {
-            orderBy: { pageOrder: 'asc' },
-          },
-        },
-      },
-    },
-  });
-
-  if (!session) {
-    throw ApiError.notFound('Play session not found');
-  }
-
-  await verifyChildAccess(user, session.childId);
+const updateProgress = async (user, sessionId, { pageId }) => {
+  const session = await getAccessibleSession(user, sessionId);
 
   if (session.status !== 'in_progress') {
     throw ApiError.badRequest('This reading session is not in progress');
   }
 
-  if (session.currentPageId !== pageId) {
-    throw ApiError.badRequest('Page ID does not match current session page');
+  const page = await prisma.storyPage.findFirst({
+    where: { id: pageId, storyId: session.storyId },
+    select: { id: true, pageOrder: true },
+  });
+  if (!page) {
+    throw ApiError.notFound('Page not found in this story');
   }
 
-  // Verify choice belongs to current page
-  const choice = await prisma.storyChoice.findFirst({
-    where: {
-      id: choiceId,
-      pageId,
-    },
-    include: {
-      choiceType: true,
-    },
+  const updated = await prisma.playSession.update({
+    where: { id: session.id },
+    data: { currentPageId: page.id, lastActivityAt: new Date() },
   });
 
-  if (!choice) {
-    throw ApiError.notFound('Choice not found for this page');
-  }
-
-  // 1. Record the decision
-  const decision = await prisma.playDecision.upsert({
-    where: {
-      sessionId_pageId: {
-        sessionId,
-        pageId,
-      },
-    },
-    update: {
-      choiceId,
-      timeToDecideMs: timeToDecideMs ?? null,
-      decidedAt: new Date(),
-    },
-    create: {
-      sessionId,
-      pageId,
-      choiceId,
-      timeToDecideMs: timeToDecideMs ?? null,
-      decidedAt: new Date(),
-    },
-  });
-
-  // 2. Determine consequence page or next page in storyline
-  // Check if a page has fromChoiceId pointing to this choice
-  let nextPage = await prisma.storyPage.findFirst({
-    where: {
-      storyId: session.storyId,
-      fromChoiceId: choiceId,
-    },
-    include: {
-      background: true,
-      choices: {
-        include: { choiceType: true },
-        orderBy: { choiceOrder: 'asc' },
-      },
-    },
-  });
-
-  // If no direct consequence branch, navigate to next page by pageOrder
-  if (!nextPage) {
-    const currentPage = session.story.pages.find((p) => p.id === pageId);
-    const currentPageOrder = currentPage?.pageOrder ?? 1;
-
-    nextPage = await prisma.storyPage.findFirst({
-      where: {
-        storyId: session.storyId,
-        pageOrder: { gt: currentPageOrder },
-      },
-      orderBy: { pageOrder: 'asc' },
-      include: {
-        background: true,
-        choices: {
-          include: { choiceType: true },
-          orderBy: { choiceOrder: 'asc' },
-        },
-      },
-    });
-  }
-
-  const totalPages = session.story.pages.length;
-
-  // 3. If there is a next page, transition to it
-  if (nextPage) {
-    await prisma.playSession.update({
-      where: { id: sessionId },
-      data: {
-        currentPageId: nextPage.id,
-        lastActivityAt: new Date(),
-      },
-    });
-
-    return {
-      isCompleted: false,
-      sessionId,
-      decision: {
-        id: decision.id.toString(),
-        pageId,
-        choiceId,
-        choiceText: choice.choiceText,
-        isProsocial: choice.choiceType.isProsocial,
-        timeToDecideMs: decision.timeToDecideMs,
-      },
-      nextPage: formatPage(nextPage),
-      progress: {
-        currentPageOrder: nextPage.pageOrder,
-        totalPages,
-      },
-    };
-  }
-
-  // 4. No more pages -> Complete session and compute EQ assessment
-  await prisma.playSession.update({
-    where: { id: sessionId },
-    data: {
-      status: 'completed',
-      completedAt: new Date(),
-      lastActivityAt: new Date(),
-    },
-  });
-
-  const eqAssessment = await computeEqAssessment(sessionId);
-
-  return {
-    isCompleted: true,
-    sessionId,
-    decision: {
-      id: decision.id.toString(),
-      pageId,
-      choiceId,
-      choiceText: choice.choiceText,
-      isProsocial: choice.choiceType.isProsocial,
-      timeToDecideMs: decision.timeToDecideMs,
-    },
-    nextPage: null,
-    progress: {
-      currentPageOrder: totalPages,
-      totalPages,
-    },
-    eqAssessment,
-  };
+  return { session: formatSession(updated), currentPageOrder: page.pageOrder };
 };
 
 /**
- * Complete a reading session manually or after final page
+ * Validate answer payload against checkpoint type
+ * @returns {Object} { firstOption }
+ */
+const validateAnswerPayload = (checkpoint, payload) => {
+  const { skipped, attempts, firstEmotion, finalEmotion, firstOptionId, finalOptionId } = payload;
+  const optionIds = new Set(checkpoint.options.map((o) => o.id));
+
+  if (EMOTION_TYPES.includes(checkpoint.type)) {
+    if (firstOptionId || finalOptionId) {
+      throw ApiError.badRequest('Emotion checkpoints are answered with an emotion, not an option');
+    }
+    if (!skipped && !firstEmotion) {
+      throw ApiError.badRequest('firstEmotion is required');
+    }
+    if (attempts === 2 && !finalEmotion) {
+      throw ApiError.badRequest('finalEmotion is required when attempts = 2');
+    }
+  } else if (OPTION_TYPES.includes(checkpoint.type)) {
+    if (firstEmotion || finalEmotion) {
+      throw ApiError.badRequest('This checkpoint is answered with an option, not an emotion');
+    }
+    if (!skipped && !firstOptionId) {
+      throw ApiError.badRequest('firstOptionId is required');
+    }
+    for (const id of [firstOptionId, finalOptionId]) {
+      if (id && !optionIds.has(id)) {
+        throw ApiError.badRequest('Option does not belong to this checkpoint');
+      }
+    }
+    // problem_solving khong co goi y nen chi chon mot lan
+    if (checkpoint.type === 'problem_solving' && attempts > 1) {
+      throw ApiError.badRequest('Problem solving checkpoints allow only one attempt');
+    }
+    if (attempts === 2 && !finalOptionId) {
+      throw ApiError.badRequest('finalOptionId is required when attempts = 2');
+    }
+  } else if (attempts > 1) {
+    throw ApiError.badRequest('Reflection checkpoints allow only one attempt');
+  }
+
+  return { firstOption: checkpoint.options.find((o) => o.id === firstOptionId) || null };
+};
+
+/**
+ * Record the child's answer at a checkpoint.
+ * Diem va nang luc duoc snapshot luc tra loi; chi lan choi dau, khong bo qua moi cong vao eq_competency_stats.
  * @param {Object} user - Authenticated user
  * @param {string} sessionId
- * @param {Object} [options] - { durationSeconds }
- * @returns {Promise<Object>} Completed session report with EQ Assessment
+ * @param {Object} payload - answer fields
+ * @returns {Promise<Object>} Saved answer
  */
-const completeSession = async (user, sessionId, options = {}) => {
-  const session = await prisma.playSession.findUnique({
-    where: { id: sessionId },
+const submitAnswer = async (user, sessionId, payload) => {
+  const session = await getAccessibleSession(user, sessionId);
+
+  if (session.status !== 'in_progress') {
+    throw ApiError.badRequest('This reading session is not in progress');
+  }
+
+  const checkpoint = await prisma.storyCheckpoint.findFirst({
+    where: { id: payload.checkpointId, storyId: session.storyId },
     include: {
-      child: true,
-      story: {
-        include: {
-          topic: {
-            include: { skill: true },
-          },
-        },
-      },
+      options: true,
+      story: { select: { topic: { select: { skillId: true } } } },
     },
   });
-
-  if (!session) {
-    throw ApiError.notFound('Play session not found');
+  if (!checkpoint) {
+    throw ApiError.notFound('Checkpoint not found in this story');
   }
 
-  await verifyChildAccess(user, session.childId);
-
-  const completedAt = new Date();
-  await prisma.playSession.update({
-    where: { id: sessionId },
-    data: {
-      status: 'completed',
-      completedAt,
-      lastActivityAt: completedAt,
-    },
-  });
-
-  // Calculate or retrieve EQ assessment
-  const eqAssessment = await computeEqAssessment(sessionId);
-
-  // If duration seconds provided or calculated from session, record screen time usage
-  let durationSeconds = options.durationSeconds;
-  if (!durationSeconds && session.startedAt) {
-    durationSeconds = Math.max(1, Math.round((completedAt.getTime() - session.startedAt.getTime()) / 1000));
-  }
-
-  if (durationSeconds && durationSeconds > 0) {
-    const usageDate = new Date(completedAt.toISOString().split('T')[0]);
-    await prisma.childUsageSession.create({
-      data: {
-        childId: session.childId,
-        startedAt: session.startedAt,
-        endedAt: completedAt,
-        durationSeconds,
-        usageDate,
-      },
+  const findExisting = () =>
+    prisma.checkpointAnswer.findUnique({
+      where: { sessionId_checkpointId: { sessionId, checkpointId: checkpoint.id } },
+      include: { skill: { select: SKILL_SELECT } },
     });
+
+  // Cau tra loi da dong bang: gui lai (retry) tra ve ban da luu
+  const existing = await findExisting();
+  if (existing) {
+    return { answer: formatAnswer(existing), alreadyAnswered: true };
   }
+
+  const skipped = Boolean(payload.skipped);
+  const attempts = skipped ? 1 : payload.attempts ?? 1;
+  const { firstOption } = validateAnswerPayload(checkpoint, { ...payload, skipped, attempts });
+
+  const skillIdByCode = await eqService.getSkillIdByCode();
+  const skillId = eqService.resolveSkillId(checkpoint, checkpoint.story.topic.skillId, skillIdByCode);
+  const score = skipped ? null : eqService.scoreFirstChoice(checkpoint, { firstEmotion: payload.firstEmotion, firstOption });
+  const countsTowardStats = session.isFirstPlay && !skipped && skillId && score !== null;
+
+  // Lan chon cuoi mac dinh bang lan chon dau khi chi chon mot lan
+  const finalEmotion = payload.finalEmotion ?? payload.firstEmotion ?? null;
+  const finalOptionId = payload.finalOptionId ?? payload.firstOptionId ?? null;
+
+  let answer;
+  try {
+    answer = await prisma.$transaction(async (tx) => {
+      const created = await tx.checkpointAnswer.create({
+        data: {
+          sessionId,
+          checkpointId: checkpoint.id,
+          firstEmotion: skipped ? null : payload.firstEmotion ?? null,
+          firstOptionId: skipped ? null : payload.firstOptionId ?? null,
+          finalEmotion: skipped ? null : finalEmotion,
+          finalOptionId: skipped ? null : finalOptionId,
+          attempts,
+          skipped,
+          timeToFirstMs: payload.timeToFirstMs ?? null,
+          questionReplays: payload.questionReplays ?? 0,
+          skillId,
+          score,
+        },
+        include: { skill: { select: SKILL_SELECT } },
+      });
+
+      if (countsTowardStats) {
+        await tx.eqCompetencyStat.upsert({
+          where: { childId_skillId: { childId: session.childId, skillId } },
+          create: { childId: session.childId, skillId, items: 1, scoreSum: score },
+          update: { items: { increment: 1 }, scoreSum: { increment: score }, updatedAt: new Date() },
+        });
+      }
+
+      await tx.playSession.update({
+        where: { id: sessionId },
+        data: { currentPageId: checkpoint.afterPageId, lastActivityAt: new Date() },
+      });
+
+      return created;
+    });
+  } catch (err) {
+    // Request trung lap chay song song: ban kia da ghi truoc
+    if (err.code !== 'P2002') throw err;
+    return { answer: formatAnswer(await findExisting()), alreadyAnswered: true };
+  }
+
+  return { answer: formatAnswer(answer), alreadyAnswered: false };
+};
+
+/**
+ * Complete a reading session after the last page
+ * @param {Object} user - Authenticated user
+ * @param {string} sessionId
+ * @returns {Promise<Object>} Completed session with per-skill summary of this play
+ */
+const completeSession = async (user, sessionId) => {
+  const session = await getAccessibleSession(user, sessionId);
+
+  if (session.status === 'abandoned') {
+    throw ApiError.badRequest('This reading session was abandoned');
+  }
+
+  const completed =
+    session.status === 'completed'
+      ? session
+      : await prisma.playSession.update({
+          where: { id: sessionId },
+          data: { status: 'completed', completedAt: new Date(), lastActivityAt: new Date() },
+        });
+
+  const answers = await getSessionAnswers(sessionId);
 
   return {
-    sessionId: session.id,
-    childId: session.childId,
-    storyId: session.storyId,
-    status: 'completed',
-    completedAt,
-    durationSeconds: durationSeconds || 0,
-    story: {
-      id: session.story.id,
-      title: session.story.title,
-      primarySkill: session.story.topic?.skill,
-    },
-    eqAssessment,
+    session: formatSession(completed),
+    answers: answers.map(formatAnswer),
+    eqSummary: summarizeAnswers(answers),
   };
 };
 
@@ -789,59 +547,19 @@ const getChildHistory = async (user, childId, query) => {
           select: {
             id: true,
             title: true,
-            coverImageKey: true,
-            topic: {
-              select: {
-                id: true,
-                title: true,
-                skill: {
-                  select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-                },
-              },
-            },
+            topic: { select: { id: true, title: true, skill: { select: SKILL_SELECT } } },
           },
         },
-        _count: {
-          select: { decisions: true },
-        },
-        eqAssessment: {
-          include: {
-            scores: {
-              include: {
-                skill: {
-                  select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-                },
-              },
-            },
-          },
-        },
+        answers: { include: { skill: { select: SKILL_SELECT } } },
       },
     }),
   ]);
 
   const formattedSessions = sessions.map((s) => ({
-    id: s.id,
+    ...formatSession(s),
     story: s.story,
-    status: s.status,
-    isReplay: s.isReplay,
-    startedAt: s.startedAt,
-    lastActivityAt: s.lastActivityAt,
-    completedAt: s.completedAt,
-    decisionsCount: s._count.decisions,
-    eqAssessment: s.eqAssessment
-      ? {
-          id: s.eqAssessment.id,
-          summaryVi: s.eqAssessment.summaryVi,
-          computedAt: s.eqAssessment.computedAt,
-          scores: s.eqAssessment.scores.map((sc) => ({
-            id: sc.id.toString(),
-            skill: sc.skill,
-            occurrences: sc.occurrences,
-            prosocialChoices: sc.prosocialChoices,
-            score: sc.score,
-          })),
-        }
-      : null,
+    answersCount: s.answers.length,
+    eqSummary: summarizeAnswers(s.answers),
   }));
 
   return {
@@ -862,7 +580,8 @@ const getChildHistory = async (user, childId, query) => {
 export default {
   startSession,
   getSession,
-  submitChoice,
+  updateProgress,
+  submitAnswer,
   completeSession,
   getChildHistory,
 };

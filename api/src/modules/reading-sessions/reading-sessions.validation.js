@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const PLAY_STATUSES = ['in_progress', 'completed', 'abandoned'];
+const EMOTIONS = ['happy', 'sad', 'angry', 'scared', 'neutral'];
 
 const startSession = z.object({
   body: z.object({
@@ -16,14 +17,29 @@ const getSession = z.object({
   }),
 });
 
-const submitChoice = z.object({
+const updateProgress = z.object({
   params: z.object({
     sessionId: z.string().uuid('Invalid session ID format'),
   }),
   body: z.object({
     pageId: z.string({ required_error: 'Page ID is required' }).uuid('Invalid page ID format'),
-    choiceId: z.string({ required_error: 'Choice ID is required' }).uuid('Invalid choice ID format'),
-    timeToDecideMs: z.number().int().min(0, 'Decision time cannot be negative').optional(),
+  }),
+});
+
+const submitAnswer = z.object({
+  params: z.object({
+    sessionId: z.string().uuid('Invalid session ID format'),
+  }),
+  body: z.object({
+    checkpointId: z.string({ required_error: 'Checkpoint ID is required' }).uuid('Invalid checkpoint ID format'),
+    firstEmotion: z.enum(EMOTIONS).optional(),
+    firstOptionId: z.string().uuid('Invalid option ID format').optional(),
+    finalEmotion: z.enum(EMOTIONS).optional(),
+    finalOptionId: z.string().uuid('Invalid option ID format').optional(),
+    attempts: z.number().int().min(1).max(2).optional(),
+    skipped: z.boolean().optional(),
+    timeToFirstMs: z.number().int().min(0, 'Time cannot be negative').optional(),
+    questionReplays: z.number().int().min(0).optional(),
   }),
 });
 
@@ -31,11 +47,6 @@ const completeSession = z.object({
   params: z.object({
     sessionId: z.string().uuid('Invalid session ID format'),
   }),
-  body: z
-    .object({
-      durationSeconds: z.number().int().min(0, 'Duration seconds cannot be negative').optional(),
-    })
-    .optional(),
 });
 
 const getChildHistory = z.object({
@@ -60,7 +71,8 @@ const getChildHistory = z.object({
 export default {
   startSession,
   getSession,
-  submitChoice,
+  updateProgress,
+  submitAnswer,
   completeSession,
   getChildHistory,
 };

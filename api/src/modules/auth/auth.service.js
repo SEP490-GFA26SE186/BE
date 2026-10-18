@@ -3,6 +3,7 @@ import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import tokenService from './token.service.js';
 import emailService from '../../services/email.service.js';
+import plansService from '../plans/plans.service.js';
 
 /**
  * Register a new user
@@ -37,7 +38,13 @@ const register = async ({ username, email, password, fullName, phone }) => {
   // Hash the password with bcrypt (cost factor = 10)
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Create user and initialize wallet inside an atomic transaction
+  // Moi tai khoan bat dau voi goi Mien phi (schema-guide: dang ky -> subscriptions + credit_grant)
+  const freePlan = await plansService.getFreePlan();
+  if (!freePlan) {
+    console.warn('No active free plan configured: new user starts without subscription');
+  }
+
+  // Create user, wallet, free subscription and first month credits inside an atomic transaction
   const newUser = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
@@ -71,6 +78,10 @@ const register = async ({ username, email, password, fullName, phone }) => {
         earningLockedVnd: 0n,
       },
     });
+
+    if (freePlan) {
+      await plansService.activateSubscription(tx, { userId: user.id, plan: freePlan });
+    }
 
     return user;
   });

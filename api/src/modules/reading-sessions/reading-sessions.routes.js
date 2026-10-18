@@ -18,10 +18,15 @@ router.get(
   validate(readingSessionsValidation.getSession),
   readingSessionsController.getSession,
 );
+router.patch(
+  '/:sessionId/progress',
+  validate(readingSessionsValidation.updateProgress),
+  readingSessionsController.updateProgress,
+);
 router.post(
-  '/:sessionId/choice',
-  validate(readingSessionsValidation.submitChoice),
-  readingSessionsController.submitChoice,
+  '/:sessionId/answers',
+  validate(readingSessionsValidation.submitAnswer),
+  readingSessionsController.submitAnswer,
 );
 router.post(
   '/:sessionId/complete',
