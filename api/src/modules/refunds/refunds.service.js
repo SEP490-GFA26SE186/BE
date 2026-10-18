@@ -123,11 +123,12 @@ async function impact(item) {
   if (item.itemType === 'plan') {
     const sub = await prisma.subscription.findFirst({ where: { orderItemId: item.id }, select: { id: true, status: true, periodStart: true, parentId: true } });
     if (!sub) return { subscriptionStatus: null, creditsUsed: 0 };
+    // credit_consume la dong danh dau (amount 0); credit thuc su tru o credit_hold (-) va tra lai o credit_release (+).
     const used = await prisma.walletLedger.aggregate({
-      where: { userId: sub.parentId, walletType: 'credit', entryType: 'credit_consume', createdAt: { gte: sub.periodStart } },
+      where: { userId: sub.parentId, walletType: 'credit', entryType: { in: ['credit_hold', 'credit_release'] }, createdAt: { gte: sub.periodStart } },
       _sum: { amount: true },
     });
-    return { subscriptionStatus: sub.status, creditsUsed: Math.abs(Number(used._sum.amount ?? 0)) };
+    return { subscriptionStatus: sub.status, creditsUsed: Math.max(0, -Number(used._sum.amount ?? 0)) };
   }
   const keys = await prisma.walletLedger.findMany({ where: { idempotencyKey: { in: [earningKey(item.id), releaseKey(item.id)] } }, select: { idempotencyKey: true } });
   const has = new Set(keys.map((k) => k.idempotencyKey));

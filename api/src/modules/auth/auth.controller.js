@@ -116,7 +116,14 @@ const verifyEmail = catchAsync(async (req, res) => {
   });
 });
 
+const forgotPassword = catchAsync(async (req, res) => ApiResponse.success(res, { message: (await authService.forgotPassword(req.body)).message }));
+const resetPassword = catchAsync(async (req, res) => ApiResponse.success(res, { message: (await authService.resetPassword(req.body)).message }));
+const changePassword = catchAsync(async (req, res) => ApiResponse.success(res, { message: (await authService.changePassword(req.user.id, req.body)).message }));
+
 export default {
+  forgotPassword,
+  resetPassword,
+  changePassword,
   register,
   login,
   refreshTokens,

@@ -58,6 +58,9 @@ const sendViaBrevo = async ({ to, toName, subject, text, html }) => {
  * Priority: 1. Brevo REST API -> 2. SMTP -> 3. Dev Mock Logger
  */
 export const sendEmail = async ({ to, toName, subject, text, html }) => {
+  // Test tu dong: khong bao gio gui that (email gia @test.storyweaver.local -> bounce, ton quota Brevo).
+  if (env.nodeEnv === 'test') return { mocked: true, to, subject };
+
   // 1. Brevo REST API
   if (env.brevo.apiKey && !env.brevo.apiKey.includes('your-brevo-api-key')) {
     try {
@@ -117,7 +120,31 @@ export const sendVerificationEmail = async (to, token, username = 'bạn') => {
   await sendEmail({ to, toName: username, subject, text, html });
 };
 
+/**
+ * Ma khoi phuc mat khau: nguoi dung dan ma vao hop thoai "Quen mat khau" tren web (hieu luc 1 gio).
+ * @param {string} to
+ * @param {string} token
+ * @param {string} [username]
+ */
+export const sendPasswordResetEmail = async (to, token, username = 'bạn') => {
+  const subject = 'StoryWeaver AI - Mã khôi phục mật khẩu';
+  const text = `Xin chào ${username},\n\nMã khôi phục mật khẩu của bạn:\n${token}\n\nDán mã này vào hộp thoại "Quên mật khẩu" trên StoryWeaver AI. Mã có hiệu lực trong 1 giờ và chỉ dùng được một lần.\nNếu bạn không yêu cầu, hãy bỏ qua email này — mật khẩu không thay đổi.\n\nĐội ngũ StoryWeaver AI`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+      <h2 style="color: #4F46E5; text-align: center;">StoryWeaver AI</h2>
+      <p>Xin chào <strong>${username}</strong>,</p>
+      <p>Mã khôi phục mật khẩu của bạn:</p>
+      <p style="font-family: monospace; font-size: 18px; background: #f4f4f8; padding: 12px; border-radius: 6px; word-break: break-all; text-align: center;">${token}</p>
+      <p>Dán mã này vào hộp thoại <strong>Quên mật khẩu</strong> trên StoryWeaver AI. Mã có hiệu lực trong 1 giờ và chỉ dùng được một lần.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="font-size: 12px; color: #999; text-align: center;">Nếu bạn không yêu cầu, hãy bỏ qua email này — mật khẩu không thay đổi.</p>
+    </div>
+  `;
+  await sendEmail({ to, toName: username, subject, text, html });
+};
+
 export default {
   sendEmail,
   sendVerificationEmail,
+  sendPasswordResetEmail,
 };

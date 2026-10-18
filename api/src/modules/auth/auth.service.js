@@ -430,7 +430,46 @@ const verifyEmail = async (rawToken) => {
   };
 };
 
+// ---- Mat khau ----
+
+/**
+ * Quen mat khau: email ton tai + tai khoan con hoat dong -> gui ma. Luon tra cung mot ket qua (khong de lo
+ * email nao da dang ky). Loi gui mail chi ghi log.
+ */
+const forgotPassword = async ({ email }) => {
+  const user = await prisma.user.findFirst({ where: { email: { equals: email.trim(), mode: 'insensitive' }, isActive: true, deletedAt: null } });
+  if (user) {
+    try {
+      const rawToken = await tokenService.generatePasswordResetToken(user.id);
+      await emailService.sendPasswordResetEmail(user.email, rawToken, user.fullName || user.username);
+    } catch (error) {
+      console.error('[auth] gui ma khoi phuc that bai:', error.message);
+    }
+  }
+  return { message: 'Nếu email đã đăng ký, mã khôi phục sẽ được gửi trong ít phút.' };
+};
+
+/** Dat lai mat khau bang ma trong email -> moi phien dang nhap cu bi thu hoi. */
+const resetPassword = async ({ token, newPassword }) => {
+  await tokenService.resetPasswordWithToken(token, await bcrypt.hash(newPassword, 10));
+  return { message: 'Đã đặt lại mật khẩu. Ba mẹ đăng nhập bằng mật khẩu mới nhé.' };
+};
+
+/** Doi mat khau khi dang dang nhap (can mat khau hien tai). */
+const changePassword = async (userId, { currentPassword, newPassword }) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw ApiError.badRequest('Account password is incorrect');
+  }
+  if (await bcrypt.compare(newPassword, user.passwordHash)) throw ApiError.badRequest('Mật khẩu mới phải khác mật khẩu hiện tại.');
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
+  return { message: 'Đã đổi mật khẩu.' };
+};
+
 export default {
+  forgotPassword,
+  resetPassword,
+  changePassword,
   register,
   login,
   refreshTokens,

@@ -12,6 +12,11 @@ router.post('/refresh-tokens', validate(authValidation.refreshTokens), authContr
 router.post('/logout', validate(authValidation.logout), authController.logout);
 router.get('/me', auth, authController.getMe);
 
+// ---- Mat khau ----
+router.post('/forgot-password', validate(authValidation.forgotPassword), authController.forgotPassword);
+router.post('/reset-password', validate(authValidation.resetPassword), authController.resetPassword);
+router.put('/change-password', auth, validate(authValidation.changePassword), authController.changePassword);
+
 // ---- Kid PIN & Kid Mode Session ----
 router.post('/kid-pin/set', auth, validate(authValidation.setKidPin), authController.setKidPin);
 router.put('/kid-pin/change', auth, validate(authValidation.changeKidPin), authController.changeKidPin);

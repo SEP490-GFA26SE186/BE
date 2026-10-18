@@ -105,6 +105,11 @@ const exitKidMode = z.object({
 
 // ---- Email Verification ----
 
+const newPassword = z.string({ required_error: 'New password must be at least 8 characters' }).min(8, 'New password must be at least 8 characters').max(100);
+const forgotPassword = z.object({ body: z.object({ email: z.string().trim().email('Invalid email address') }) });
+const resetPassword = z.object({ body: z.object({ token: z.string().trim().min(1, 'Nhập mã khôi phục').max(200), newPassword }) });
+const changePassword = z.object({ body: z.object({ currentPassword: z.string().min(1, 'Account password is incorrect'), newPassword }) });
+
 const sendVerificationEmail = z.object({
   body: z.object({
     email: z.string().email('Invalid email address').optional(),
@@ -124,6 +129,9 @@ const verifyEmail = z.object({
 });
 
 export default {
+  forgotPassword,
+  resetPassword,
+  changePassword,
   register,
   login,
   refreshTokens,

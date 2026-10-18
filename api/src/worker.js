@@ -43,16 +43,21 @@ console.log(
 // han. Chay luc khoi dong roi moi BILLING_CYCLE_MINUTES (mac dinh 15). Idempotent (key tat dinh) nen
 // hai worker cung chay khong cap trung; loi -> log, lan sau thu lai.
 const BILLING_EVERY_MS = (Number(process.env.BILLING_CYCLE_MINUTES) || 15) * 60_000;
-const billingTick = async () => {
+// Moi viec chay doc lap: mot viec loi (log) khong chan cac viec con lai trong cung chu ky.
+const step = async (name, fn) => {
   try {
-    const r = await runBillingCycle(prisma);
-    r.earningsReleased = await releaseDueEarnings(prisma); // doanh thu nguoi ban het han giu (3 ngay)
-    r.payoutsChecked = await syncProcessingWithdrawals(); // lenh chi ho payOS dang chay -> paid / that bai
-    r.auditsCreated = (await scheduleRandomAudits(prisma)).created; // kiem tra ngau nhien: moi tuan mot dot
-    if (r.granted || r.renewedFree || r.expired || r.ordersExpired || r.earningsReleased || r.auditsCreated) console.log('[billing]', JSON.stringify(r));
+    return await fn();
   } catch (error) {
-    console.error('[billing] chu ky loi:', error);
+    console.error(`[billing] ${name} loi:`, error);
+    return null;
   }
+};
+const billingTick = async () => {
+  const r = (await step('chu ky goi', () => runBillingCycle(prisma))) ?? {};
+  r.earningsReleased = await step('mo khoa doanh thu', () => releaseDueEarnings(prisma)); // het han giu (3 ngay)
+  r.payoutsChecked = await step('dong bo chi ho', () => syncProcessingWithdrawals()); // lenh chi ho payOS -> paid / that bai
+  r.auditsCreated = (await step('kiem tra ngau nhien', () => scheduleRandomAudits(prisma)))?.created; // moi tuan mot dot
+  if (r.granted || r.renewedFree || r.expired || r.ordersExpired || r.earningsReleased || r.auditsCreated || r.failed) console.log('[billing]', JSON.stringify(r));
 };
 billingTick();
 const billingTimer = setInterval(billingTick, BILLING_EVERY_MS);

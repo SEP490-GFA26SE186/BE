@@ -97,6 +97,7 @@ export async function closeOrder(tx, orderId, status) {
 /**
  * Cron (worker, dinh ky): cap credit thang moi, gia han goi Mien phi, het han goi tra phi (ve Mien
  * phi), dong don qua han. Moi subscription mot transaction; key tat dinh nen chay lai khong cap trung.
+ * Mot subscription loi -> ghi log, bo qua, cac subscription khac va viec dong don van chay (lan sau thu lai).
  */
 export async function runBillingCycle(prisma, now = new Date()) {
   const due = await prisma.subscription.findMany({
@@ -104,22 +105,27 @@ export async function runBillingCycle(prisma, now = new Date()) {
     include: { plan: true },
     take: 500,
   });
-  const done = { granted: 0, renewedFree: 0, expired: 0, ordersExpired: 0 };
+  const done = { granted: 0, renewedFree: 0, expired: 0, ordersExpired: 0, failed: 0 };
   for (const sub of due) {
-    await prisma.$transaction(async (tx) => {
-      const step = cycleAction(sub, sub.plan, now);
-      if (step.action === 'grant') {
-        await expireCredit(tx, { userId: sub.parentId, key: expireKey(sub.id, step.monthIndex), refId: sub.id });
-        await grantCredit(tx, { userId: sub.parentId, amount: sub.plan.creditsPerMonth, key: grantKey(sub.id, step.monthIndex), refId: sub.id });
-        await tx.subscription.update({ where: { id: sub.id }, data: { nextCreditGrantAt: step.nextCreditGrantAt } });
-        done.granted += 1;
-      } else if (step.action === 'renew_free' || step.action === 'expire') {
-        // Het ky: credit con lai het han, roi sang ky Mien phi moi.
-        await expireCredit(tx, { userId: sub.parentId, key: expireKey(sub.id, monthsBetween(sub.periodStart, sub.periodEnd)), refId: sub.id });
-        await startPeriod(tx, { parentId: sub.parentId, plan: await freePlan(tx), now, replacedStatus: 'expired' });
-        done[step.action === 'renew_free' ? 'renewedFree' : 'expired'] += 1;
-      }
-    }, TX);
+    try {
+      await prisma.$transaction(async (tx) => {
+        const step = cycleAction(sub, sub.plan, now);
+        if (step.action === 'grant') {
+          await expireCredit(tx, { userId: sub.parentId, key: expireKey(sub.id, step.monthIndex), refId: sub.id });
+          await grantCredit(tx, { userId: sub.parentId, amount: sub.plan.creditsPerMonth, key: grantKey(sub.id, step.monthIndex), refId: sub.id });
+          await tx.subscription.update({ where: { id: sub.id }, data: { nextCreditGrantAt: step.nextCreditGrantAt } });
+          done.granted += 1;
+        } else if (step.action === 'renew_free' || step.action === 'expire') {
+          // Het ky: credit con lai het han, roi sang ky Mien phi moi.
+          await expireCredit(tx, { userId: sub.parentId, key: expireKey(sub.id, monthsBetween(sub.periodStart, sub.periodEnd)), refId: sub.id });
+          await startPeriod(tx, { parentId: sub.parentId, plan: await freePlan(tx), now, replacedStatus: 'expired' });
+          done[step.action === 'renew_free' ? 'renewedFree' : 'expired'] += 1;
+        }
+      }, TX);
+    } catch (error) {
+      done.failed += 1;
+      console.error(`[billing] subscription ${sub.id} loi, bo qua lan nay:`, error.message);
+    }
   }
   const { count } = await prisma.order.updateMany({
     where: { status: 'pending', expiresAt: { lt: now } },

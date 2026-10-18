@@ -85,6 +85,9 @@ export async function requestWithdrawal(user, { amountVnd }, { now = new Date() 
   if (amountVnd < minWithdrawalVnd) throw unprocessable(`Số tiền rút tối thiểu là ${minWithdrawalVnd.toLocaleString('vi-VN')}đ.`);
 
   const created = await prisma.$transaction(async (tx) => {
+    // Khoa ho so ban: hai yeu cau song song chay lan luot -> yeu cau sau thay yeu cau truoc. (Partial unique
+    // cua DB chi chan `requested`, khong chan `processing`.)
+    await tx.$queryRaw`SELECT user_id FROM seller_profiles WHERE user_id = ${user.id}::uuid FOR UPDATE`;
     const unfinished = await tx.withdrawalRequest.findFirst({ where: { sellerId: user.id, status: { in: ['requested', 'processing'] } } });
     if (unfinished) throw conflict('Đang có một yêu cầu rút tiền chưa xử lý xong.');
     const w = await tx.withdrawalRequest.create({

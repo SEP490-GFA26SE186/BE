@@ -534,6 +534,34 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     },
 
     // ---- KID MODE ----
+    '/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Quên mật khẩu — gửi mã khôi phục qua email',
+        description: 'Mã hiệu lực 1 giờ, dùng một lần; mã cũ chưa dùng hết hiệu lực. Luôn trả 200 kể cả email chưa đăng ký (không để dò email).',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } } } },
+        responses: { 200: { description: 'Đã nhận yêu cầu' } },
+      },
+    },
+    '/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Đặt lại mật khẩu bằng mã trong email',
+        description: 'Thành công → thu hồi mọi phiên đăng nhập (refresh token) cũ.',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['token', 'newPassword'], properties: { token: { type: 'string' }, newPassword: { type: 'string', minLength: 8 } } } } } },
+        responses: { 200: { description: 'Đã đặt lại' }, 400: { description: 'Mã sai / đã dùng / hết hạn' } },
+      },
+    },
+    '/auth/change-password': {
+      put: {
+        tags: ['Auth'],
+        summary: 'Đổi mật khẩu (đang đăng nhập)',
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['currentPassword', 'newPassword'], properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string', minLength: 8 } } } } } },
+        responses: { 200: { description: 'Đã đổi' }, 400: { description: 'Mật khẩu hiện tại sai / mật khẩu mới trùng mật khẩu cũ' } },
+      },
+    },
+
     '/auth/kid-pin/set': {
       post: {
         tags: ['Kid Mode'],

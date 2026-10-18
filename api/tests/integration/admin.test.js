@@ -138,11 +138,13 @@ test('cau hinh: sua theo danh sach, rang buoc cheo, khoa ngoai danh sach -> 422'
 test('hoan tien truyen: phu huynh yeu cau trong han -> giu doanh thu (cron bo qua) -> Admin duyet: thu hoi quyen doc, go gia sach, tru doanh thu', { skip }, async () => {
   const { seller, listing } = await publishedListing(19000);
   const buyer = await withPlan('FREE');
-  const order = await buy(buyer, listingItem(listing, 19000), { paidAt: new Date(Date.now() - 4 * 86_400_000) });
+  // Tra hom nay: doanh thu giu toi +3 ngay (cron cua test khac chay song song khong mo khoa duoc).
+  const order = await buy(buyer, listingItem(listing, 19000));
   const item = order.items[0];
   const kid = await createChild(buyer.user.id, 'Na');
   assert.equal((await call(buyer.token, 'POST', '/bookshelf', { childId: kid.id, storyId: listing.publishedStoryId })).status, 201);
 
+  await prisma.order.update({ where: { id: order.id }, data: { paidAt: new Date(Date.now() - 4 * 86_400_000) } });
   const mine = (await call(buyer.token, 'GET', '/payments/orders')).body.data;
   const row = mine.orders.find((o) => o.id === order.id).items[0];
   assert.equal(row.refundable, false, 'qua 3 ngay -> het han');
@@ -182,8 +184,11 @@ test('hoan tien goi: duyet -> huy goi, het credit, ve Mien phi; tu choi phai co 
   const order = await buy(parent, { itemType: 'plan', planId: fam.id, unitPriceVnd: fam.priceVnd });
   assert.equal((await prisma.subscription.findFirst({ where: { parentId: parent.user.id, status: 'active' }, include: { plan: true } })).plan.code, 'FAMILY_MONTH');
   const r = (await call(parent.token, 'POST', `/payments/order-items/${order.items[0].id}/refund`, { reason: 'Mua nhầm gói, muốn hoàn lại.' })).body.data.refund;
+  // Da dung 2 credit (giu 2 khi sinh truyen) -> Admin thay 2 credit da dung (credit_consume luon = 0, khong dem duoc)
+  const ledger = await import('../../src/modules/wallets/creditLedger.js');
+  await prisma.$transaction((tx) => ledger.holdCredit(tx, { userId: parent.user.id, amount: 2, aiRequestId: crypto.randomUUID() }));
   const info = (await call(admin.token, 'GET', '/admin/refunds')).body.data.refunds.find((x) => x.id === r.id);
-  assert.deepEqual([info.impact.subscriptionStatus, info.impact.creditsUsed], ['active', 0]);
+  assert.deepEqual([info.impact.subscriptionStatus, info.impact.creditsUsed], ['active', 2]);
   assert.equal((await call(admin.token, 'POST', `/admin/refunds/${r.id}/decision`, { approve: false })).status, 422);
   const ok = await call(admin.token, 'POST', `/admin/refunds/${r.id}/decision`, { approve: true, bankTransactionRef: 'FT26101800002', note: 'Đã hoàn.' });
   assert.equal(ok.status, 200, JSON.stringify(ok.body));

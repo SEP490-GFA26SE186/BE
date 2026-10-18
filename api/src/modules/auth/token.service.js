@@ -267,6 +267,40 @@ export const verifyEmailToken = async (rawToken) => {
 };
 
 /**
+ * Token dat lai mat khau (hieu luc 1 gio, dung mot lan). Token cu chua dung bi vo hieu.
+ * @param {string} userId
+ * @returns {Promise<string>} raw token (gui qua email)
+ */
+export const generatePasswordResetToken = async (userId) => {
+  const rawToken = crypto.randomBytes(24).toString('hex');
+  await prisma.$transaction(async (tx) => {
+    await tx.authToken.updateMany({ where: { userId, type: 'password_reset', consumedAt: null }, data: { consumedAt: new Date() } });
+    await tx.authToken.create({
+      data: { userId, type: 'password_reset', tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+    });
+  });
+  return rawToken;
+};
+
+/**
+ * Dat lai mat khau bang token: danh dau token da dung, doi mat khau, thu hoi moi phien dang nhap (refresh token).
+ * @returns {Promise<string>} userId
+ */
+export const resetPasswordWithToken = async (rawToken, passwordHash) => {
+  const record = await prisma.authToken.findUnique({ where: { tokenHash: hashToken(rawToken.trim()) } });
+  if (!record || record.type !== 'password_reset' || record.consumedAt !== null || record.expiresAt < new Date()) {
+    throw ApiError.badRequest('Mã khôi phục không đúng, đã dùng hoặc đã hết hạn. Ba mẹ gửi lại mã mới nhé.');
+  }
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.authToken.updateMany({ where: { id: record.id, consumedAt: null }, data: { consumedAt: new Date() } });
+    if (count !== 1) throw ApiError.badRequest('Mã khôi phục đã được dùng.');
+    await tx.user.update({ where: { id: record.userId }, data: { passwordHash } });
+    await tx.authToken.updateMany({ where: { userId: record.userId, type: 'refresh', consumedAt: null }, data: { consumedAt: new Date() } });
+  });
+  return record.userId;
+};
+
+/**
  * Generate a scoped Kid Session Token for reading in Kid Mode
  * @param {Object} parentUser
  * @param {string} childId
@@ -362,6 +396,8 @@ export const consumeKidSessionToken = async (tokenId) => {
 };
 
 export default {
+  generatePasswordResetToken,
+  resetPasswordWithToken,
   hashToken,
   parseDuration,
   generateAuthTokens,

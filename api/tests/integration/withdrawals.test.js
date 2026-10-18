@@ -140,3 +140,27 @@ test('chi ho that bai -> rejected, tra tien; Admin tu choi bat buoc ly do', { sk
   assert.equal(rejected.body.data.withdrawal.rejectReason, 'Sai tên chủ tài khoản');
   assert.equal((await wallet(b.user.id)).earningAvailableVnd, 70000n);
 });
+
+test('rut tien song song: hai yeu cau cung luc -> chi mot cai duoc tao (khoa ho so ban)', { skip }, async () => {
+  const s = await readySeller(200000);
+  const [a, b] = await Promise.all([
+    call(s.token, 'POST', '/sellers/me/withdrawals', { amountVnd: 60000 }),
+    call(s.token, 'POST', '/sellers/me/withdrawals', { amountVnd: 70000 }),
+  ]);
+  assert.deepEqual([a.status, b.status].sort(), [201, 409]);
+  assert.equal(await prisma.withdrawalRequest.count({ where: { sellerId: s.user.id } }), 1);
+});
+
+test('mo khoa doanh thu: dong da mo khoa khong chiem cho trong lo (lo 1 dong van toi khoan moi)', { skip }, async () => {
+  const s = await sellerWith(10000); // khoan 1 da mo khoa trong sellerWith
+  const later = new Date(Date.now() + 1000);
+  await prisma.$transaction((tx) =>
+    earnings.recordEarning(tx, { sellerId: s.user.id, amount: 5000n, orderItemId: crypto.randomUUID(), availableAt: new Date(Date.now() - 500) }),
+  );
+  // Lo 1 dong: ban cu lay lai dong cu nhat (da mo khoa) va khong bao gio toi khoan moi.
+  for (let i = 0; i < 50 && (await wallet(s.user.id)).earningPendingVnd > 0n; i++) {
+    await earnings.releaseDueEarnings(prisma, later, { batch: 1 });
+  }
+  const w = await wallet(s.user.id);
+  assert.deepEqual([w.earningPendingVnd, w.earningAvailableVnd], [0n, 15000n]);
+});
