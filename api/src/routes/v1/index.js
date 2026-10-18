@@ -22,6 +22,7 @@ import contentLibraryRouter, {
   checklistItemsRouter,
 } from '../../modules/content-library/content-library.routes.js';
 import adminRouter, { parentRefundRouter } from '../../modules/admin/admin.routes.js';
+import { reviewModerationRouter, reviewsRouter } from '../../modules/reviews/reviews.routes.js';
 
 
 const router = express.Router();
@@ -48,6 +49,7 @@ router.use('/payments', billingRoutes);
 router.use('/payments', parentRefundRouter);
 router.use('/market', marketRoutes);
 router.use('/market', reportRouter);
+router.use('/market', reviewsRouter);
 router.use('/sellers', sellersRouter);
 router.use('/sellers', sellerMoneyRouter);
 router.use('/sellers', sellerStrikesRouter);
@@ -55,6 +57,7 @@ router.use('/listings', listingsRouter);
 router.use('/moderation', moderationReviewRouter);
 router.use('/moderation', keywordsRouter);
 router.use('/moderation', moderationMonitoringRouter);
+router.use('/moderation', reviewModerationRouter);
 router.use('/admin', adminWithdrawalsRouter);
 router.use('/admin', appealsAdminRouter);
 router.use('/admin', adminRouter);

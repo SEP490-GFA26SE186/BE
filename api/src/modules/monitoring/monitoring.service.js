@@ -80,6 +80,7 @@ const REPORT_INCLUDE = {
   handler: { select: { id: true, fullName: true } },
   page: { select: { id: true, pageOrder: true } },
   listing: { select: { id: true, title: true, status: true, sellerId: true, seller: { select: { displayName: true } } } },
+  productReview: { select: { id: true, rating: true, comment: true, hiddenAt: true, listing: { select: { id: true, title: true, status: true, sellerId: true, seller: { select: { displayName: true } } } } } },
 };
 
 const formatReport = (r) => ({
@@ -92,8 +93,12 @@ const formatReport = (r) => ({
   reporter: r.reporter?.fullName ?? null,
   handler: r.handler?.fullName ?? null,
   pageOrder: r.page?.pageOrder ?? null,
-  listing: r.listing && { id: r.listing.id, title: r.listing.title, status: r.listing.status, sellerId: r.listing.sellerId, seller: r.listing.seller.displayName },
+  listing: formatReportListing(r.listing ?? r.productReview?.listing),
+  // Bao cao danh gia (luong 7.1): danh gia bi bao cao, Moderator an duoc (luong 7.3)
+  review: r.productReview && { id: r.productReview.id, rating: r.productReview.rating, comment: r.productReview.comment, hidden: Boolean(r.productReview.hiddenAt) },
 });
+
+const formatReportListing = (l) => l && { id: l.id, title: l.title, status: l.status, sellerId: l.sellerId, seller: l.seller.displayName };
 
 /**
  * Hang doi bao cao, gom theo truyen: moi truyen co cac bao cao + luot hau kiem dang mo (neu co).
@@ -101,12 +106,13 @@ const formatReport = (r) => ({
  */
 export async function listReports({ status = 'open' } = {}) {
   const rows = await prisma.contentReport.findMany({
-    where: { listingId: { not: null }, ...(status !== 'all' && { status }) },
+    where: status === 'all' ? {} : { status },
     orderBy: { createdAt: 'desc' },
     include: REPORT_INCLUDE,
     take: 300,
   });
-  const listingIds = [...new Set(rows.map((r) => r.listingId))];
+  const keyOf = (r) => r.listingId ?? r.productReview?.listing.id;
+  const listingIds = [...new Set(rows.map(keyOf))];
   const openReviews = await prisma.moderationReview.findMany({
     where: { listingId: { in: listingIds }, decidedAt: null },
     select: { id: true, listingId: true, reviewType: true },
@@ -114,9 +120,10 @@ export async function listReports({ status = 'open' } = {}) {
   const reviewBy = new Map(openReviews.map((r) => [r.listingId, r]));
   const groups = new Map();
   for (const r of rows) {
-    const g = groups.get(r.listingId) ?? { listing: formatReport(r).listing, openReview: reviewBy.get(r.listingId) ?? null, reports: [] };
+    const key = keyOf(r);
+    const g = groups.get(key) ?? { listing: formatReport(r).listing, openReview: reviewBy.get(key) ?? null, reports: [] };
     g.reports.push(formatReport(r));
-    groups.set(r.listingId, g);
+    groups.set(key, g);
   }
   return { groups: [...groups.values()] };
 }

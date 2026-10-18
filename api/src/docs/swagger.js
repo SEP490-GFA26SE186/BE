@@ -3,6 +3,7 @@ import storiesPaths from './paths/stories.paths.js';
 import moderatorPaths from './paths/moderator.paths.js';
 import monitoringPaths from './paths/monitoring.paths.js';
 import adminPaths from './paths/admin.paths.js';
+import reviewsPaths from './paths/reviews.paths.js';
 
 const swaggerSpec = {
   openapi: '3.0.0',
@@ -1755,6 +1756,18 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
+    // ==========================================
+    // Paths tach file (src/docs/paths/*.paths.js)
+    // ==========================================
+    ...storiesPaths,
+    ...moderatorPaths,
+    ...monitoringPaths,
+    ...adminPaths,
+    ...reviewsPaths,
+
+    // =========================================================================
+    // Content Library: Backgrounds
+    // =========================================================================
     '/backgrounds': {
       get: {
         tags: ['Content Library'],
