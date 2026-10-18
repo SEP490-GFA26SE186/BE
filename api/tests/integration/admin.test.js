@@ -157,7 +157,7 @@ test('hoan tien truyen: phu huynh yeu cau trong han -> giu doanh thu (cron bo qu
 
   // Doanh thu toi han (cron chay sau 4 ngay) nhung dang co yeu cau hoan -> khong mo khoa
   const later = new Date(Date.now() + 4 * 86_400_000);
-  await earnings.releaseDueEarnings(prisma, later);
+  await earnings.releaseDueEarnings(prisma, later, { userId: seller.user.id });
   assert.equal(Number((await prisma.wallet.findUnique({ where: { userId: seller.user.id } })).earningPendingVnd), 15200);
 
   const pending = (await call(admin.token, 'GET', '/admin/refunds')).body.data.refunds.find((r) => r.id === req.body.data.refund.id);
@@ -171,7 +171,7 @@ test('hoan tien truyen: phu huynh yeu cau trong han -> giu doanh thu (cron bo qu
   assert.equal(await prisma.bookshelfItem.count({ where: { childId: kid.id } }), 0);
   const w = await prisma.wallet.findUnique({ where: { userId: seller.user.id } });
   assert.deepEqual([Number(w.earningPendingVnd), Number(w.earningAvailableVnd)], [0, 0]);
-  await earnings.releaseDueEarnings(prisma, later); // khoan da hoan -> khong mo khoa (khong lam am)
+  await earnings.releaseDueEarnings(prisma, later, { userId: seller.user.id }); // khoan da hoan -> khong mo khoa (khong lam am)
   assert.equal(Number((await prisma.wallet.findUnique({ where: { userId: seller.user.id } })).earningPendingVnd), 0);
   assert.equal((await call(admin.token, 'POST', `/admin/refunds/${pending.id}/decision`, { approve: true, bankTransactionRef: 'x' })).status, 409);
   const after = (await call(buyer.token, 'GET', '/payments/orders')).body.data.orders.find((o) => o.id === order.id).items[0];

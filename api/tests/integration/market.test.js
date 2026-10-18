@@ -135,11 +135,11 @@ test('mua truyen co gia qua payOS: nguoi ban nhan 80% vao ngan cho, mo khoa sau 
   assert.deepEqual([w.earningPendingVnd, w.earningAvailableVnd], [15200n, 0n]);
   assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).purchaseCount, 1);
 
-  await earnings.releaseDueEarnings(prisma, new Date(Date.now() + 2 * 86_400_000));
+  await earnings.releaseDueEarnings(prisma, new Date(Date.now() + 2 * 86_400_000), { userId: seller.user.id });
   w = await wallet(seller.user.id);
   assert.equal(w.earningAvailableVnd, 0n, 'chua du 3 ngay');
-  await earnings.releaseDueEarnings(prisma, new Date(Date.now() + 3 * 86_400_000 + 60_000));
-  await earnings.releaseDueEarnings(prisma, new Date(Date.now() + 4 * 86_400_000)); // chay lai khong mo khoa trung
+  await earnings.releaseDueEarnings(prisma, new Date(Date.now() + 3 * 86_400_000 + 60_000), { userId: seller.user.id });
+  await earnings.releaseDueEarnings(prisma, new Date(Date.now() + 4 * 86_400_000), { userId: seller.user.id }); // chay lai khong mo khoa trung
   w = await wallet(seller.user.id);
   assert.deepEqual([w.earningPendingVnd, w.earningAvailableVnd], [0n, 15200n]);
   const rows = await prisma.walletLedger.findMany({ where: { userId: seller.user.id, walletType: 'earning' }, orderBy: { id: 'asc' } });

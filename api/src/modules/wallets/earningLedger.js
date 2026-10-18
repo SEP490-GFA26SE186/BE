@@ -53,15 +53,17 @@ export const recordEarning = (tx, { sellerId, amount, orderItemId, availableAt }
 /**
  * Cron: doanh thu het han giu -> ngan rut duoc. Moi dong earning_pending toi han ma chua co dong
  * earning_release tuong ung. Bo qua khoan dang co yeu cau hoan tien cho xu ly (giu tiep cho toi khi Admin
- * quyet) va khoan da hoan (earning_reversal). Tra so dong da mo khoa.
+ * quyet) va khoan da hoan (earning_reversal). `userId`: chi mot nguoi ban (doi soat / test chay song song
+ * voi thoi diem gia lap). Tra so dong da mo khoa.
  */
-export async function releaseDueEarnings(prisma, now = new Date(), { batch = 1000 } = {}) {
+export async function releaseDueEarnings(prisma, now = new Date(), { batch = 1000, userId = null } = {}) {
   // Chi lay khoan CHUA mo khoa / chua hoan / khong dang cho hoan. Lay ca dong da xu ly (take N don thuan)
   // thi khi so dong cu vuot N, cron doc mai cac dong cu va khong bao gio toi khoan moi.
   const due = await prisma.$queryRaw`
     SELECT p.user_id AS "userId", p.amount, p.ref_id AS "refId"
     FROM wallet_ledger p
     WHERE p.wallet_type = 'earning' AND p.entry_type = 'earning_pending' AND p.available_at <= ${now}
+      AND (${userId}::uuid IS NULL OR p.user_id = ${userId}::uuid)
       AND NOT EXISTS (SELECT 1 FROM wallet_ledger r WHERE r.idempotency_key IN ('earning_release:' || p.ref_id, 'earning_reversal:' || p.ref_id))
       AND NOT EXISTS (SELECT 1 FROM refund_requests q WHERE q.order_item_id = p.ref_id AND q.status = 'pending')
     ORDER BY p.available_at
