@@ -13,6 +13,9 @@ schema, trần token đầu ra (cộng budget thinking), vòng thử lại. `scr
 *Spike Gemini (docs 01) tạm dừng, mới xong một phần; còn thiếu số đo cho sample xung đột mạnh và
 truyện `custom` 20 trang.*
 
+> **2026-10-17: M4a / M4b BỎ QUA** theo quyết định người dùng (spike SD 1.5 trên CPU thất bại, không có
+> GPU). Endpoint ảnh mock giữ nguyên; không làm tiếp phần dưới.
+
 **M4a — Lớp ảnh.** Port, registry, `MockAdapter`, bốn decorator, chuẩn hoá WebP, chân dung 2 phương án, ảnh cảnh có tham chiếu. Tầng mock + ghi/phát lại +
 `try_images.py`.
 

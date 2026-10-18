@@ -87,9 +87,9 @@ lên giá sách được.
 | BE | Seed `ui_audio_assets` (đáp án cảm xúc, câu nhắc chọn lại) bằng narration. | |
 | Web | Kid reader dùng API thật: tranh (hoặc ảnh giữ chỗ), chữ, phát audio, điểm dừng theo 4 kiểu; trang báo cáo EQ cho phụ huynh. | |
 
-**Quyết định cần trước phase này — ảnh:** có GPU (Kaggle / Colab chạy ComfyUI, hoặc API trả phí theo
-ảnh) hay không. Không có thì truyện chạy với `use_ai_image = false` và ảnh giữ chỗ; phần ảnh dời sang
-Phase 5.
+**Ảnh — đã chốt 2026-10-17: BỎ QUA luồng sinh ảnh** (người dùng: "bỏ qua luồng sinh ảnh đi"). Truyện
+chạy với `use_ai_image = false` và ảnh giữ chỗ; không làm M4a/M4b. Code mock ảnh hiện có giữ nguyên,
+không phát triển thêm.
 
 **Xong khi:** một bé chơi hết truyện trên Web có giọng đọc, câu trả lời được lưu, báo cáo EQ hiện điểm.
 

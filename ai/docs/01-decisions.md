@@ -175,6 +175,10 @@ số mục trong ngoặc là số mục của spec đó)*
   `public_id` = `CLOUDINARY_FOLDER` + key, bỏ đuôi với ảnh / audio. Audio vào `resource_type=video`.
 - DB dev chuyển sang Postgres local (`docker-compose.localdb.yml`), Supabase vẫn là DB dùng chung.
 
+**Ảnh — bỏ qua** *(2026-10-17, người dùng chốt: "bỏ qua luồng sinh ảnh đi")*
+- Không làm M4a / M4b. Truyện dùng `use_ai_image = false` + ảnh giữ chỗ. Endpoint ảnh mock và
+  `docs/06` giữ lại làm tài liệu, không phát triển thêm. Các mục "Đang mở" về ảnh dưới đây đóng băng.
+
 **Chi phí** *(backend làm)*
 - Chỉ bán gói; mỗi gói cấp credit theo tháng. Mỗi loại `ai_request_type` có đơn giá credit.
 - Service chỉ trả `usage`; không biết credit, không trừ tiền.
