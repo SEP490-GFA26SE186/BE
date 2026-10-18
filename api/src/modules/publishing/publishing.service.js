@@ -4,6 +4,8 @@ import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { formatStoryDetail, STORY_DETAIL_INCLUDE } from '../stories/lib/storyFormat.js';
 import { findReviewGaps } from '../stories/lib/editorRules.js';
+import { dispatchNarration, prepareNarration } from '../stories/stories.narration.service.js';
+import { loadReadiness, loadVoice } from '../stories/stories.narration.store.js';
 import {
   CLAIM_MINUTES,
   aliasErrors,
@@ -29,6 +31,7 @@ const formatListing = (l) => ({
   priceVnd: vnd(l.priceTier?.priceVnd),
   priceTierId: l.priceTierId,
   hasAiContent: l.hasAiContent,
+  hasNarration: Boolean(l.publishedStory?.useTts),
   publishedStoryId: l.publishedStoryId,
   sourceStoryId: l.publishedStory?.sourceStoryId ?? null,
   submittedAt: l.submittedAt,
@@ -40,7 +43,7 @@ const formatListing = (l) => ({
 
 const LISTING_INCLUDE = {
   priceTier: true,
-  publishedStory: { select: { sourceStoryId: true } },
+  publishedStory: { select: { sourceStoryId: true, useTts: true } },
   moderationReviews: { where: { decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, take: 1 },
 };
 
@@ -111,8 +114,10 @@ async function forbiddenNamesOf(userId) {
 /**
  * POST /listings { storyId, title, description?, priceTierId, aliases: [{ token, aliasName }] }
  * Truyen rieng da hoan tat -> ban sao `published` (go ca nhan hoa) + listing `submitted` + luot duyet.
+ * Ban rieng bat giong doc -> ban sao cung bat va SINH LAI giong doc bang ten chung (audio cu chua ten that,
+ * khong dung lai duoc). Moderator chi nhan duyet khi giong doc xong (claimReview).
  */
-export async function createListing(user, body) {
+export async function createListing(user, body, narrationOptions) {
   const seller = await prisma.sellerProfile.findUnique({ where: { userId: user.id } });
   if (seller?.status !== 'approved') throw ApiError.forbidden('Ba mẹ cần được duyệt hồ sơ người bán trước khi đăng bán.');
   const plan = await activePlan(user.id);
@@ -135,7 +140,7 @@ export async function createListing(user, body) {
   if (errors.length) throw unprocessable('Chưa gỡ hết thông tin cá nhân của gia đình.', errors);
 
   const aliasOf = new Map(body.aliases.map((a) => [a.token, a.aliasName.normalize('NFC').trim()]));
-  const listing = await prisma.$transaction(async (tx) => {
+  const { listing, jobs } = await prisma.$transaction(async (tx) => {
     const copy = await tx.story.create({
       data: {
         ownerId: user.id,
@@ -146,7 +151,7 @@ export async function createListing(user, body) {
         title: body.title.trim(),
         situation: null, // chuyen that cua gia dinh khong theo ban dang ban
         useAiImage: false,
-        useTts: false, // audio cua ban rieng chua ten that (spec TTS §7)
+        useTts: story.useTts, // theo lua chon cua tac gia; audio sinh lai bang ten chung ben duoi
         status: 'ready',
         reviewedAt: new Date(),
         storyCharacters: { create: story.storyCharacters.map((c) => ({ token: c.token, aliasName: aliasOf.get(c.token), isMain: c.isMain })) },
@@ -191,14 +196,25 @@ export async function createListing(user, body) {
       },
     });
     await tx.moderationReview.create({ data: { listingId: created.id, reviewType: 'submission' } });
-    return tx.listing.findUniqueOrThrow({ where: { id: created.id }, include: LISTING_INCLUDE });
+    return {
+      listing: await tx.listing.findUniqueOrThrow({ where: { id: created.id }, include: LISTING_INCLUDE }),
+      jobs: await prepareNarration(tx, copy.id),
+    };
   }, TX);
-  return { listing: formatListing(listing) };
+  await dispatchNarration(jobs, narrationOptions); // Redis loi -> clip failed, nguoi ban bam thu lai
+  return { listing: await withNarration(formatListing(listing)) };
+}
+
+/** Tien do giong doc cua ban dang ban (nguoi ban + Moderator thay; Moderator chi duyet khi xong). */
+async function withNarration(listing) {
+  if (!listing.hasNarration) return { ...listing, narration: null };
+  const check = await loadReadiness(prisma, listing.publishedStoryId);
+  return { ...listing, narration: check?.narration ?? null };
 }
 
 export async function getMyListings(user) {
   const rows = await prisma.listing.findMany({ where: { sellerId: user.id }, orderBy: { submittedAt: 'desc' }, include: LISTING_INCLUDE });
-  return rows.map(formatListing);
+  return Promise.all(rows.map((r) => withNarration(formatListing(r))));
 }
 
 // ---------------------------------------------------------------------------
@@ -218,15 +234,21 @@ export async function getQueue(moderator, { now = new Date() } = {}) {
         include: {
           priceTier: true,
           seller: { select: { displayName: true } },
-          publishedStory: { select: { length: true, topic: { select: { title: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true } } } },
+          publishedStory: { select: { length: true, useTts: true, topic: { select: { title: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true } } } },
           _count: { select: { contentReports: { where: { status: 'open' } } } },
         },
       },
       moderator: { select: { id: true, fullName: true } },
     },
   });
+  const narrationOf = new Map();
+  for (const r of rows) {
+    if (r.listing.publishedStory.useTts) narrationOf.set(r.id, (await loadReadiness(prisma, r.listing.publishedStoryId))?.narration ?? null);
+  }
   return rows.map((r) => ({
     reviewId: r.id,
+    hasNarration: r.listing.publishedStory.useTts,
+    narration: narrationOf.get(r.id) ?? null,
     reviewType: r.reviewType,
     listingId: r.listingId,
     title: r.listing.title,
@@ -260,6 +282,7 @@ export async function claimReview(moderator, reviewId, { now = new Date() } = {}
     const review = await loadReview(reviewId, tx);
     if (review.decidedAt) throw new ApiError(StatusCodes.CONFLICT, 'Bài này đã được quyết định.');
     if (claimedByOther(review, moderator.id, now)) throw new ApiError(StatusCodes.CONFLICT, 'Moderator khác đang duyệt bài này.');
+    await assertNarrationReady(tx, review.listing.publishedStoryId);
     await tx.moderationReview.update({
       where: { id: reviewId },
       data: { moderatorId: moderator.id, claimedAt: now, claimExpiresAt: new Date(now.getTime() + CLAIM_MINUTES * 60_000) },
@@ -267,6 +290,20 @@ export async function claimReview(moderator, reviewId, { now = new Date() } = {}
     await tx.listing.updateMany({ where: { id: review.listingId, status: 'submitted' }, data: { status: 'in_review' } });
   }, TX);
   return getReview(moderator, reviewId, { now });
+}
+
+/** Truyen bat giong doc: phai doc xong moi duyet (Moderator nghe khi duyet; nguoi mua nhan truyen co san audio). */
+async function assertNarrationReady(db, storyId) {
+  const check = await loadReadiness(db, storyId);
+  const n = check?.narration;
+  if (n?.enabled && !n.complete) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      n.failed || n.missing
+        ? `Giọng đọc của truyện còn lỗi (${n.ready}/${n.total} đoạn) — chờ người bán bấm tạo lại giọng đọc.`
+        : `Giọng đọc đang được tạo (${n.ready}/${n.total} đoạn). Duyệt lại sau ít phút.`,
+    );
+  }
 }
 
 async function assertClaimed(moderator, review, now) {
@@ -283,7 +320,7 @@ export async function getReview(moderator, reviewId, { now = new Date() } = {}) 
     prisma.story.findUniqueOrThrow({ where: { id: review.listing.publishedStoryId }, include: STORY_DETAIL_INCLUDE }),
     prisma.checklistItem.findMany({ where: { isActive: true }, orderBy: { displayOrder: 'asc' } }),
   ]);
-  const detail = formatStoryDetail(story);
+  const detail = formatStoryDetail(story, { voice: await loadVoice(prisma) });
   return {
     review: {
       id: review.id,
@@ -354,6 +391,7 @@ export async function decide(moderator, reviewId, body, { now = new Date() } = {
       tx.reviewChecklistResult.findMany({ where: { reviewId } }),
     ]);
     const progress = reviewProgress(pages.map((p) => p.id), review.pageViews.map((v) => v.pageId), items.map((i) => i.id), results);
+    if (body.decision === 'approved') await assertNarrationReady(tx, review.listing.publishedStoryId);
     if (body.decision === 'approved' && !progress.canApprove) {
       throw unprocessable(`Cần xem hết ${progress.pagesTotal} trang (đã xem ${progress.pagesViewed}) và đạt đủ ${progress.checklistTotal} mục checklist (đạt ${progress.checklistPassed}) trước khi duyệt.`);
     }

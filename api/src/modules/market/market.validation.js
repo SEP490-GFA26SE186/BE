@@ -8,6 +8,7 @@ const list = z.object({
     competency: z.enum(COMPETENCY).default('all'),
     age: z.union([z.literal('all'), z.string().regex(/^\d{1,2}$/)]).default('all'),
     priceTierId: z.union([z.literal('all'), z.string().uuid()]).default('all'),
+    narration: z.enum(['all', 'with', 'without']).default('all'),
     sort: z.enum(['best_selling', 'newest', 'rating', 'price_asc']).default('best_selling'),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(50).default(8),

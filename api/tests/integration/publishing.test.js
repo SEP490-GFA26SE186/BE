@@ -161,3 +161,44 @@ test('yeu cau sua: bat buoc nhan xet; nguoi ban thay quyet dinh + nhan xet', { s
   assert.equal(mine.status, 'changes_requested');
   assert.equal(mine.lastDecision.comment, 'Trang 3 đang giảng đạo lý.');
 });
+
+test('ban dang ban co giong doc: sinh lai bang ten chung; Moderator chi nhan duyet khi doc xong; Cho hien badge', { skip }, async () => {
+  const s = await approvedSeller();
+  await prisma.story.update({ where: { id: s.story.id }, data: { useTts: true } }); // tac gia bat giong doc
+  const publishing = await import('../../src/modules/publishing/publishing.service.js');
+  const narrationStore = await import('../../src/modules/stories/stories.narration.store.js');
+  const batches = [];
+  const { listing } = await publishing.createListing(s.user, listingBody(s), { enqueue: async (jobs) => batches.push(jobs) });
+  assert.equal(listing.hasNarration, true);
+  assert.equal(listing.narration.complete, false);
+  const jobs = batches.flat();
+  assert.equal(jobs.length, listing.narration.total, 'moi doan mot job');
+
+  const review = await prisma.moderationReview.findFirst({ where: { listingId: listing.id } });
+  const early = await call(s.mod.token, 'POST', `/moderation/submissions/${review.id}/claim`);
+  assert.equal(early.status, 409);
+  assert.match(early.body.message, /đang được tạo/);
+  const queue = (await call(s.mod.token, 'GET', '/moderation/submissions')).body.data.queue.find((q) => q.reviewId === review.id);
+  assert.deepEqual([queue.hasNarration, queue.narration.complete], [true, false]);
+
+  // Gia lap worker doc xong: chu gui TTS dung ten chung, khong lo ten that
+  for (const job of jobs) {
+    assert.ok(await narrationStore.markClipGenerating(prisma, { ...job, attempt: 1 }));
+    const input = await narrationStore.loadClipInput(prisma, job.clipId);
+    assert.ok(!/Bin|Bà(?! nội)/.test(input.text) && input.text.includes('Bống'), input.text);
+    await narrationStore.persistClip(prisma, {
+      ...job, fingerprint: input.clip.fingerprint, kind: input.kind, targetId: input.targetId,
+      audioKey: `stories/${input.storyId}/audio/${job.clipId}.mp3`, durationSeconds: 2,
+    });
+  }
+  const claim = await call(s.mod.token, 'POST', `/moderation/submissions/${review.id}/claim`);
+  assert.equal(claim.status, 200, JSON.stringify(claim.body));
+  assert.ok(claim.body.data.story.pages.every((p) => p.audioKey), 'Moderator nghe duoc tung trang (URL ky Cloudinary — test khong co cau hinh)');
+
+  await prisma.listing.update({ where: { id: listing.id }, data: { status: 'published', publishedAt: new Date() } });
+  const buyer = await createParent();
+  const withAudio = (await call(buyer.token, 'GET', '/market/listings?narration=with&sort=newest&limit=50')).body.data.items;
+  assert.ok(withAudio.some((i) => i.id === listing.id && i.hasNarration === true));
+  const textOnly = (await call(buyer.token, 'GET', '/market/listings?narration=without&sort=newest&limit=50')).body.data.items;
+  assert.ok(!textOnly.some((i) => i.id === listing.id));
+});

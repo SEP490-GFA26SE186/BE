@@ -18,7 +18,7 @@ const LISTING_INCLUDE = {
   priceTier: true,
   seller: { select: { userId: true, displayName: true, ratingAvg: true, totalSales: true } },
   publishedStory: {
-    select: { id: true, length: true, topic: { select: { title: true, ageMin: true, ageMax: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true, checkpoints: true } } },
+    select: { id: true, length: true, useTts: true, topic: { select: { title: true, ageMin: true, ageMax: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true, checkpoints: true } } },
   },
 };
 
@@ -40,6 +40,7 @@ const formatCard = (l, owned = false) => ({
   ratingAvg: l.ratingAvg == null ? 0 : Number(l.ratingAvg),
   ratingCount: l.ratingCount,
   hasAiContent: l.hasAiContent,
+  hasNarration: l.publishedStory.useTts,
   publishedAt: l.publishedAt,
   publishedStoryId: l.publishedStory.id,
   owned,
@@ -55,12 +56,13 @@ async function ownedListingIds(userId, listingIds) {
 }
 
 /** GET /market/listings — chi truyen `published`. */
-export async function listListings(user, { search, competency = 'all', age = 'all', priceTierId = 'all', sort = 'best_selling', page = 1, limit = 8 }) {
+export async function listListings(user, { search, competency = 'all', age = 'all', priceTierId = 'all', narration = 'all', sort = 'best_selling', page = 1, limit = 8 }) {
   const keyword = search?.trim();
   const where = {
     ...SELLABLE,
     ...(priceTierId !== 'all' && { priceTierId }),
     publishedStory: {
+      ...(narration !== 'all' && { useTts: narration === 'with' }),
       topic: {
         ...(competency !== 'all' && { skill: { caselCode: competency } }),
         ...(age !== 'all' && { ageMin: { lte: Number(age) }, ageMax: { gte: Number(age) } }),
