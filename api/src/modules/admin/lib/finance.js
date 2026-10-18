@@ -61,6 +61,16 @@ export function revenueSeries(items, from, to) {
 /** provider_cost_micros (phan trieu USD) -> VND theo ti gia cau hinh. */
 export const microsToVnd = (micros, usdVnd) => Math.round((Number(micros) / 1_000_000) * usdVnd);
 
+/** Cong chi phi AI theo ngay (gio VN) vao chuoi doanh thu. rows: [{ createdAt, providerCostMicros }]. */
+export function withAiCost(series, rows, usdVnd) {
+  const byDay = new Map(series.map((d) => [d.day, { ...d, aiCost: 0 }]));
+  for (const r of rows) {
+    const d = byDay.get(vnDay(r.createdAt));
+    if (d) d.aiCost += microsToVnd(r.providerCostMicros ?? 0n, usdVnd);
+  }
+  return [...byDay.values()];
+}
+
 /** Lai lo don gian: phan nen tang giu - chi phi AI (nha cung cap). */
 export const profitAndLoss = ({ platformRevenue, aiCostVnd }) => ({
   platformRevenue,

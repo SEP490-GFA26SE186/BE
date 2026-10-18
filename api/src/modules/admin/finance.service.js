@@ -1,7 +1,7 @@
 // Bao cao tai chinh cho Admin (rev8): tong quan, doanh thu, chi phi AI, lai lo, doi soat.
 import { prisma } from '../../config/index.js';
 import { SETTINGS_REGISTRY } from './lib/settingsRegistry.js';
-import { microsToVnd, profitAndLoss, rangeOf, revenueSeries, revenueSummary, walletMismatches } from './lib/finance.js';
+import { microsToVnd, profitAndLoss, rangeOf, revenueSeries, revenueSummary, walletMismatches, withAiCost } from './lib/finance.js';
 
 const usdVnd = async () => {
   const row = await prisma.platformSetting.findUnique({ where: { key: 'finance.usd_vnd' }, select: { value: true } });
@@ -50,9 +50,10 @@ async function aiCost(from, to) {
 /** GET /admin/finance/summary?range — so lieu dashboard + doanh thu theo ngay + chi phi AI + lai lo. */
 export async function summary({ range = '30d' } = {}, { now = new Date() } = {}) {
   const { from, to } = rangeOf(range, now);
-  const [items, ai, newParents, activePaid, pendingWithdrawals] = await Promise.all([
+  const [items, ai, aiRows, newParents, activePaid, pendingWithdrawals] = await Promise.all([
     paidItems(from, to),
     aiCost(from, to),
+    prisma.aiRequest.findMany({ where: { createdAt: { gte: from, lte: to } }, select: { createdAt: true, providerCostMicros: true } }),
     prisma.user.count({ where: { role: 'parent', createdAt: { gte: from, lte: to } } }),
     prisma.subscription.groupBy({ by: ['planId'], where: { status: 'active', plan: { priceVnd: { gt: 0 } } }, _count: { _all: true } }),
     prisma.withdrawalRequest.aggregate({ where: { status: { in: ['requested', 'processing'] } }, _sum: { amountVnd: true }, _count: { _all: true } }),
@@ -64,7 +65,7 @@ export async function summary({ range = '30d' } = {}, { now = new Date() } = {})
   return {
     range: { key: range, from, to },
     revenue,
-    series: revenueSeries(items, from, to),
+    series: withAiCost(revenueSeries(items, from, to), aiRows, ai.usdVnd),
     aiCost: ai,
     pnl: profitAndLoss({ platformRevenue: revenue.platformRevenue, aiCostVnd: ai.totalVnd }),
     newParents,

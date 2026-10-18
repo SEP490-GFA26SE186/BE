@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { describeSettings, settingError } from '../../src/modules/admin/lib/settingsRegistry.js';
-import { microsToVnd, profitAndLoss, rangeOf, revenueSeries, revenueSummary, vnDay, walletMismatches } from '../../src/modules/admin/lib/finance.js';
+import { microsToVnd, profitAndLoss, rangeOf, revenueSeries, revenueSummary, vnDay, walletMismatches, withAiCost } from '../../src/modules/admin/lib/finance.js';
 
 test('cau hinh: chi khoa trong danh sach; kieu, khoang, rang buoc hoan tien <= giu doanh thu', () => {
   assert.match(settingError('story_layout.short', 1), /không được sửa/);
@@ -33,6 +33,8 @@ test('doanh thu: goi tinh du, truyen tach phan nguoi ban / hoa hong, hoan tien t
   // 20:00Z ngay 17 = 03:00 ngay 18 gio VN
   const series = revenueSeries(items, new Date('2026-10-16T17:00:00Z'), new Date('2026-10-18T10:00:00Z'));
   assert.deepEqual(series.map((d) => [d.day, d.plan, d.listing]), [['2026-10-17', 99000, 0], ['2026-10-18', 0, 19000]]);
+  const withAi = withAiCost(series, [{ createdAt: new Date('2026-10-18T01:00:00Z'), providerCostMicros: 1_000_000n }], 26000);
+  assert.deepEqual(withAi.map((d) => d.aiCost), [0, 26000]);
 });
 
 test('khoang thoi gian theo ngay VN; quy doi chi phi AI; lai lo; doi soat vi', () => {
