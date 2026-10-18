@@ -25,6 +25,8 @@ const formatCharacterResponse = (character) => {
     portraitStatus: character.portraitStatus,
     createdAt: character.createdAt,
     updatedAt: character.updatedAt,
+    // So truyen rieng (chua xoa) dang dung nhan vat — doi ten se doi ten trong cac truyen nay.
+    storiesCount: character._count?.storyCharacters ?? undefined,
     child: character.child
       ? {
           id: character.child.id,
@@ -81,7 +83,7 @@ const createCharacter = async (parentId, characterData) => {
     });
 
     if (!child) {
-      throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
+      throw ApiError.badRequest('Hồ sơ bé không tồn tại hoặc đã bị xoá.');
     }
   }
 
@@ -96,7 +98,7 @@ const createCharacter = async (parentId, characterData) => {
 
   if (currentCount >= maxQuota) {
     throw ApiError.forbidden(
-      `You have reached the maximum limit of ${maxQuota} characters for your current subscription. Please upgrade to create more characters.`,
+      `Gói hiện tại cho tối đa ${maxQuota} nhân vật. Ba mẹ xoá bớt nhân vật không dùng hoặc nâng cấp gói nhé.`,
     );
   }
 
@@ -154,6 +156,7 @@ const getCharacters = async (parentId, filter = {}) => {
           birthDate: true,
         },
       },
+      _count: { select: { storyCharacters: { where: { story: { deletedAt: null, kind: 'private' } } } } },
     },
   });
 
@@ -185,7 +188,7 @@ const getCharacterById = async (parentId, characterId) => {
   });
 
   if (!character) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
   }
 
   return formatCharacterResponse(character);
@@ -208,7 +211,11 @@ const updateCharacter = async (parentId, characterId, updateData) => {
   });
 
   if (!existingCharacter) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
+  }
+  // Nhan vat cua be: ten di theo ho so be (sua o trang "Be nha minh"), khong sua rieng o day.
+  if (existingCharacter.childId && updateData.name && updateData.name.trim() !== existingCharacter.name) {
+    throw new ApiError(422, 'Nhân vật này là bé — ba mẹ đổi tên ở trang “Bé nhà mình”.');
   }
 
   // If childId is provided/updated, verify validity
@@ -222,7 +229,7 @@ const updateCharacter = async (parentId, characterId, updateData) => {
     });
 
     if (!child) {
-      throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
+      throw ApiError.badRequest('Hồ sơ bé không tồn tại hoặc đã bị xoá.');
     }
   }
 
@@ -266,7 +273,10 @@ const deleteCharacter = async (parentId, characterId) => {
   });
 
   if (!existingCharacter) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
+  }
+  if (existingCharacter.childId) {
+    throw new ApiError(422, 'Nhân vật này là bé — muốn bỏ thì xoá hồ sơ bé ở trang “Bé nhà mình”.');
   }
 
   await prisma.character.update({
@@ -303,7 +313,7 @@ const requestPortraitGeneration = async (parentId, characterId, options = {}) =>
   });
 
   if (!character) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
   }
 
   const styleDescriptions = {
