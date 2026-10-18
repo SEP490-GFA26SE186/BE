@@ -402,7 +402,77 @@ export async function listAudits({ open } = {}) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Giam sat dung AI (luong 7.6, ban gon)
+// ---------------------------------------------------------------------------
+
+/**
+ * Phu huynh co nhieu luot AI bi chan (guardrail: tu khoa cam / noi dung khong an toan) trong `days` ngay.
+ * Bi chan = ai_requests.status 'blocked'. Kem luot loi, tong luot, ly do gan nhat, trang thai khoa.
+ */
+export async function listAiFlags({ days = 7, min = 2 } = {}, { now = new Date() } = {}) {
+  const since = new Date(now.getTime() - days * DAY_MS);
+  const rows = await prisma.aiRequest.groupBy({
+    by: ['userId', 'status'],
+    where: { createdAt: { gte: since } },
+    _count: { _all: true },
+  });
+  const byUser = new Map();
+  for (const r of rows) {
+    const u = byUser.get(r.userId) ?? { total: 0, blocked: 0, failed: 0 };
+    u.total += r._count._all;
+    if (r.status === 'blocked') u.blocked += r._count._all;
+    if (r.status === 'failed') u.failed += r._count._all;
+    byUser.set(r.userId, u);
+  }
+  const flagged = [...byUser].filter(([, u]) => u.blocked >= min).map(([userId]) => userId);
+  const blockedNow = await prisma.user.findMany({ where: { aiBlockedUntil: { gt: now } }, select: { id: true } });
+  const ids = [...new Set([...flagged, ...blockedNow.map((u) => u.id)])];
+  const [users, lastBlocked] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true, email: true, aiBlockedUntil: true } }),
+    prisma.aiRequest.findMany({
+      where: { userId: { in: ids }, status: 'blocked' },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['userId'],
+      select: { userId: true, createdAt: true, errorMessage: true, story: { select: { title: true } } },
+    }),
+  ]);
+  const lastOf = new Map(lastBlocked.map((b) => [b.userId, b]));
+  return {
+    days,
+    min,
+    flags: users
+      .map((u) => {
+        const s = byUser.get(u.id) ?? { total: 0, blocked: 0, failed: 0 };
+        const last = lastOf.get(u.id);
+        return {
+          userId: u.id,
+          fullName: u.fullName,
+          email: u.email,
+          ...s,
+          blockedRate: s.total ? Math.round((s.blocked / s.total) * 100) : 0,
+          lastBlocked: last && { at: last.createdAt, reason: last.errorMessage, storyTitle: last.story?.title ?? null },
+          aiBlockedUntil: u.aiBlockedUntil && u.aiBlockedUntil > now ? u.aiBlockedUntil : null,
+        };
+      })
+      .sort((a, b) => b.blocked - a.blocked),
+  };
+}
+
+/** Tam khoa quyen dung AI `days` ngay (khong khoa tai khoan: van doc truyen, tu viet duoc). days = 0 -> mo khoa. */
+export async function setAiBlock(moderator, userId, { days, reason }, { now = new Date() } = {}) {
+  const user = await prisma.user.findFirst({ where: { id: userId, role: 'parent', deletedAt: null }, select: { aiBlockedUntil: true } });
+  if (!user) throw ApiError.notFound('Không tìm thấy phụ huynh.');
+  const until = days > 0 ? new Date(now.getTime() + days * DAY_MS) : null;
+  return prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { aiBlockedUntil: until } });
+    await audit(tx, moderator.id, until ? 'ai.block' : 'ai.unblock', 'user', userId, { aiBlockedUntil: user.aiBlockedUntil }, { aiBlockedUntil: until, reason: reason?.trim() || null });
+    return { userId, aiBlockedUntil: until };
+  }, TX);
+}
+
 export default {
+  listAiFlags, setAiBlock,
   createReport, listReports, dismissReport,
   suspendListing, listRestrictedListings,
   issueStrike, listStrikes, listMyStrikes, appealStrike,

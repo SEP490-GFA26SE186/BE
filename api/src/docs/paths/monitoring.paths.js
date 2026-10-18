@@ -101,6 +101,31 @@ export default {
     },
   },
 
+  '/moderation/ai-flags': {
+    get: {
+      tags: ['Moderation'],
+      summary: '[Moderator] Cảnh báo AI: phụ huynh có nhiều lượt AI bị chặn',
+      description: 'Luồng 7.6. Bị chặn = ai_requests.status blocked (guardrail). Kèm phụ huynh đang bị khoá quyền dùng AI.',
+      security: bearer,
+      parameters: [
+        { name: 'days', in: 'query', schema: { type: 'integer', default: 7 } },
+        { name: 'min', in: 'query', schema: { type: 'integer', default: 2 } },
+      ],
+      responses: { 200: { description: '{ days, min, flags: [{ userId, fullName, email, total, blocked, failed, blockedRate, lastBlocked, aiBlockedUntil }] }' } },
+    },
+  },
+  '/moderation/ai-flags/{userId}/block': {
+    post: {
+      tags: ['Moderation'],
+      summary: '[Moderator] Tạm khoá / mở khoá quyền dùng AI',
+      description: 'days > 0: khoá đến now + days (sinh truyện bằng AI trả 403; vẫn đọc / tự viết được). days = 0: mở khoá. Ghi nhật ký.',
+      security: bearer,
+      parameters: [path('userId')],
+      requestBody: json({ type: 'object', required: ['days'], properties: { days: { type: 'integer', minimum: 0, maximum: 90 }, reason: { type: 'string' } } }),
+      responses: { 200: { description: '{ userId, aiBlockedUntil }' } },
+    },
+  },
+
   '/sellers/me/strikes': {
     get: { tags: ['Publishing'], summary: '[Seller] Cảnh cáo của tôi', security: bearer, responses: { 200: { description: '{ sellerStatus, strikeLimit, activeStrikes, strikes }' } } },
   },

@@ -104,6 +104,13 @@ export async function startGeneration(
       'Truyện tự viết không dùng được AI viết chữ. Hãy chỉnh sửa trực tiếp các trang.',
     );
   }
+  // Luong 7.6: Moderator tam khoa quyen dung AI (van doc truyen / tu viet duoc)
+  const { aiBlockedUntil } = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { aiBlockedUntil: true } });
+  if (aiBlockedUntil && aiBlockedUntil > new Date()) {
+    throw ApiError.forbidden(
+      `Quyền dùng AI viết truyện đang tạm khoá đến ${aiBlockedUntil.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} do nhiều lần nội dung bị chặn. Ba mẹ vẫn tự viết truyện được.`,
+    );
+  }
   await assertNoLeftoverNames(storyId);
   const { storyTextCost: cost } = await loadStorySettings(prisma);
   const aiRequestId = randomUUID();

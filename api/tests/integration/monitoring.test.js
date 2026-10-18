@@ -199,3 +199,37 @@ test('kiem tra ngau nhien: Moderator tao dot -> luot random_audit tren truyen da
   assert.equal(keep.status, 200, JSON.stringify(keep.body));
   assert.equal(keep.body.data.listing.status, 'published');
 });
+
+test('canh bao AI: phu huynh nhieu luot bi chan -> gan co; tam khoa quyen dung AI -> sinh truyen 403; mo khoa', { skip }, async () => {
+  const mod = await createUser({ role: 'moderator' });
+  const parent = await withPlan('FAMILY_MONTH');
+  const child = await createChild(parent.user.id, 'Bin');
+  const bin = await createCharacter(parent.user.id, 'Bin', { childId: child.id });
+  const mit = await createCharacter(parent.user.id, 'Mít');
+  const created = await call(parent.token, 'POST', '/stories', {
+    topicId: topic.id, length: 'short', title: 'Truyện AI', situation: 'Bé làm đổ sữa.', useTts: false, characters: [{ characterId: bin.id, isMain: true }, { characterId: mit.id, isMain: false }],
+  });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const story = created.body.data.story;
+  for (let i = 0; i < 3; i++) {
+    await prisma.aiRequest.create({
+      data: { userId: parent.user.id, requestType: 'story_text', storyId: story.id, status: 'blocked', errorMessage: 'UNSAFE_CONTENT: nội dung bạo lực', idempotencyKey: `test-blocked-${story.id}-${i}` },
+    });
+  }
+  const flags = (await call(mod.token, 'GET', '/moderation/ai-flags?days=7&min=3')).body.data.flags;
+  const f = flags.find((x) => x.userId === parent.user.id);
+  assert.ok(f, 'phu huynh bi gan co');
+  assert.deepEqual([f.blocked, f.blockedRate, f.lastBlocked.storyTitle], [3, 100, 'Truyện AI']);
+  assert.equal((await call(parent.token, 'GET', '/moderation/ai-flags')).status, 403);
+
+  const block = await call(mod.token, 'POST', `/moderation/ai-flags/${parent.user.id}/block`, { days: 3, reason: 'Nhiều lần yêu cầu nội dung bạo lực' });
+  assert.equal(block.status, 200, JSON.stringify(block.body));
+  const gen = await call(parent.token, 'POST', `/stories/${story.id}/generate`);
+  assert.equal(gen.status, 403);
+  assert.match(gen.body.message, /tạm khoá/);
+  assert.equal((await call(parent.token, 'GET', '/children')).status, 200, 'khong khoa ca tai khoan');
+
+  await call(mod.token, 'POST', `/moderation/ai-flags/${parent.user.id}/block`, { days: 0 });
+  assert.equal((await prisma.user.findUnique({ where: { id: parent.user.id } })).aiBlockedUntil, null);
+  assert.equal(await prisma.adminAuditLog.count({ where: { targetId: parent.user.id, action: { in: ['ai.block', 'ai.unblock'] } } }), 2);
+});

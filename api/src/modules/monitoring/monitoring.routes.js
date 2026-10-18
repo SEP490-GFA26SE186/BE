@@ -80,6 +80,24 @@ moderationMonitoringRouter.post(
   ok((req) => svc.runRandomAudits(req.user, req.body), StatusCodes.CREATED),
 );
 
+moderationMonitoringRouter.get(
+  '/ai-flags',
+  ...mod,
+  validate(z.object({ query: z.object({ days: z.coerce.number().int().min(1).max(90).default(7), min: z.coerce.number().int().min(1).max(100).default(2) }) })),
+  ok((req) => svc.listAiFlags(req.query)),
+);
+moderationMonitoringRouter.post(
+  '/ai-flags/:userId/block',
+  ...mod,
+  validate(
+    z.object({
+      params: z.object({ userId: uuid('userId') }),
+      body: z.object({ days: z.number().int().min(0, '0 = mở khoá').max(90), reason: z.string().max(2000).optional() }),
+    }),
+  ),
+  ok((req) => svc.setAiBlock(req.user, req.params.userId, req.body)),
+);
+
 export const reportRouter = Router();
 reportRouter.get('/report-categories', auth, ok(async () => ({ categories: Object.entries(REPORT_CATEGORY_LABELS).map(([value, label]) => ({ value, label })) })));
 reportRouter.post(
