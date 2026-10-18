@@ -54,7 +54,7 @@ async function publishedListing(existingSeller) {
   for (const p of story.pages) await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} ở trang ${p.pageOrder}.` } });
   await call(s.token, 'POST', `/stories/${story.id}/review`);
   const created = await call(s.token, 'POST', '/listings', {
-    storyId: story.id, title: `Bé đi chơi ${Date.now()}`, priceTierId: tiers[0].id, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
+    storyId: story.id, title: `Truyện thử giám sát ${Date.now()}`, priceTierId: tiers[0].id, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const { listing } = created.body.data;

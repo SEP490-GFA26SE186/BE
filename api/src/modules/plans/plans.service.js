@@ -22,67 +22,6 @@ const getPlanById = async (id) => {
   return plan;
 };
 
-const createPlan = async (data) => {
-  const existing = await prisma.plan.findUnique({
-    where: { code: data.code },
-  });
-
-  if (existing) {
-    throw new ApiError(409, `Plan with code '${data.code}' already exists`);
-  }
-
-  return prisma.plan.create({
-    data: {
-      ...data,
-      priceVnd: BigInt(data.priceVnd),
-    },
-  });
-};
-
-const updatePlan = async (id, data) => {
-  const plan = await prisma.plan.findUnique({
-    where: { id },
-  });
-
-  if (!plan) {
-    throw new ApiError(404, 'Subscription plan not found');
-  }
-
-  if (data.code && data.code !== plan.code) {
-    const existing = await prisma.plan.findUnique({
-      where: { code: data.code },
-    });
-    if (existing) {
-      throw new ApiError(409, `Plan with code '${data.code}' already exists`);
-    }
-  }
-
-  const updateData = { ...data };
-  if (updateData.priceVnd !== undefined) {
-    updateData.priceVnd = BigInt(updateData.priceVnd);
-  }
-
-  return prisma.plan.update({
-    where: { id },
-    data: updateData,
-  });
-};
-
-const deletePlan = async (id) => {
-  const plan = await prisma.plan.findUnique({
-    where: { id },
-  });
-
-  if (!plan) {
-    throw new ApiError(404, 'Subscription plan not found');
-  }
-
-  return prisma.plan.update({
-    where: { id },
-    data: { isActive: false },
-  });
-};
-
 // ==========================================
 // 3. SUBSCRIPTIONS SERVICE
 // ==========================================
@@ -188,58 +127,10 @@ const cancelMySubscription = async (userId) => {
   return updated;
 };
 
-const getAllSubscriptions = async (query = {}) => {
-  const page = parseInt(query.page, 10) || 1;
-  const limit = parseInt(query.limit, 10) || 20;
-  const skip = (page - 1) * limit;
-
-  const where = {};
-  if (query.status) {
-    where.status = query.status;
-  }
-  if (query.parentId) {
-    where.parentId = query.parentId;
-  }
-
-  const [total, subscriptions] = await Promise.all([
-    prisma.subscription.count({ where }),
-    prisma.subscription.findMany({
-      where,
-      skip,
-      take: limit,
-      include: {
-        plan: true,
-        parent: {
-          select: {
-            id: true,
-            email: true,
-            fullName: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-  ]);
-
-  return {
-    subscriptions,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
-};
-
 export default {
   getPlans,
   getPlanById,
-  createPlan,
-  updatePlan,
-  deletePlan,
   getMySubscription,
   subscribeFreePlan,
   cancelMySubscription,
-  getAllSubscriptions,
 };

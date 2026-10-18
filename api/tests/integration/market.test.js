@@ -89,7 +89,7 @@ const wallet = (userId) => prisma.wallet.findUnique({ where: { userId } });
 test('cho: chi truyen published; truyen mien phi -> nhan ngay -> len gia sach -> be doc bang ten chung', { skip }, async () => {
   const { listing } = await publishedListing(0);
   const buyer = await withPlan('FREE');
-  const list = await call(buyer.token, 'GET', '/market/listings?search=Bé đi chơi');
+  const list = await call(buyer.token, 'GET', '/market/listings?search=Bé đi chơi&sort=newest&limit=50');
   const card = list.body.data.items.find((i) => i.id === listing.id);
   assert.ok(card);
   assert.equal(card.owned, false);

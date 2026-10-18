@@ -41,6 +41,7 @@ export async function moveEarning(tx, { userId, entryType, amount, delta, key, r
 
 export const earningKey = (orderItemId) => `earning:${orderItemId}`;
 export const releaseKey = (orderItemId) => `earning_release:${orderItemId}`;
+export const reversalKey = (orderItemId) => `earning_reversal:${orderItemId}`;
 
 /** Ban duoc mot truyen: doanh thu vao ngan cho (giu `holdDays` ngay). */
 export const recordEarning = (tx, { sellerId, amount, orderItemId, availableAt }) =>
@@ -51,7 +52,8 @@ export const recordEarning = (tx, { sellerId, amount, orderItemId, availableAt }
 
 /**
  * Cron: doanh thu het han giu -> ngan rut duoc. Moi dong earning_pending toi han ma chua co dong
- * earning_release tuong ung. Tra so dong da mo khoa.
+ * earning_release tuong ung. Bo qua khoan dang co yeu cau hoan tien cho xu ly (giu tiep cho toi khi Admin
+ * quyet) va khoan da hoan (earning_reversal). Tra so dong da mo khoa.
  */
 export async function releaseDueEarnings(prisma, now = new Date()) {
   const due = await prisma.walletLedger.findMany({
@@ -61,15 +63,15 @@ export async function releaseDueEarnings(prisma, now = new Date()) {
   });
   let released = 0;
   for (const row of due) {
-    const ok = await prisma.$transaction(
-      (tx) =>
-        moveEarning(tx, {
-          userId: row.userId, entryType: 'earning_release', amount: row.amount,
-          delta: { earningPendingVnd: -row.amount, earningAvailableVnd: row.amount },
-          key: releaseKey(row.refId), refType: 'order_item', refId: row.refId,
-        }),
-      { timeout: 20000 },
-    );
+    const ok = await prisma.$transaction(async (tx) => {
+      if (await recorded(tx, reversalKey(row.refId))) return false;
+      if (await tx.refundRequest.findFirst({ where: { orderItemId: row.refId, status: 'pending' }, select: { id: true } })) return false;
+      return moveEarning(tx, {
+        userId: row.userId, entryType: 'earning_release', amount: row.amount,
+        delta: { earningPendingVnd: -row.amount, earningAvailableVnd: row.amount },
+        key: releaseKey(row.refId), refType: 'order_item', refId: row.refId,
+      });
+    }, { timeout: 20000 });
     if (ok) released += 1;
   }
   return released;

@@ -25,7 +25,7 @@ import contentLibraryRouter, {
   checklistItemsRouter,
 } from '../../modules/content-library/content-library.routes.js';
 import reportsRoutes from '../../modules/reports/reports.routes.js';
-import platformRoutes from '../../modules/platform/platform.routes.js';
+import adminRouter, { parentRefundRouter } from '../../modules/admin/admin.routes.js';
 
 import {
   cartRouter,
@@ -55,6 +55,7 @@ router.use('/content-library', contentLibraryRouter);
 router.use('/bookshelf', bookshelfRoutes);
 router.use('/kid', kidRoutes);
 router.use('/payments', billingRoutes);
+router.use('/payments', parentRefundRouter);
 router.use('/market', marketRoutes);
 router.use('/market', reportRouter);
 router.use('/marketplace', marketplaceRoutes);
@@ -69,8 +70,7 @@ router.use('/moderation', moderationRoutes);
 router.use('/reports', reportsRoutes);
 router.use('/admin', adminWithdrawalsRouter);
 router.use('/admin', appealsAdminRouter);
-router.use('/admin', platformRoutes);
-router.use('/platform', platformRoutes);
+router.use('/admin', adminRouter);
 router.use('/plans', plansRouter);
 router.use('/subscriptions', subscriptionsRouter);
 router.use('/wallets', walletsRoutes);

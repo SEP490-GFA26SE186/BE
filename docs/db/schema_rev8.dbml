@@ -968,10 +968,14 @@ Table refund_requests {
   status request_status [not null, default: 'pending']
   handled_by uuid [note: 'admin']
   handled_at timestamptz
-  bank_transaction_ref varchar(100)
+  bank_transaction_ref varchar(100) [note: 'ma giao dich Admin chuyen tra (thu cong)']
+  decision_note text [note: 'ly do tu choi / ghi chu cho phu huynh (2026-10-18)']
   created_at timestamptz [not null, default: `now()`]
 
-  Note: 'Chi trong 7 ngay ke tu paid_at'
+  Note: '''
+  Chi trong market.refund_window_days (mac dinh 3 = so ngay giu doanh thu) ke tu paid_at.
+  Doanh thu cua item dang co yeu cau cho xu ly khong duoc mo khoa (cron giu lai).
+  '''
 }
 
 Table webhook_logs {

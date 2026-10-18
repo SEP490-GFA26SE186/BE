@@ -1238,6 +1238,7 @@ model RefundRequest {
   handledBy          String?       @map("handled_by") @db.Uuid
   handledAt          DateTime?     @map("handled_at") @db.Timestamptz()
   bankTransactionRef String?       @map("bank_transaction_ref") @db.VarChar(100)
+  decisionNote       String?       @map("decision_note")
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz()
 
   orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)

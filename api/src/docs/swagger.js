@@ -2,6 +2,7 @@ import { env } from '../config/index.js';
 import storiesPaths from './paths/stories.paths.js';
 import moderatorPaths from './paths/moderator.paths.js';
 import monitoringPaths from './paths/monitoring.paths.js';
+import adminPaths from './paths/admin.paths.js';
 
 const swaggerSpec = {
   openapi: '3.0.0',
@@ -2090,115 +2091,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    '/plans': {
-      get: {
-        tags: ['Plans & Subscriptions'],
-        summary: '[Public] Xem danh sách gói thành viên đang hoạt động',
-        description: '**Quyền truy cập:** Mọi người dùng (không yêu cầu đăng nhập).\nTrả về danh sách các gói đăng ký định kỳ (Free, Monthly, Yearly) kèm theo định mức AI story, AI image, số lượng hồ sơ bé và nhân vật tối đa.',
-        responses: {
-          200: { description: 'Lấy danh sách gói thành viên thành công' },
-        },
-      },
-      post: {
-        tags: ['Plans & Subscriptions'],
-        summary: '[Admin] Tạo mới gói thành viên',
-        description: '**Quyền truy cập:** `admin`.\nTạo gói đăng ký thành viên mới trên hệ thống.',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['code', 'name', 'period', 'priceVnd', 'aiStoryQuota', 'aiImageQuota', 'maxChildren', 'maxCharacters'],
-                properties: {
-                  code: { type: 'string', example: 'FAMILY_VIP' },
-                  name: { type: 'string', example: 'Gói Gia Đình VIP' },
-                  period: { type: 'string', enum: ['month', 'year'], example: 'month' },
-                  priceVnd: { type: 'integer', example: 199000 },
-                  aiStoryQuota: { type: 'integer', example: 50 },
-                  aiImageQuota: { type: 'integer', example: 100 },
-                  maxChildren: { type: 'integer', example: 5 },
-                  maxCharacters: { type: 'integer', example: 25 },
-                  canSell: { type: 'boolean', example: true },
-                  isActive: { type: 'boolean', example: true },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Tạo gói thành viên thành công' },
-        },
-      },
-    },
-
-    '/plans/{id}': {
-      get: {
-        tags: ['Plans & Subscriptions'],
-        summary: '[Public] Xem chi tiết gói thành viên',
-        description: '**Quyền truy cập:** Mọi người dùng.',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Lấy chi tiết gói thành viên thành công' },
-          404: { description: 'Không tìm thấy gói thành viên' },
-        },
-      },
-      put: {
-        tags: ['Plans & Subscriptions'],
-        summary: '[Admin] Cập nhật thông tin gói thành viên',
-        description: '**Quyền truy cập:** `admin`.\nCập nhật quyền lợi, giá tiền hoặc định mức của gói thành viên.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  priceVnd: { type: 'integer' },
-                  aiStoryQuota: { type: 'integer' },
-                  aiImageQuota: { type: 'integer' },
-                  maxChildren: { type: 'integer' },
-                  maxCharacters: { type: 'integer' },
-                  canSell: { type: 'boolean' },
-                  isActive: { type: 'boolean' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật gói thành viên thành công' },
-        },
-      },
-      delete: {
-        tags: ['Plans & Subscriptions'],
-        summary: '[Admin] Vô hiệu hóa gói thành viên',
-        description: '**Quyền truy cập:** `admin`.\nChuyển trạng thái gói thành viên sang không hoạt động (`isActive = false`).',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Vô hiệu hóa gói thành viên thành công' },
-        },
-      },
-    },
-
-    /* =========================================================================
-     * CREDIT PACKS
-     * ========================================================================= */
-
-
-    /* =========================================================================
-     * SUBSCRIPTIONS
-     * ========================================================================= */
     '/subscriptions/me': {
       get: {
         tags: ['Plans & Subscriptions'],
@@ -2247,27 +2139,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    '/subscriptions/admin/all': {
-      get: {
-        tags: ['Plans & Subscriptions'],
-        summary: '[Admin] Danh sách toàn bộ gói đăng ký người dùng',
-        description: '**Quyền truy cập:** `admin`.\nQuản trị viên xem và lọc lịch sử đăng ký gói của toàn bộ người dùng kèm phân trang.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'expired', 'cancelled'] } },
-          { name: 'parentId', in: 'query', schema: { type: 'string', format: 'uuid' } },
-          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
-        ],
-        responses: {
-          200: { description: 'Lấy danh sách đăng ký thành công' },
-        },
-      },
-    },
-
-    /* =========================================================================
-     * WALLETS & FINANCIALS
-     * ========================================================================= */
     '/wallets/me': {
       get: {
         tags: ['Wallets & Financials'],
@@ -2437,6 +2308,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     ...storiesPaths,
     ...moderatorPaths,
     ...monitoringPaths,
+    ...adminPaths,
 
     // =========================================================================
     // Content Library: Backgrounds
@@ -2861,82 +2733,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     // =========================================================================
     // Platform Settings & Admin Audit Logs
     // =========================================================================
-    '/admin/settings': {
-      get: {
-        tags: ['Platform & Audit Logs'],
-        summary: '[Admin] Lấy danh sách toàn bộ cấu hình tham số hệ thống',
-        description: 'Tỷ lệ hoa hồng nền tảng (commission_rate: 30%), số ngày giam tiền (holding_days: 7), mức rút tiền tối thiểu (min_withdrawal_vnd), ngưỡng báo cáo tự động tạm gỡ (report_threshold). Tự động khởi tạo giá trị mặc định nếu bảng trống.',
-        security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'Danh sách cấu hình hệ thống' },
-        },
-      },
-    },
-
-    '/admin/settings/{key}': {
-      get: {
-        tags: ['Platform & Audit Logs'],
-        summary: '[Admin] Lấy chi tiết một tham số cấu hình',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'key', in: 'path', required: true, schema: { type: 'string' }, example: 'commission_rate' },
-        ],
-        responses: {
-          200: { description: 'Chi tiết cấu hình' },
-        },
-      },
-      put: {
-        tags: ['Platform & Audit Logs'],
-        summary: '[Admin] Cập nhật tham số cấu hình hệ thống',
-        description: 'Cập nhật giá trị cấu hình và tự động lưu vết vào nhật ký kiểm toán quản trị (Admin Audit Logs).',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'key', in: 'path', required: true, schema: { type: 'string' }, example: 'commission_rate' },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['value'],
-                properties: {
-                  value: { example: 30 },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật tham số thành công' },
-        },
-      },
-    },
-
-    '/admin/audit-logs': {
-      get: {
-        tags: ['Platform & Audit Logs'],
-        summary: '[Admin] Truy vấn nhật ký kiểm toán quản trị',
-        description: 'Xem toàn bộ lịch sử thao tác của các Admin và Moderator (duyệt khiếu nại, cấp gậy, thay đổi cấu hình hệ thống, khóa tài khoản...).',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'actorId', in: 'query', schema: { type: 'string', format: 'uuid' }, description: 'Lọc theo ID người thực hiện' },
-          { name: 'action', in: 'query', schema: { type: 'string' }, description: 'Lọc theo hành động (VD: UPDATE_PLATFORM_SETTING, APPROVE_STRIKE_APPEAL)' },
-          { name: 'targetType', in: 'query', schema: { type: 'string' }, description: 'Lọc theo đối tượng tác động (VD: PLATFORM_SETTING, STRIKE_APPEAL)' },
-          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
-          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
-        ],
-        responses: {
-          200: { description: 'Danh sách nhật ký kiểm toán phân trang' },
-        },
-      },
-    },
-
-    // ==========================================
-    // Cart Routes (/cart)
-    // ==========================================
     '/cart': {
       get: {
         tags: ['Cart'],

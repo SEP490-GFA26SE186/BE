@@ -15,29 +15,6 @@ const getPlanById = catchAsync(async (req, res) => {
   });
 });
 
-const createPlan = catchAsync(async (req, res) => {
-  const plan = await plansService.createPlan(req.body);
-  return ApiResponse.created(res, {
-    message: 'Subscription plan created successfully',
-    data: { plan },
-  });
-});
-
-const updatePlan = catchAsync(async (req, res) => {
-  const plan = await plansService.updatePlan(req.params.id, req.body);
-  return ApiResponse.success(res, {
-    message: 'Subscription plan updated successfully',
-    data: { plan },
-  });
-});
-
-const deletePlan = catchAsync(async (req, res) => {
-  await plansService.deletePlan(req.params.id);
-  return ApiResponse.success(res, {
-    message: 'Subscription plan deactivated successfully',
-  });
-});
-
 const getMySubscription = catchAsync(async (req, res) => {
   const result = await plansService.getMySubscription(req.user.id);
   return ApiResponse.success(res, {
@@ -61,21 +38,10 @@ const cancelMySubscription = catchAsync(async (req, res) => {
   });
 });
 
-const getAllSubscriptions = catchAsync(async (req, res) => {
-  const result = await plansService.getAllSubscriptions(req.query);
-  return ApiResponse.success(res, {
-    data: result,
-  });
-});
-
 export default {
   getPlans,
   getPlanById,
-  createPlan,
-  updatePlan,
-  deletePlan,
   getMySubscription,
   subscribeFreePlan,
   cancelMySubscription,
-  getAllSubscriptions,
 };

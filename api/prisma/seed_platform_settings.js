@@ -69,6 +69,9 @@ export const platformSettingsData = [
   { key: 'market.seller_share_rate', value: 0.8 },
   { key: 'market.earning_hold_days', value: 3 },
   { key: 'market.min_withdrawal_vnd', value: 50000 },
+  // Hoàn tiền: phụ huynh yêu cầu trong N ngày kể từ lúc trả tiền — bằng số ngày giữ doanh thu, để tiền
+  // hoàn luôn lấy lại được từ doanh thu đang chờ của người bán.
+  { key: 'market.refund_window_days', value: 3 },
   // Giám sát (luồng 7): đủ 3 người khác nhau báo cáo trong 24 giờ -> tự tạm gỡ; cảnh cáo hiệu lực 90 ngày,
   // 3 cảnh cáo còn hiệu lực -> khoá tài khoản bán; mỗi tuần chọn 3 truyện đang bán để kiểm tra ngẫu nhiên.
   { key: 'moderation.report_threshold', value: 3 },
