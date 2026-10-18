@@ -14,10 +14,17 @@ export function vnWeekStart(date) {
   return new Date(vn.getTime() - dow * DAY_MS).toISOString().slice(0, 10);
 }
 
+const EMOTIONS = ['happy', 'sad', 'angry', 'scared', 'neutral'];
+
 /**
- * rows: [{ answeredAt, score (0..1 | null), skipped, attempts, caselCode | null, type }] — chi luot doc dau.
- * Tra { trend, byType }. trend: `weeks` tuan gan nhat (cu -> moi), moi nang luc { items, score }; tuan it
- * hon EQ_MIN_ITEMS cau van tra diem (xu huong), nhung FE ghi "it du lieu".
+ * rows: [{ answeredAt, score (0..1 | null), skipped, attempts, caselCode | null, type, answerEmotion?, firstEmotion? }]
+ * — chi luot doc dau. Tra { trend, byType, emotions }.
+ * - trend: `weeks` tuan gan nhat (cu -> moi), moi nang luc { items, score }; tuan it hon EQ_MIN_ITEMS cau
+ *   van tra diem (xu huong), nhung FE ghi "it du lieu".
+ * - byType.firstTryRate: % cau duoc cham dat diem toi da ngay lan chon dau (cam xuc / goc nhin chon dung,
+ *   giai quyet tinh huong chon cach xay dung).
+ * - emotions: diem dung nhan dien cam xuc (emotion_self / emotion_other), theo cam xuc dung: so lan gap,
+ *   so lan be nhan dung ngay lan dau (y tuong tu origin/main).
  */
 export function buildEqJourney(rows, { weeks = 8, now = new Date() } = {}) {
   const thisWeek = vnWeekStart(now);
@@ -26,18 +33,25 @@ export function buildEqJourney(rows, { weeks = 8, now = new Date() } = {}) {
   );
   const acc = new Map(weekKeys.map((w) => [w, new Map()]));
   const types = new Map();
+  const emotionAcc = new Map();
 
   for (const r of rows) {
-    const t = types.get(r.type) ?? { type: r.type, answered: 0, skipped: 0, scored: 0, scoreSum: 0, firstTry: 0, retried: 0 };
+    const t = types.get(r.type) ?? { type: r.type, answered: 0, skipped: 0, scored: 0, scoreSum: 0, firstTry: 0 };
     t.answered += 1;
     if (r.skipped) t.skipped += 1;
     if (r.score != null) {
       t.scored += 1;
       t.scoreSum += Number(r.score);
-      if (r.attempts === 1) t.firstTry += 1;
-      else t.retried += 1;
+      if (Number(r.score) === 1) t.firstTry += 1;
     }
     types.set(r.type, t);
+
+    if (r.answerEmotion && !r.skipped) {
+      const e = emotionAcc.get(r.answerEmotion) ?? { emotion: r.answerEmotion, count: 0, correctFirstTry: 0 };
+      e.count += 1;
+      if (r.firstEmotion === r.answerEmotion) e.correctFirstTry += 1;
+      emotionAcc.set(r.answerEmotion, e);
+    }
 
     const week = acc.get(vnWeekStart(r.answeredAt));
     if (!week || r.score == null || !r.caselCode) continue;
@@ -59,6 +73,7 @@ export function buildEqJourney(rows, { weeks = 8, now = new Date() } = {}) {
       avgScore: pct(t.scoreSum, t.scored),
       firstTryRate: t.scored ? Math.round((t.firstTry / t.scored) * 100) : null,
     })),
+    emotions: EMOTIONS.filter((e) => emotionAcc.has(e)).map((e) => emotionAcc.get(e)),
   };
 }
 

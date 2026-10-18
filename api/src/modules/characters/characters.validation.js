@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 // Rev8: characters khong con cot role — vai cua nhan vat trong truyen do story_characters.is_main quyet.
-const GENERATION_STATUSES = ['none', 'queued', 'generating', 'ready', 'failed'];
 
 const createCharacter = z.object({
   body: z.object({
@@ -64,13 +63,6 @@ const updateCharacter = z.object({
       .string()
       .max(1000, 'Generation prompt must not exceed 1000 characters')
       .nullable()
-      .optional(),
-    portraitStatus: z
-      .enum(GENERATION_STATUSES, {
-        errorMap: () => ({
-          message: 'Invalid portrait status (allowed: none, queued, generating, ready, failed)',
-        }),
-      })
       .optional(),
   }),
 });

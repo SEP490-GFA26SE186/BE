@@ -41,7 +41,7 @@ const getBackgrounds = async (filter = {}) => {
       take: limitNum,
       orderBy: { createdAt: 'desc' },
       include: {
-        createdBy: {
+        creator: {
           select: {
             id: true,
             username: true,
@@ -49,7 +49,7 @@ const getBackgrounds = async (filter = {}) => {
           },
         },
         _count: {
-          select: { storyPages: true },
+          select: { storyScenes: true },
         },
       },
     }),
@@ -66,8 +66,8 @@ const getBackgrounds = async (filter = {}) => {
       imageKey: bg.imageKey,
       tags: bg.tags,
       isActive: bg.isActive,
-      usageCount: bg._count.storyPages,
-      createdBy: bg.createdBy,
+      usageCount: bg._count.storyScenes,
+      createdBy: bg.creator,
       createdAt: bg.createdAt,
     })),
   };
@@ -82,7 +82,7 @@ const getBackgroundById = async (id) => {
   const background = await prisma.background.findUnique({
     where: { id },
     include: {
-      createdBy: {
+      creator: {
         select: {
           id: true,
           username: true,
@@ -90,7 +90,7 @@ const getBackgroundById = async (id) => {
         },
       },
       _count: {
-        select: { storyPages: true },
+        select: { storyScenes: true },
       },
     },
   });
@@ -105,8 +105,8 @@ const getBackgroundById = async (id) => {
     imageKey: background.imageKey,
     tags: background.tags,
     isActive: background.isActive,
-    usageCount: background._count.storyPages,
-    createdBy: background.createdBy,
+    usageCount: background._count.storyScenes,
+    createdBy: background.creator,
     createdAt: background.createdAt,
   };
 };
@@ -126,10 +126,10 @@ const createBackground = async (userId, data) => {
       imageKey,
       tags: tags || null,
       isActive,
-      createdById: userId,
+      createdBy: userId,
     },
     include: {
-      createdBy: {
+      creator: {
         select: {
           id: true,
           username: true,
@@ -177,7 +177,7 @@ const deleteBackground = async (id) => {
     where: { id },
     include: {
       _count: {
-        select: { storyPages: true },
+        select: { storyScenes: true },
       },
     },
   });
@@ -186,13 +186,13 @@ const deleteBackground = async (id) => {
     throw ApiError.notFound('Background not found');
   }
 
-  if (existing._count.storyPages > 0) {
+  if (existing._count.storyScenes > 0) {
     await prisma.background.update({
       where: { id },
       data: { isActive: false },
     });
     return {
-      message: `Ảnh nền đã được ${existing._count.storyPages} trang truyện sử dụng, đã chuyển sang trạng thái ngưng hoạt động (isActive: false)`,
+      message: `Ảnh nền đã được ${existing._count.storyScenes} cảnh truyện sử dụng, đã chuyển sang trạng thái ngưng hoạt động (isActive: false)`,
       deactivated: true,
     };
   }

@@ -30,3 +30,22 @@ test('strengths: chi xet nang luc du so cau; mot nang luc -> chua co "can ho tro
   assert.deepEqual(strengths([s('a', 6, 80), s('b', 5, 40), s('c', 2, 10)]), { strongest: 'a', focus: 'b' });
   assert.deepEqual(strengths([s('a', 6, 80), s('b', 1, null)]), { strongest: 'a', focus: null });
 });
+
+test('buildEqJourney: firstTryRate chi tinh cau dat diem toi da; thong ke nhan dien cam xuc theo cam xuc dung', () => {
+  const now = new Date('2026-10-18T10:00:00Z');
+  const at = new Date('2026-10-17T03:00:00Z');
+  const rows = [
+    { answeredAt: at, score: 0.5, skipped: false, attempts: 1, caselCode: 'self_management', type: 'problem_solving' },
+    { answeredAt: at, score: 1, skipped: false, attempts: 1, caselCode: 'self_management', type: 'problem_solving' },
+    { answeredAt: at, score: 1, skipped: false, attempts: 1, caselCode: 'self_awareness', type: 'emotion_self', answerEmotion: 'sad', firstEmotion: 'sad' },
+    { answeredAt: at, score: 0, skipped: false, attempts: 1, caselCode: 'social_awareness', type: 'emotion_other', answerEmotion: 'sad', firstEmotion: 'angry' },
+    { answeredAt: at, score: 1, skipped: false, attempts: 1, caselCode: 'self_awareness', type: 'emotion_self', answerEmotion: 'happy', firstEmotion: 'happy' },
+    { answeredAt: at, score: null, skipped: true, attempts: 1, caselCode: null, type: 'emotion_self', answerEmotion: 'angry', firstEmotion: null },
+  ];
+  const { byType, emotions } = buildEqJourney(rows, { weeks: 1, now });
+  assert.equal(byType.find((t) => t.type === 'problem_solving').firstTryRate, 50);
+  assert.deepEqual(emotions, [
+    { emotion: 'happy', count: 1, correctFirstTry: 1 },
+    { emotion: 'sad', count: 2, correctFirstTry: 1 },
+  ]);
+});

@@ -157,3 +157,35 @@ test('khong mua truyen cua chinh minh; truyen chua duyet khong tim thay; chua mu
   const mod = await createUser({ role: 'moderator' });
   assert.ok(mod);
 });
+
+test('mua trung (hai don cung duoc tra): khong giao lai, khong cong doanh thu; tu mo yeu cau hoan tien; duyet hoan khong thu hoi quyen doc cu', { skip }, async () => {
+  const { seller, listing } = await publishedListing(19000);
+  const buyer = await withPlan('FREE');
+  const orderFor = () => prisma.order.create({
+    data: {
+      buyerId: buyer.user.id, subtotalVnd: 19000n, totalVnd: 19000n, payosOrderCode: BigInt(Date.now()) * 10n + BigInt(Math.floor(Math.random() * 10)),
+      items: { create: { itemType: 'listing', listingId: listing.id, unitPriceVnd: 19000n, sellerShareRate: 0.8, sellerAmountVnd: 15200n } },
+    },
+    include: { items: true },
+  });
+  const first = await orderFor();
+  const second = await orderFor();
+  await prisma.$transaction((tx) => store.fulfillOrder(tx, first.id));
+  await prisma.$transaction((tx) => store.fulfillOrder(tx, second.id));
+
+  const ents = await prisma.entitlement.findMany({ where: { parentId: buyer.user.id, listingId: listing.id } });
+  assert.deepEqual(ents.map((e) => e.orderItemId), [first.items[0].id]);
+  assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).purchaseCount, 1);
+  assert.equal((await wallet(seller.user.id)).earningPendingVnd, 15200n);
+  const refund = await prisma.refundRequest.findUnique({ where: { orderItemId: second.items[0].id } });
+  assert.equal(refund?.status, 'pending');
+  assert.equal(refund.reason, store.DUPLICATE_REFUND_REASON);
+
+  const { user: admin } = await createUser({ role: 'admin' });
+  const { decideRefund } = await import('../../src/modules/refunds/refunds.service.js');
+  await decideRefund({ id: admin.id, role: 'admin' }, refund.id, { approve: true, bankTransactionRef: 'FT-DUP-1' });
+  const still = await prisma.entitlement.findFirst({ where: { orderItemId: first.items[0].id } });
+  assert.equal(still.revokedAt, null, 'quyen doc tu don dau van con');
+  assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).purchaseCount, 1);
+  assert.equal((await wallet(seller.user.id)).earningPendingVnd, 15200n);
+});

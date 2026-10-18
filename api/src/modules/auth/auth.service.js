@@ -117,14 +117,14 @@ const login = async ({ emailOrUsername, email, username, password }) => {
     throw ApiError.unauthorized('Invalid email/username or password');
   }
 
-  if (!user.isActive) {
-    throw ApiError.forbidden('Your account has been deactivated. Please contact support.');
-  }
-
-  // Verify password
+  // Kiem mat khau TRUOC khi bao "bi khoa": khong lo trang thai tai khoan cho nguoi khong biet mat khau.
   const isPasswordMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isPasswordMatch) {
     throw ApiError.unauthorized('Invalid email/username or password');
+  }
+
+  if (!user.isActive) {
+    throw ApiError.forbidden('Your account has been deactivated. Please contact support.');
   }
 
   // Update last login timestamp asynchronously

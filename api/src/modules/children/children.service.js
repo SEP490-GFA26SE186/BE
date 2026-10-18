@@ -182,11 +182,11 @@ const getChildEqJourney = async (parentId, childId, { weeks = 8 } = {}) => {
       orderBy: { answeredAt: 'desc' },
       take: 1000,
       select: {
-        answeredAt: true, score: true, skipped: true, attempts: true,
+        answeredAt: true, score: true, skipped: true, attempts: true, firstEmotion: true,
         skill: { select: { caselCode: true } },
         checkpoint: {
           select: {
-            type: true, question: true,
+            type: true, question: true, answerEmotion: true,
             story: { select: { title: true, storyCharacters: { select: { token: true, aliasName: true, character: { select: { name: true } } } } } },
           },
         },
@@ -197,8 +197,9 @@ const getChildEqJourney = async (parentId, childId, { weeks = 8 } = {}) => {
   const rows = answers.map((a) => ({
     answeredAt: a.answeredAt, score: a.score == null ? null : Number(a.score), skipped: a.skipped, attempts: a.attempts,
     caselCode: a.skill?.caselCode ?? null, type: a.checkpoint.type,
+    answerEmotion: a.checkpoint.answerEmotion ?? null, firstEmotion: a.firstEmotion ?? null,
   }));
-  const { trend, byType } = buildEqJourney(rows, { weeks });
+  const { trend, byType, emotions } = buildEqJourney(rows, { weeks });
   const count = (status) => sessions.find((s) => s.status === status)?._count._all ?? 0;
   return {
     childId,
@@ -209,6 +210,7 @@ const getChildEqJourney = async (parentId, childId, { weeks = 8 } = {}) => {
     totals: { answers: rows.filter((r) => !r.skipped).length, sessions: sessions.reduce((n, s) => n + s._count._all, 0), completed: count('completed') },
     trend,
     byType,
+    emotions,
     recent: answers.slice(0, 10).map((a) => ({
       answeredAt: a.answeredAt,
       storyTitle: a.checkpoint.story.title,

@@ -18,15 +18,29 @@ export async function loadMarketSettings(db) {
   return { sellerShareRate: rate, earningHoldDays: holdDays, minWithdrawalVnd: minWithdrawal };
 }
 
+export const DUPLICATE_REFUND_REASON = 'Tự động: mua trùng — phụ huynh đã sở hữu truyện này từ đơn trước, cần hoàn tiền.';
+
 /**
  * Giao mot item truyen: quyen doc (entitlement) + bo dem; truyen co gia -> doanh thu nguoi ban
- * (seller_amount_vnd da chot trong don) giu `holdDays` ngay. Da co quyen (mua trung) -> chi them doanh thu.
+ * (seller_amount_vnd da chot trong don) giu `holdDays` ngay.
+ * Da co quyen (mua trung, vd. hai don cho cung duoc tra) -> khong giao lai, khong cong bo dem / doanh
+ * thu; don co tien thi tu mo yeu cau hoan tien de Admin tra lai (y tuong tu origin/main).
  */
 async function deliverListing(tx, { buyerId, item, now }) {
   const listing = await tx.listing.findUniqueOrThrow({ where: { id: item.listingId } });
-  const active = await tx.entitlement.findFirst({ where: { parentId: buyerId, listingId: listing.id, revokedAt: null } });
-  if (!active) await tx.entitlement.create({ data: { parentId: buyerId, listingId: listing.id, orderItemId: item.id, grantedAt: now } });
   const paid = item.unitPriceVnd > 0n;
+  const active = await tx.entitlement.findFirst({ where: { parentId: buyerId, listingId: listing.id, revokedAt: null } });
+  if (active) {
+    if (paid) {
+      await tx.refundRequest.upsert({
+        where: { orderItemId: item.id },
+        create: { orderItemId: item.id, requesterId: buyerId, reason: DUPLICATE_REFUND_REASON, createdAt: now },
+        update: {},
+      });
+    }
+    return;
+  }
+  await tx.entitlement.create({ data: { parentId: buyerId, listingId: listing.id, orderItemId: item.id, grantedAt: now } });
   await tx.listing.update({ where: { id: listing.id }, data: paid ? { purchaseCount: { increment: 1 } } : { freeClaimCount: { increment: 1 } } });
   if (paid) {
     await tx.sellerProfile.update({ where: { userId: listing.sellerId }, data: { totalSales: { increment: 1 } } });

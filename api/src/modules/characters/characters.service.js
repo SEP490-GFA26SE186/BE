@@ -64,6 +64,20 @@ const getMaxCharactersQuota = async (parentId) => {
 };
 
 /**
+ * Moi be chi co mot nhan vat "la be" (characters.child_id unique, ke ca dong da xoa mem). Be da co nhan
+ * vat song -> 409 ro rang thay vi loi P2002; dong da xoa mem dang giu cho -> nha ra (child_id = null).
+ * (Y tuong tu origin/main assertChildAvatarSlot.)
+ */
+const claimChildSlot = async (childId, exceptCharacterId = null) => {
+  const holder = await prisma.character.findUnique({ where: { childId } });
+  if (!holder || holder.id === exceptCharacterId) return;
+  if (!holder.deletedAt) {
+    throw ApiError.conflict(`Bé đã có nhân vật “${holder.name}” — ba mẹ sửa nhân vật đó thay vì tạo thêm.`);
+  }
+  await prisma.character.update({ where: { id: holder.id }, data: { childId: null } });
+};
+
+/**
  * Create a new family character
  * @param {string} parentId
  * @param {Object} characterData
@@ -85,6 +99,7 @@ const createCharacter = async (parentId, characterData) => {
     if (!child) {
       throw ApiError.badRequest('Hồ sơ bé không tồn tại hoặc đã bị xoá.');
     }
+    await claimChildSlot(childId);
   }
 
   // 2. Check character quota for current subscription
@@ -218,8 +233,13 @@ const updateCharacter = async (parentId, characterId, updateData) => {
     throw new ApiError(422, 'Nhân vật này là bé — ba mẹ đổi tên ở trang “Bé nhà mình”.');
   }
 
+  // Nhan vat cua be gan co dinh voi be (go / chuyen sang be khac = xoa ho so be, khong lam o day).
+  if (existingCharacter.childId && updateData.childId !== undefined && updateData.childId !== existingCharacter.childId) {
+    throw new ApiError(422, 'Nhân vật này là bé — không gỡ hay chuyển sang bé khác được.');
+  }
+
   // If childId is provided/updated, verify validity
-  if (updateData.childId !== undefined && updateData.childId !== null) {
+  if (updateData.childId !== undefined && updateData.childId !== null && updateData.childId !== existingCharacter.childId) {
     const child = await prisma.childProfile.findFirst({
       where: {
         id: updateData.childId,
@@ -231,6 +251,7 @@ const updateCharacter = async (parentId, characterId, updateData) => {
     if (!child) {
       throw ApiError.badRequest('Hồ sơ bé không tồn tại hoặc đã bị xoá.');
     }
+    await claimChildSlot(updateData.childId, characterId);
   }
 
   const updatedCharacter = await prisma.character.update({
@@ -239,9 +260,12 @@ const updateCharacter = async (parentId, characterId, updateData) => {
       ...(updateData.name && { name: updateData.name }),
       ...(updateData.appearance !== undefined && { appearance: updateData.appearance }),
       ...(updateData.childId !== undefined && { childId: updateData.childId }),
-      ...(updateData.portraitImageKey !== undefined && { portraitImageKey: updateData.portraitImageKey }),
+      // Trang thai chan dung do server suy ra tu anh (client khong tu dat duoc).
+      ...(updateData.portraitImageKey !== undefined && {
+        portraitImageKey: updateData.portraitImageKey,
+        portraitStatus: updateData.portraitImageKey ? 'ready' : 'none',
+      }),
       ...(updateData.genPrompt !== undefined && { genPrompt: updateData.genPrompt }),
-      ...(updateData.portraitStatus && { portraitStatus: updateData.portraitStatus }),
     },
     include: {
       child: {

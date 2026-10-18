@@ -141,7 +141,11 @@ export async function handleWebhook(body, { now = new Date() } = {}) {
   else if (Number(data.amount) < Number(order.totalVnd)) reason = 'amount_mismatch';
   else {
     processed = await prisma.$transaction((tx) => fulfillOrder(tx, order.id, { transactionId: data.reference ?? null, now }), TX);
-    if (!processed) reason = 'already_processed';
+    if (!processed) {
+      // Tien da ve nhung don da huy / loi -> khong giao, ghi ro de doi soat hoan tay (y tuong tu origin/main).
+      const { status } = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, select: { status: true } });
+      reason = status === 'paid' ? 'already_processed' : `paid_but_order_${status}_needs_manual_refund`;
+    }
   }
   await prisma.webhookLog.update({ where: { id: log.id }, data: { processed, errorMessage: reason } });
   return { ok: true, processed, reason };

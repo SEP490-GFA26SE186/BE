@@ -169,11 +169,16 @@ export async function listRefunds({ status = 'pending' } = {}) {
   return { refunds };
 }
 
-/** Hoan quyen loi da giao: truyen -> thu hoi quyen doc, go khoi gia sach be, tru doanh thu; goi -> huy, ve Mien phi. */
+/**
+ * Hoan quyen loi da giao: truyen -> thu hoi quyen doc, go khoi gia sach be, tru doanh thu; goi -> huy, ve Mien phi.
+ * Chi thu hoi quyen doc do CHINH item nay cap: item mua trung (khong cap quyen) -> chi hoan tien, giu
+ * nguyen quyen doc + bo dem cua don truoc.
+ */
 async function revokeDelivery(tx, item, buyerId, now) {
   if (item.itemType === 'listing') {
     const listing = await tx.listing.findUniqueOrThrow({ where: { id: item.listingId } });
-    await tx.entitlement.updateMany({ where: { parentId: buyerId, listingId: listing.id, revokedAt: null }, data: { revokedAt: now } });
+    const { count } = await tx.entitlement.updateMany({ where: { orderItemId: item.id, revokedAt: null }, data: { revokedAt: now } });
+    if (count === 0) return;
     await tx.bookshelfItem.deleteMany({ where: { storyId: listing.publishedStoryId, child: { parentId: buyerId } } });
     await tx.listing.updateMany({ where: { id: listing.id, purchaseCount: { gt: 0 } }, data: { purchaseCount: { decrement: 1 } } });
     await tx.sellerProfile.updateMany({ where: { userId: listing.sellerId, totalSales: { gt: 0 } }, data: { totalSales: { decrement: 1 } } });
