@@ -32,6 +32,10 @@ router
   .get(validate(childrenValidation.getEqReport), childrenController.getChildEqReport);
 
 router
+  .route('/:id/eq-journey')
+  .get(validate(childrenValidation.getEqJourney), childrenController.getChildEqJourney);
+
+router
   .route('/:id/bookshelf')
   .get(validate(childrenValidation.getChildBookshelf), childrenController.getChildBookshelf);
 

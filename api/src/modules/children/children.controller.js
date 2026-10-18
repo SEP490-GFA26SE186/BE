@@ -78,6 +78,10 @@ const getChildEqReport = catchAsync(async (req, res) => {
   });
 });
 
+const getChildEqJourney = catchAsync(async (req, res) =>
+  ApiResponse.success(res, { data: await childrenService.getChildEqJourney(req.user.id, req.params.id, req.query) }),
+);
+
 const getChildBookshelf = catchAsync(async (req, res) => {
   const bookshelf = await childrenService.getChildBookshelf(req.user, req.params.id, req.query);
 
@@ -96,5 +100,6 @@ export default {
   getChildUsage,
   getChildOverview,
   getChildEqReport,
+  getChildEqJourney,
   getChildBookshelf,
 };

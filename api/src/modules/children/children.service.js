@@ -4,7 +4,9 @@
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import bookshelfService from '../bookshelf/bookshelf.service.js';
-import { eqSkillsFromStats, formatChild, summarizeReading, vnDate } from './lib/childFormat.js';
+import { EQ_MIN_ITEMS, eqSkillsFromStats, formatChild, summarizeReading, vnDate } from './lib/childFormat.js';
+import { buildEqJourney, strengths } from './lib/eqJourney.js';
+import { detokenize } from '../stories/lib/narration.js';
 
 // Supabase o xa: moi truy van vai tram ms, mac dinh 5 s cua Prisma khong du cho 4-5 truy van
 // (giong TX_OPTIONS cua module stories).
@@ -168,6 +170,58 @@ const getChildUsage = async (parentId, childId, dateStr) => {
   return summarizeReading(child, sessions, date);
 };
 
+/**
+ * Bao cao EQ chi tiet (trang "Bao cao EQ"): diem cong don 5 nang luc + xu huong theo tuan + theo loai cau hoi
+ * + cau tra loi gan day. Chi luot doc dau (luot doc lai khong tinh diem — giong eq_competency_stats).
+ */
+const getChildEqJourney = async (parentId, childId, { weeks = 8 } = {}) => {
+  const { childName, skills } = await getChildEqReport(parentId, childId);
+  const [answers, sessions] = await Promise.all([
+    prisma.checkpointAnswer.findMany({
+      where: { session: { childId, isFirstPlay: true } },
+      orderBy: { answeredAt: 'desc' },
+      take: 1000,
+      select: {
+        answeredAt: true, score: true, skipped: true, attempts: true,
+        skill: { select: { caselCode: true } },
+        checkpoint: {
+          select: {
+            type: true, question: true,
+            story: { select: { title: true, storyCharacters: { select: { token: true, aliasName: true, character: { select: { name: true } } } } } },
+          },
+        },
+      },
+    }),
+    prisma.playSession.groupBy({ by: ['status'], where: { childId }, _count: { _all: true } }),
+  ]);
+  const rows = answers.map((a) => ({
+    answeredAt: a.answeredAt, score: a.score == null ? null : Number(a.score), skipped: a.skipped, attempts: a.attempts,
+    caselCode: a.skill?.caselCode ?? null, type: a.checkpoint.type,
+  }));
+  const { trend, byType } = buildEqJourney(rows, { weeks });
+  const count = (status) => sessions.find((s) => s.status === status)?._count._all ?? 0;
+  return {
+    childId,
+    childName,
+    minItems: EQ_MIN_ITEMS,
+    skills,
+    ...strengths(skills),
+    totals: { answers: rows.filter((r) => !r.skipped).length, sessions: sessions.reduce((n, s) => n + s._count._all, 0), completed: count('completed') },
+    trend,
+    byType,
+    recent: answers.slice(0, 10).map((a) => ({
+      answeredAt: a.answeredAt,
+      storyTitle: a.checkpoint.story.title,
+      type: a.checkpoint.type,
+      question: detokenize(a.checkpoint.question, a.checkpoint.story.storyCharacters),
+      caselCode: a.skill?.caselCode ?? null,
+      score: a.score == null ? null : Math.round(Number(a.score) * 100),
+      attempts: a.attempts,
+      skipped: a.skipped,
+    })),
+  };
+};
+
 const getChildEqReport = async (parentId, childId) => {
   const child = await findOwnChild(prisma, parentId, childId);
   const [skills, stats] = await Promise.all([
@@ -212,6 +266,7 @@ export default {
   updateChildAvatar,
   getChildUsage,
   getChildEqReport,
+  getChildEqJourney,
   getChildOverview,
   getChildBookshelf,
 };

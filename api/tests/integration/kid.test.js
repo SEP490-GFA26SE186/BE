@@ -162,3 +162,30 @@ test('truyen khong co tren gia cua be -> 404; sai kieu lua chon -> 400', { skip 
   const bad = await api.request('POST', `/kid/sessions/${session.id}/answers`, { token: kid, body: { checkpointId: f.ps.id, emotion: 'angry' } });
   assert.equal(bad.status, 400);
 });
+
+test('bao cao EQ: luot doc dau vao xu huong + theo loai + gan day (ten that hien cho phu huynh); luot doc lai khong tinh', { skip }, async () => {
+  const f = await setup();
+  await addToShelf(f);
+  const kid = await enterKid(f);
+  const play = async () => {
+    const { session } = (await api.request('POST', '/kid/sessions', { token: kid, body: { storyId: f.story.id } })).body.data;
+    await api.request('POST', `/kid/sessions/${session.id}/answers`, { token: kid, body: { checkpointId: f.emo.id, emotion: 'angry' } });
+    await api.request('POST', `/kid/sessions/${session.id}/answers`, { token: kid, body: { checkpointId: f.ps.id, optionId: f.ps.options.find((o) => o.role === 'constructive').id } });
+    await api.request('POST', `/kid/sessions/${session.id}/complete`, { token: kid });
+  };
+  await play();
+  await play(); // doc lai: khong cong diem, khong vao bao cao
+
+  const res = await api.request('GET', `/children/${f.child.id}/eq-journey?weeks=4`, { token: f.token });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const r = res.body.data;
+  assert.equal(r.trend.length, 4);
+  const thisWeek = r.trend.at(-1).skills;
+  assert.equal(thisWeek.self_awareness.items, 1);
+  assert.equal(thisWeek.self_awareness.score, 100);
+  assert.deepEqual(r.byType.map((t) => t.type).sort(), ['emotion_self', 'problem_solving']);
+  assert.equal(r.recent.length, 2);
+  assert.ok(r.recent.some((x) => x.question === 'Bin thấy sao?'), 'phu huynh thay ten that cua be');
+  assert.equal(r.totals.completed, 2);
+  assert.equal((await api.request('GET', `/children/${f.child.id}/eq-journey`, { token: (await createParent()).token })).status, 404);
+});

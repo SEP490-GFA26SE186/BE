@@ -101,6 +101,11 @@ const updateAvatar = z.object({
 });
 
 // Bao cao EQ cong don toan bo lich su (eq_competency_stats, docs/01) — khong loc theo ngay.
+const getEqJourney = z.object({
+  params: z.object({ id: z.string().uuid('Invalid child ID format') }),
+  query: z.object({ weeks: z.coerce.number().int().min(4).max(26).default(8) }),
+});
+
 const getEqReport = z.object({
   params: z.object({
     id: z.string().uuid('Invalid child ID format'),
@@ -130,5 +135,6 @@ export default {
   getUsage,
   updateAvatar,
   getEqReport,
+  getEqJourney,
   getChildBookshelf,
 };
