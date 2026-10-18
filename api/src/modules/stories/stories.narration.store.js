@@ -2,6 +2,7 @@
 // Khong tinh credit (nguoi dung chot 2026-10-17): khong dung ai_requests, khong giu / hoan credit.
 import ApiError from '../../utils/ApiError.js';
 import { SEGMENT_TARGETS, childReadiness, fingerprintOf, narrationSegments, planNarration } from './lib/narration.js';
+import { BLOCKED_LISTING_STATUSES } from '../monitoring/lib/monitoring.js';
 
 export const VOICE_KEY = 'tts.voice';
 
@@ -33,12 +34,19 @@ export async function loadReadiness(db, storyId) {
   if (!story) return null;
   const row = await db.platformSetting.findUnique({ where: { key: VOICE_KEY }, select: { value: true } });
   const voice = typeof row?.value === 'string' ? row.value.trim() : '';
-  return { story, ...childReadiness(story, story.narrationClips, voice) };
+  const readiness = childReadiness(story, story.narrationClips, voice);
+  // Ban dang ban dang tam go / da go han (luong 7) -> be tam khong doc duoc, ke ca ban da mua.
+  if (readiness.ready && story.kind === 'published') {
+    const listing = await db.listing.findUnique({ where: { publishedStoryId: story.id }, select: { status: true } });
+    if (BLOCKED_LISTING_STATUSES.includes(listing?.status)) return { story, ...readiness, ready: false, reason: 'taken_down' };
+  }
+  return { story, ...readiness };
 }
 
 /** Cau bao tieng Viet khi truyen chua san sang (422) — FE hien nguyen van. */
 export function notReadyMessage({ reason, narration }) {
   if (reason === 'not_reviewed') return 'Truyện chưa được ba mẹ bấm hoàn tất.';
+  if (reason === 'taken_down') return 'Truyện đang tạm gỡ để kiểm duyệt viên xem lại nội dung.';
   const left = narration.total - narration.ready;
   return narration.pending > 0
     ? `Giọng đọc đang được tạo (còn ${left}/${narration.total} đoạn). Vui lòng chờ ít phút.`

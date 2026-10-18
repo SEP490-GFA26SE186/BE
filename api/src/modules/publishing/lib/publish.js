@@ -102,13 +102,6 @@ export function reviewProgress(pageIds, viewedIds, itemIds, results) {
   };
 }
 
-/** Quyet dinh -> trang thai listing. */
-export const LISTING_STATUS_BY_DECISION = {
-  approved: 'published',
-  changes_requested: 'changes_requested',
-  rejected: 'rejected',
-};
-
 /** Claim con hieu luc cua nguoi khac? */
 export const claimedByOther = (review, moderatorId, now = new Date()) =>
   Boolean(review.moderatorId && review.moderatorId !== moderatorId && review.claimExpiresAt && review.claimExpiresAt > now);

@@ -1050,7 +1050,7 @@ Table withdrawal_requests {
 }
 
 Table platform_settings {
-  key varchar(60) [pk, note: 'commission_rate | holding_days | min_withdrawal | report_threshold | ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*']
+  key varchar(60) [pk, note: 'market.* (seller_share_rate, earning_hold_days, min_withdrawal_vnd) | moderation.* (report_threshold, strike_limit, strike_valid_days, audit_per_week) | ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*']
   value jsonb [not null]
   updated_by uuid [not null]
   updated_at timestamptz [not null, default: `now()`]

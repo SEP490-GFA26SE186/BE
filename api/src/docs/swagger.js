@@ -1,6 +1,7 @@
 import { env } from '../config/index.js';
 import storiesPaths from './paths/stories.paths.js';
 import moderatorPaths from './paths/moderator.paths.js';
+import monitoringPaths from './paths/monitoring.paths.js';
 
 const swaggerSpec = {
   openapi: '3.0.0',
@@ -1638,7 +1639,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/moderation/submissions/{reviewId}/claim': { post: { tags: ['Moderation'], summary: '[Moderator] Nhận bài (giữ 30 phút)', description: 'Người khác đang giữ → 409.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
     '/moderation/submissions/{reviewId}': { get: { tags: ['Moderation'], summary: '[Moderator] Chi tiết lượt duyệt: truyện (tên chung), checklist, trang đã xem, tiến độ', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ review, listing, story, checklist, pageViews, progress }' } } } },
     '/moderation/submissions/{reviewId}/pages/{pageId}/view': { post: { tags: ['Moderation'], summary: '[Moderator] Đánh dấu đã xem trang (+ nhận xét)', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'pageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { comment: { type: 'string' } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
-    '/moderation/submissions/{reviewId}/decision': { post: { tags: ['Moderation'], summary: '[Moderator] Quyết định', description: 'approved chỉ khi đã xem 100% trang và đạt đủ checklist; changes_requested / rejected bắt buộc nhận xét.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'changes_requested', 'rejected'] }, comment: { type: 'string' }, checklist: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'string', format: 'uuid' }, passed: { type: 'boolean' } } } } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
+    '/moderation/submissions/{reviewId}/decision': { post: { tags: ['Moderation'], summary: '[Moderator] Quyết định', description: 'Lượt nộp bán: approved | changes_requested | rejected. Lượt hậu kiểm (report_followup / random_audit): approved = giữ / bán lại, taken_down = gỡ hẳn (archived + tự cảnh cáo). approved chỉ khi đã xem 100% trang và đạt đủ checklist; quyết định khác bắt buộc nhận xét.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'changes_requested', 'rejected', 'taken_down'] }, comment: { type: 'string' }, issueStrike: { type: 'boolean', description: 'rejected + true → cảnh cáo nguồn rejection' }, checklist: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'string', format: 'uuid' }, passed: { type: 'boolean' } } } } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
 
     // ---- MARKET + RUT TIEN (rev8 luong 4, 6) ----
     '/market/listings': { get: { tags: ['Market'], summary: 'Truyện đang bán (chỉ published)', security: [{ BearerAuth: [] }], parameters: [{ name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'competency', in: 'query', schema: { type: 'string' } }, { name: 'age', in: 'query', schema: { type: 'string' } }, { name: 'priceTierId', in: 'query', schema: { type: 'string' } }, { name: 'sort', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: '{ items: [{ id, title, topic, totalPages, priceTier, seller, purchaseCount, owned }], pagination }' } } } },
@@ -2017,82 +2018,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    '/moderation/reports': {
-      post: {
-        tags: ['Moderation'],
-        summary: '[Parent] Gửi báo cáo nội dung vi phạm hoặc bài học không phù hợp',
-        description: '**Quyền truy cập:** `parent`.\nPhụ huynh gửi báo cáo vi phạm tác phẩm hoặc nhận xét (danh mục: đáng sợ, bạo lực, bài học sai lệch...). Nếu 1 truyện nhận >= 3 báo cáo trong 24h sẽ tự động tạm đình chỉ.',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['category'],
-                properties: {
-                  listingId: { type: 'string', format: 'uuid' },
-                  pageId: { type: 'string', format: 'uuid' },
-                  productReviewId: { type: 'string', format: 'uuid' },
-                  category: {
-                    type: 'string',
-                    enum: ['scary', 'violent', 'inappropriate_lesson', 'personal_info', 'technical_error', 'other'],
-                  },
-                  description: { type: 'string', example: 'Hình ảnh ở trang 3 có chi tiết hơi đáng sợ với bé nhỏ tuổi' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Báo cáo vi phạm đã được tiếp nhận' },
-        },
-      },
-      get: {
-        tags: ['Moderation'],
-        summary: '[Moderator | Admin] Xem danh sách các báo cáo vi phạm từ cộng đồng',
-        description: '**Quyền truy cập:** `moderator`, `admin`.\nLấy danh sách các phản ánh của phụ huynh cần xử lý.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'resolved', 'dismissed'] } },
-          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
-        ],
-        responses: {
-          200: { description: 'Lấy danh sách báo cáo vi phạm thành công' },
-        },
-      },
-    },
-
-    '/moderation/reports/{reportId}/resolve': {
-      put: {
-        tags: ['Moderation'],
-        summary: '[Moderator | Admin] Xử lý đóng hoặc bác bỏ báo cáo vi phạm',
-        description: '**Quyền truy cập:** `moderator`, `admin`.\nCập nhật trạng thái xử lý báo cáo vi phạm (đã xử lý `resolved` hoặc bác bỏ `dismissed`).',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'reportId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['status'],
-                properties: {
-                  status: { type: 'string', enum: ['resolved', 'dismissed'] },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Xử lý báo cáo vi phạm thành công' },
-        },
-      },
-    },
-
     '/moderation/reviews/queue': {
       get: {
         tags: ['Moderation'],
@@ -2165,53 +2090,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    '/moderation/strikes': {
-      post: {
-        tags: ['Moderation'],
-        summary: '[Moderator | Admin] Phạt đánh gậy tác giả vi phạm tiêu chuẩn cộng đồng',
-        description: '**Quyền truy cập:** `moderator`, `admin`.\nÁp dụng biện pháp xử phạt tác giả. Tích lũy 3 gậy còn hiệu lực trong 90 ngày sẽ khiến tài khoản Seller tự động bị đình chỉ (`suspended`).',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['sellerId', 'source', 'reason'],
-                properties: {
-                  sellerId: { type: 'string', format: 'uuid' },
-                  source: { type: 'string', enum: ['report', 'rejection', 'takedown'] },
-                  sourceId: { type: 'string', format: 'uuid' },
-                  reason: { type: 'string', example: 'Cố tình chèn nội dung bạo lực không phù hợp với lứa tuổi 3-6' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Phạt gậy tác giả thành công' },
-        },
-      },
-    },
-
-    '/moderation/sellers/{sellerId}/strikes': {
-      get: {
-        tags: ['Moderation'],
-        summary: '[Moderator | Admin] Xem lịch sử xử phạt của một tác giả',
-        description: '**Quyền truy cập:** `moderator`, `admin`.\nXem toàn bộ gậy vi phạm còn hiệu lực và lịch sử kháng cáo của tác giả.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'sellerId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Lấy lịch sử xử phạt thành công' },
-        },
-      },
-    },
-
-    /* =========================================================================
-     * PLANS & SUBSCRIPTIONS
-     * ========================================================================= */
     '/plans': {
       get: {
         tags: ['Plans & Subscriptions'],
@@ -2558,6 +2436,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     // ==========================================
     ...storiesPaths,
     ...moderatorPaths,
+    ...monitoringPaths,
 
     // =========================================================================
     // Content Library: Backgrounds
@@ -2949,106 +2828,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
 
     // =========================================================================
     // Moderation: Strike Appeals (Khiếu nại gậy cảnh cáo)
-    // =========================================================================
-    '/moderation/strikes/{strikeId}/appeals': {
-      post: {
-        tags: ['Moderation'],
-        summary: '[Seller] Gửi đơn khiếu nại đối với gậy cảnh cáo',
-        description: 'Tác giả (Seller) gửi giải trình và lý do khiếu nại đối với gậy cảnh cáo đã nhận từ kiểm duyệt viên.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'strikeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['reason'],
-                properties: {
-                  reason: { type: 'string', minLength: 10, example: 'Truyện của tôi tuân thủ hoàn toàn hướng dẫn, tình huống tranh chấp đồ chơi là để dạy bé bài học chia sẻ chứ không mang tính bạo lực.' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Gửi đơn khiếu nại thành công' },
-          400: { description: 'Gậy đã hết hạn hoặc đã được gỡ bỏ' },
-          409: { description: 'Gậy này đã có đơn khiếu nại' },
-        },
-      },
-    },
-
-    '/moderation/my-appeals': {
-      get: {
-        tags: ['Moderation'],
-        summary: '[Seller] Xem danh sách đơn khiếu nại của chính mình',
-        security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'Danh sách đơn khiếu nại của tác giả' },
-        },
-      },
-    },
-
-    '/moderation/appeals': {
-      get: {
-        tags: ['Moderation'],
-        summary: '[Moderator / Admin] Xem danh sách tất cả đơn khiếu nại gậy cảnh cáo',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'status', in: 'query', schema: { type: 'string', enum: ['pending', 'approved', 'rejected', 'cancelled'] } },
-          { name: 'sellerId', in: 'query', schema: { type: 'string', format: 'uuid' } },
-          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
-        ],
-        responses: {
-          200: { description: 'Danh sách đơn khiếu nại phân trang' },
-        },
-      },
-    },
-
-    '/moderation/appeals/{appealId}/decide': {
-      post: {
-        tags: ['Moderation'],
-        summary: '[Admin] Phê duyệt hoặc từ chối đơn khiếu nại gậy cảnh cáo',
-        description: 'Chỉ Admin mới có quyền quyết định. Nếu chấp thuận (`approved`), hệ thống tự động gỡ bỏ gậy cảnh cáo (`revokedAt = now()`), khôi phục trạng thái hoạt động của Seller nếu trước đó bị đình chỉ, ghi nhật ký kiểm toán và gửi thông báo tới Seller.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'appealId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['status'],
-                properties: {
-                  status: { type: 'string', enum: ['approved', 'rejected'], example: 'approved' },
-                  decisionNote: { type: 'string', example: 'Sau khi rà soát lại nội dung trang truyện, khiếu nại của tác giả là có cơ sở.' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Xử lý quyết định thành công' },
-        },
-      },
-    },
-
-    // =========================================================================
-    // Notifications (Hệ thống thông báo đẩy)
-    // =========================================================================
-
-
-
-
-
-    // =========================================================================
-    // Reports & Supervision
     // =========================================================================
     '/reports/eq/children/{childId}': {
       get: {

@@ -6,12 +6,13 @@ import { formatStoryDetail, STORY_DETAIL_INCLUDE } from '../stories/lib/storyFor
 import { findReviewGaps } from '../stories/lib/editorRules.js';
 import {
   CLAIM_MINUTES,
-  LISTING_STATUS_BY_DECISION,
   aliasErrors,
   claimedByOther,
   leftoverNameErrors,
   reviewProgress,
 } from './lib/publish.js';
+import { DECISIONS_BY_REVIEW_TYPE, LISTING_STATUS_BY_DECISION } from '../monitoring/lib/monitoring.js';
+import { closeOpenReports, issueStrikeTx } from '../monitoring/monitoring.service.js';
 
 const TX = { timeout: 20000 };
 const unprocessable = (message, errors = []) => new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, message, errors);
@@ -204,10 +205,13 @@ export async function getMyListings(user) {
 // Kiem duyet
 // ---------------------------------------------------------------------------
 
-/** Hang doi: luot duyet chua quyet, cu nhat truoc. */
+/**
+ * Hang doi: luot duyet chua quyet, cu nhat truoc. Gom luot nop ban (submission) va hau kiem tren truyen
+ * da ban: bao cao (report_followup, truyen dang tam go) + kiem tra ngau nhien (random_audit).
+ */
 export async function getQueue(moderator, { now = new Date() } = {}) {
   const rows = await prisma.moderationReview.findMany({
-    where: { decidedAt: null, listing: { status: { in: ['submitted', 'in_review'] } } },
+    where: { decidedAt: null, listing: { status: { in: ['submitted', 'in_review', 'published', 'suspended'] } } },
     orderBy: { createdAt: 'asc' },
     include: {
       listing: {
@@ -215,6 +219,7 @@ export async function getQueue(moderator, { now = new Date() } = {}) {
           priceTier: true,
           seller: { select: { displayName: true } },
           publishedStory: { select: { length: true, topic: { select: { title: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true } } } },
+          _count: { select: { contentReports: { where: { status: 'open' } } } },
         },
       },
       moderator: { select: { id: true, fullName: true } },
@@ -231,7 +236,10 @@ export async function getQueue(moderator, { now = new Date() } = {}) {
     competency: r.listing.publishedStory.topic.skill.caselCode,
     pageCount: r.listing.publishedStory._count.pages,
     hasAiContent: r.listing.hasAiContent,
+    listingStatus: r.listing.status,
+    openReports: r.listing._count.contentReports,
     submittedAt: r.listing.submittedAt,
+    createdAt: r.createdAt,
     claimedBy: r.claimExpiresAt && r.claimExpiresAt > now ? { id: r.moderator?.id, name: r.moderator?.fullName, mine: r.moderatorId === moderator.id } : null,
   }));
 }
@@ -280,6 +288,7 @@ export async function getReview(moderator, reviewId, { now = new Date() } = {}) 
     review: {
       id: review.id,
       reviewType: review.reviewType,
+      allowedDecisions: DECISIONS_BY_REVIEW_TYPE[review.reviewType],
       decision: review.decision,
       comment: review.comment,
       decidedAt: review.decidedAt,
@@ -316,14 +325,20 @@ export async function viewPage(moderator, reviewId, pageId, { comment } = {}, { 
 }
 
 /**
- * Quyet dinh. body: { decision: approved|changes_requested|rejected, comment?, checklist: [{ itemId, passed }] }.
- * approved: phai xem 100% trang + dat du checklist. changes_requested / rejected: bat buoc nhan xet.
+ * Quyet dinh. body: { decision, comment?, checklist: [{ itemId, passed }], issueStrike? }.
+ * - Luot nop ban: approved | changes_requested | rejected (rejected + issueStrike -> canh cao nguon `rejection`).
+ * - Luot hau kiem (bao cao / ngau nhien): approved = giu (truyen dang tam go -> ban lai) | taken_down = go han
+ *   (listing archived, tu canh cao nguon `takedown`). Bao cao con mo cua truyen dong theo quyet dinh.
+ * approved: phai xem 100% trang + dat du checklist. Quyet dinh khac: bat buoc nhan xet.
  */
 export async function decide(moderator, reviewId, body, { now = new Date() } = {}) {
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM moderation_reviews WHERE id = ${reviewId}::uuid FOR UPDATE`;
     const review = await loadReview(reviewId, tx);
     await assertClaimed(moderator, review, now);
+    if (!DECISIONS_BY_REVIEW_TYPE[review.reviewType].includes(body.decision)) {
+      throw unprocessable('Quyết định không hợp lệ với loại lượt duyệt này.');
+    }
     const items = await tx.checklistItem.findMany({ where: { isActive: true }, select: { id: true } });
     const known = new Set(items.map((i) => i.id));
     for (const r of body.checklist ?? []) {
@@ -342,13 +357,19 @@ export async function decide(moderator, reviewId, body, { now = new Date() } = {
     if (body.decision === 'approved' && !progress.canApprove) {
       throw unprocessable(`Cần xem hết ${progress.pagesTotal} trang (đã xem ${progress.pagesViewed}) và đạt đủ ${progress.checklistTotal} mục checklist (đạt ${progress.checklistPassed}) trước khi duyệt.`);
     }
-    if (body.decision !== 'approved' && !body.comment?.trim()) throw unprocessable('Hãy ghi nhận xét để người bán biết cần sửa gì.');
+    const comment = body.comment?.trim() || null;
+    if (body.decision !== 'approved' && !comment) throw unprocessable('Hãy ghi nhận xét để người bán biết cần sửa gì.');
 
-    await tx.moderationReview.update({ where: { id: reviewId }, data: { decision: body.decision, comment: body.comment?.trim() || null, decidedAt: now } });
+    await tx.moderationReview.update({ where: { id: reviewId }, data: { decision: body.decision, comment, decidedAt: now } });
     await tx.listing.update({
       where: { id: review.listingId },
-      data: { status: LISTING_STATUS_BY_DECISION[body.decision], ...(body.decision === 'approved' && { publishedAt: now }) },
+      data: { status: LISTING_STATUS_BY_DECISION[body.decision], ...(body.decision === 'approved' && !review.listing.publishedAt && { publishedAt: now }) },
     });
+    if (review.reviewType !== 'submission') await closeOpenReports(tx, moderator.id, review.listingId, body.decision, now);
+    const strikeSource = body.decision === 'taken_down' ? 'takedown' : body.decision === 'rejected' && body.issueStrike ? 'rejection' : null;
+    if (strikeSource) {
+      await issueStrikeTx(tx, moderator.id, { sellerId: review.listing.sellerId, source: strikeSource, sourceId: reviewId, reason: `${review.listing.title}: ${comment}` }, now);
+    }
   }, TX);
   return getReview(moderator, reviewId, { now });
 }

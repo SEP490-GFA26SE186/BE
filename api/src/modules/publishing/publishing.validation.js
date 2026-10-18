@@ -30,8 +30,9 @@ const viewPage = z.object({
 const decide = z.object({
   params: z.object({ reviewId: uuid('reviewId') }),
   body: z.object({
-    decision: z.enum(['approved', 'changes_requested', 'rejected']),
+    decision: z.enum(['approved', 'changes_requested', 'rejected', 'taken_down']),
     comment: z.string().max(4000).optional(),
+    issueStrike: z.boolean().optional(),
     checklist: z.array(z.object({ itemId: uuid('itemId'), passed: z.boolean() })).default([]),
   }),
 });

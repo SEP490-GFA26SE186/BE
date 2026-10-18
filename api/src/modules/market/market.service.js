@@ -45,6 +45,9 @@ const formatCard = (l, owned = false) => ({
   owned,
 });
 
+// Dang ban duoc: listing published VA nguoi ban con hoat dong (3 canh cao -> tai khoan ban bi khoa, an het).
+const SELLABLE = { status: 'published', seller: { status: 'approved' } };
+
 async function ownedListingIds(userId, listingIds) {
   if (!userId || !listingIds.length) return new Set();
   const rows = await prisma.entitlement.findMany({ where: { parentId: userId, listingId: { in: listingIds }, revokedAt: null }, select: { listingId: true } });
@@ -55,7 +58,7 @@ async function ownedListingIds(userId, listingIds) {
 export async function listListings(user, { search, competency = 'all', age = 'all', priceTierId = 'all', sort = 'best_selling', page = 1, limit = 8 }) {
   const keyword = search?.trim();
   const where = {
-    status: 'published',
+    ...SELLABLE,
     ...(priceTierId !== 'all' && { priceTierId }),
     publishedStory: {
       topic: {
@@ -85,7 +88,7 @@ export async function listListings(user, { search, competency = 'all', age = 'al
 
 /** GET /market/listings/:id — chi tiet + trang dau xem truoc (ten chung). */
 export async function getListing(user, listingId) {
-  const l = await prisma.listing.findFirst({ where: { id: listingId, status: 'published' }, include: LISTING_INCLUDE });
+  const l = await prisma.listing.findFirst({ where: { id: listingId, ...SELLABLE }, include: LISTING_INCLUDE });
   if (!l) throw ApiError.notFound('Không tìm thấy truyện đang bán.');
   const [owned, first, characters] = await Promise.all([
     ownedListingIds(user?.id, [l.id]),
@@ -112,7 +115,7 @@ export async function listOwned(user) {
  * Gia + ti le nguoi ban nhan duoc CHOT vao order_item luc dat (SNAPSHOT, DBML order_items).
  */
 export async function checkoutListing(user, listingId) {
-  const l = await prisma.listing.findFirst({ where: { id: listingId, status: 'published' }, include: { priceTier: true } });
+  const l = await prisma.listing.findFirst({ where: { id: listingId, ...SELLABLE }, include: { priceTier: true } });
   if (!l) throw ApiError.notFound('Không tìm thấy truyện đang bán.');
   if (l.sellerId === user.id) throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'Đây là truyện của ba mẹ, không cần mua.');
   if ((await ownedListingIds(user.id, [l.id])).size) throw new ApiError(StatusCodes.CONFLICT, 'Ba mẹ đã có truyện này.');

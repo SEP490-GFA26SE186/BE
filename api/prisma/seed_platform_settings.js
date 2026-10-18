@@ -69,6 +69,12 @@ export const platformSettingsData = [
   { key: 'market.seller_share_rate', value: 0.8 },
   { key: 'market.earning_hold_days', value: 3 },
   { key: 'market.min_withdrawal_vnd', value: 50000 },
+  // Giám sát (luồng 7): đủ 3 người khác nhau báo cáo trong 24 giờ -> tự tạm gỡ; cảnh cáo hiệu lực 90 ngày,
+  // 3 cảnh cáo còn hiệu lực -> khoá tài khoản bán; mỗi tuần chọn 3 truyện đang bán để kiểm tra ngẫu nhiên.
+  { key: 'moderation.report_threshold', value: 3 },
+  { key: 'moderation.strike_limit', value: 3 },
+  { key: 'moderation.strike_valid_days', value: 90 },
+  { key: 'moderation.audit_per_week', value: 3 },
 ];
 
 export async function seedPlatformSettings(prisma) {

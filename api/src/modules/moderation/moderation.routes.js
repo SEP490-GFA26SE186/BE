@@ -16,45 +16,9 @@ router.post(
 );
 
 // ---------------------------------------------------------------------------
-// Community reporting (Any authenticated parent)
-// ---------------------------------------------------------------------------
-router.post(
-  '/reports',
-  auth,
-  validate(moderationValidation.createReport),
-  moderationController.createReport,
-);
-
-// ---------------------------------------------------------------------------
 // Moderator & Admin endpoints
 // ---------------------------------------------------------------------------
 const requireModerator = [auth, authorize('admin', 'moderator')];
-const requireAdmin = [auth, authorize('admin')];
-
-import contentLibraryController from '../content-library/content-library.controller.js';
-import contentLibraryValidation from '../content-library/content-library.validation.js';
-
-// Blocked keywords management
-router.get('/keywords', ...requireModerator, moderationController.getBlockedKeywords);
-router.post(
-  '/keywords',
-  ...requireModerator,
-  validate(moderationValidation.createKeyword),
-  moderationController.addBlockedKeyword,
-);
-router.post(
-  '/keywords/bulk',
-  ...requireModerator,
-  validate(contentLibraryValidation.bulkImportKeywords),
-  contentLibraryController.bulkImportKeywords,
-);
-router.put(
-  '/keywords/:id',
-  ...requireModerator,
-  validate(contentLibraryValidation.updateKeyword),
-  contentLibraryController.updateKeyword,
-);
-router.delete('/keywords/:id', ...requireAdmin, moderationController.deleteBlockedKeyword);
 
 // Moderation review queue and decisions
 router.get('/reviews/queue', ...requireModerator, moderationController.getReviewQueue);
@@ -69,40 +33,6 @@ router.post(
   ...requireModerator,
   validate(moderationValidation.reviewDecision),
   moderationController.submitReviewDecision,
-);
-
-// Reports management
-router.get('/reports', ...requireModerator, moderationController.getReports);
-router.put(
-  '/reports/:reportId/resolve',
-  ...requireModerator,
-  validate(moderationValidation.resolveReport),
-  moderationController.resolveReport,
-);
-
-// Creator strikes
-router.post(
-  '/strikes',
-  ...requireModerator,
-  validate(moderationValidation.issueStrike),
-  moderationController.issueStrike,
-);
-router.get('/sellers/:sellerId/strikes', ...requireModerator, moderationController.getSellerStrikes);
-
-// Strike Appeals (Khiếu nại gậy cảnh cáo)
-router.post(
-  '/strikes/:strikeId/appeals',
-  auth,
-  validate(moderationValidation.createStrikeAppeal),
-  moderationController.createStrikeAppeal,
-);
-router.get('/my-appeals', auth, moderationController.getMyStrikeAppeals);
-router.get('/appeals', ...requireModerator, validate(moderationValidation.getStrikeAppeals), moderationController.getStrikeAppeals);
-router.post(
-  '/appeals/:appealId/decide',
-  ...requireAdmin,
-  validate(moderationValidation.decideStrikeAppeal),
-  moderationController.decideStrikeAppeal,
 );
 
 export default router;
