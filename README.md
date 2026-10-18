@@ -71,6 +71,35 @@ docker compose exec api npx prisma db seed           # eq_skills + topics
 Migration **phải** đi qua `DIRECT_URL` (port **5432**). Port 6543 là pgbouncer ở
 chế độ transaction, nó không giữ session nên Prisma migrate sẽ lỗi.
 
+### `ai` chạy ngoài Docker — chữ thật bằng Claude CLI + giọng đọc VieNeu (chỉ dev)
+
+Container `ai` mặc định là **mock**: chữ là vài câu cố định lặp lại (các trang gần như y hệt nhau,
+không có mạch truyện) — chỉ để chạy thử luồng. Muốn truyện thật mà không có `ANTHROPIC_API_KEY`, chạy
+`ai` trên máy với `LLM_PROVIDER=claude_code` (dùng CLI `claude` đang đăng nhập; image không có CLI).
+VieNeu cũng nhanh gấp ~2 lần khi chạy thẳng trên Windows (trang 51 tiếng: 17 s so với 31–38 s).
+
+```bash
+# 1. Một lần: venv Python 3.12 (VieNeu chỉ hỗ trợ 3.10–3.13)
+cd ai
+py -3.12 -m venv .venv312          # hoặc python 3.12 do uv cài
+.venv312/Scripts/python -m pip install -e ".[tts,claude-code]"
+# ai/.env: INTERNAL_TOKEN (bằng BE/.env), LLM_PROVIDER=claude_code, LLM_CLAUDE_MODEL=sonnet,
+#          LLM_CLAUDE_EFFORT=low, LLM_THINKING_BUDGET=12000, LLM_CLAUDE_CLI_PATH=<...\claude.exe>,
+#          TTS_PROVIDER=vieneu, CLOUDINARY_* (xem ai/README "Claude", "TTS")
+
+# 2. Mỗi lần dev: chạy ai trên máy, cổng 8001
+.venv312/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+
+# 3. Worker trong Docker gọi sang máy: thêm docker-compose.hostai.yml vào COMPOSE_FILE (.env)
+COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.localdb.yml;docker-compose.hostai.yml
+docker compose up -d
+```
+
+`curl localhost:8001/health` phải báo `"llm_provider":"claude_code"` và `"tts_provider":"vieneu"`.
+Container `ai` vẫn chạy (worker phụ thuộc nó) nhưng không ai gọi — đặt `TTS_PROVIDER=mock` trong `.env`
+để nó khỏi nạp model giọng đọc. **Không dùng `claude_code` để phục vụ người dùng thật** (gói CLI là
+dùng cá nhân); production dùng `LLM_PROVIDER=claude` + API key.
+
 ### DB local — khuyên dùng khi dev
 
 Qua pooler Supabase mỗi truy vấn mất ~600–900 ms (editor lưu một trang 3–19 s, có lúc 500

@@ -42,3 +42,8 @@ line-length = 100
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# Chi dong goi app/: thu muc out/ (ket qua script thu that, git-ignored) lam setuptools tu do
+# nham "nhieu package top-level" va `pip install -e .` that bai.
+[tool.setuptools.packages.find]
+include = ["app*"]
