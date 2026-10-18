@@ -11,13 +11,6 @@ const createChild = z.object({
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be formatted as YYYY-MM-DD')
       .optional(),
-    dailyScreenTimeMinutes: z
-      .number({ invalid_type_error: 'Screen time must be a number of minutes' })
-      .int('Screen time must be an integer')
-      .min(5, 'Minimum screen time is 5 minutes')
-      .max(300, 'Maximum screen time is 300 minutes')
-      .optional()
-      .default(30),
     preferredVoice: z
       .string()
       .trim()
@@ -50,12 +43,6 @@ const updateChild = z.object({
     birthDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be formatted as YYYY-MM-DD')
-      .optional(),
-    dailyScreenTimeMinutes: z
-      .number({ invalid_type_error: 'Screen time must be a number of minutes' })
-      .int('Screen time must be an integer')
-      .min(5, 'Minimum screen time is 5 minutes')
-      .max(300, 'Maximum screen time is 300 minutes')
       .optional(),
     preferredVoice: z
       .string()
@@ -102,20 +89,7 @@ const getUsage = z.object({
   }),
 });
 
-const logUsageSession = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid child ID format'),
-  }),
-  body: z.object({
-    durationSeconds: z
-      .number({ required_error: 'Duration in seconds is required' })
-      .int()
-      .positive('Duration must be positive'),
-    startedAt: z.string().datetime().optional(),
-    endedAt: z.string().datetime().optional(),
-  }),
-});
-
+// Phien dung may: duration_seconds va usage_date la cot DB tu sinh tu started_at / ended_at (rev8).
 const updateAvatar = z.object({
   params: z.object({
     id: z.string().uuid('Invalid child ID format'),
@@ -126,13 +100,15 @@ const updateAvatar = z.object({
   }),
 });
 
+// Bao cao EQ cong don toan bo lich su (eq_competency_stats, docs/01) — khong loc theo ngay.
+const getEqJourney = z.object({
+  params: z.object({ id: z.string().uuid('Invalid child ID format') }),
+  query: z.object({ weeks: z.coerce.number().int().min(4).max(26).default(8) }),
+});
+
 const getEqReport = z.object({
   params: z.object({
     id: z.string().uuid('Invalid child ID format'),
-  }),
-  query: z.object({
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }),
 });
 
@@ -144,6 +120,10 @@ const getChildBookshelf = z.object({
     page: z.string().regex(/^\d+$/).transform(Number).default('1'),
     limit: z.string().regex(/^\d+$/).transform(Number).default('10'),
     search: z.string().trim().optional(),
+    status: z.enum(['all', 'reading', 'completed', 'not_started']).default('all'),
+    competency: z
+      .enum(['all', 'self_awareness', 'self_management', 'social_awareness', 'relationship_skills', 'responsible_decision_making'])
+      .default('all'),
   }),
 });
 
@@ -153,8 +133,8 @@ export default {
   getChild,
   deleteChild,
   getUsage,
-  logUsageSession,
   updateAvatar,
   getEqReport,
+  getEqJourney,
   getChildBookshelf,
 };

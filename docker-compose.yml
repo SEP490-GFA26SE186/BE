@@ -43,11 +43,22 @@ services:
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
       BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-StoryWeaver AI}
+      # payOS (thu tien goi / truyen). PAYOS_PAYOUT_* chi khi chi ho dung kenh rieng.
       PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
       PAYOS_API_KEY: ${PAYOS_API_KEY:-}
       PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
-      PAYOS_RETURN_URL: ${PAYOS_RETURN_URL:-}
-      PAYOS_CANCEL_URL: ${PAYOS_CANCEL_URL:-}
+      PAYOS_PAYOUT_CLIENT_ID: ${PAYOS_PAYOUT_CLIENT_ID:-}
+      PAYOS_PAYOUT_API_KEY: ${PAYOS_PAYOUT_API_KEY:-}
+      PAYOS_PAYOUT_CHECKSUM_KEY: ${PAYOS_PAYOUT_CHECKSUM_KEY:-}
+      # Ma hoa so tai khoan ngan hang nguoi ban (32 byte hex/base64). Production bat buoc; dev trong = suy tu JWT_SECRET.
+      BANK_DATA_KEY: ${BANK_DATA_KEY:-}
+      # Trang Web payOS tra nguoi dung ve (returnUrl / cancelUrl).
+      WEB_URL: ${WEB_URL:-http://localhost:5173}
+      # Ky link xem anh / audio cho client (api/src/clients/assetUrl.js). Cung tai khoan + folder voi ai.
+      # Khong can CLOUDINARY_API_KEY: link giao file chi ky bang secret.
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-storyweaver}
       # CO Y khong co AI_SERVICE_URL: moi yeu cau sinh noi dung phai qua queue.
     ports:
       - "3000:3000"
@@ -68,7 +79,12 @@ services:
       REDIS_URL: redis://redis:6379
       AI_SERVICE_URL: http://ai:8000
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-12000}
+      # Timeout goi ai/ theo job (ms). De trong = mac dinh JOB_CONFIG trong api/src/clients/aiClient.js
+      # (320s story_text, 90s anh, 150s narration). Xem docs/contracts/ai-service.md §6.
+      AI_TIMEOUT_MS_STORY_TEXT: ${AI_TIMEOUT_MS_STORY_TEXT:-}
+      AI_TIMEOUT_MS_CHARACTER_PORTRAIT: ${AI_TIMEOUT_MS_CHARACTER_PORTRAIT:-}
+      AI_TIMEOUT_MS_SCENE_IMAGE: ${AI_TIMEOUT_MS_SCENE_IMAGE:-}
+      AI_TIMEOUT_MS_NARRATION: ${AI_TIMEOUT_MS_NARRATION:-}
       AI_JOB_ATTEMPTS: ${AI_JOB_ATTEMPTS:-3}
       AI_WORKER_CONCURRENCY: ${AI_WORKER_CONCURRENCY:-3}
       # CO Y khong co JWT_SECRET / BREVO_*: worker khong xu ly request cua user.
@@ -92,14 +108,55 @@ services:
   ai:
     build:
       context: ./ai
+      args:
+        # tts = cai VieNeu-TTS vao image (can khi TTS_PROVIDER=vieneu). Doi xong phai `up --build ai`.
+        AI_EXTRAS: ${AI_EXTRAS:-}
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      # Chu (mock | gemini | claude; claude_code chi chay ngoai Docker) va giong doc (mock; vieneu o M5) chon rieng. Anh chi co mock toi M4b.
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      TTS_PROVIDER: ${TTS_PROVIDER:-mock}
+      # Chi khi TTS_PROVIDER=vieneu. De trong = mac dinh ai/app/config.py (Kim Thanh, fp32, 120 s, mp3).
+      TTS_DEFAULT_VOICE: ${TTS_DEFAULT_VOICE:-}
+      TTS_VIENEU_PRECISION: ${TTS_VIENEU_PRECISION:-}
+      TTS_TIMEOUT_SECONDS: ${TTS_TIMEOUT_SECONDS:-}
+      TTS_AUDIO_FORMAT: ${TTS_AUDIO_FORMAT:-}
+      # Chi can khi LLM_PROVIDER=gemini; model phai ton tai (kiem luc khoi dong).
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-}
+      # Chi khi LLM_PROVIDER=claude (Anthropic API). Trong container khong co profile
+      # `ant auth login`, nen phai co ANTHROPIC_API_KEY. LLM_PROVIDER=claude_code (CLI, dev)
+      # khong chay duoc trong image nay: image khong cai claude-agent-sdk.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_CLAUDE_MODEL: ${LLM_CLAUDE_MODEL:-}
+      LLM_CLAUDE_THINKING: ${LLM_CLAUDE_THINKING:-}
+      LLM_CLAUDE_EFFORT: ${LLM_CLAUDE_EFFORT:-}
+      # Tuy chon. De trong = mac dinh trong ai/app/config.py (Settings bo qua bien rong).
+      # Bat bien: AI_TIMEOUT_MS_STORY_TEXT (worker) > 2 x LLM_TIMEOUT_SECONDS + overhead.
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-}
+      LLM_RETRY_TEMPERATURE: ${LLM_RETRY_TEMPERATURE:-}
+      LLM_THINKING_BUDGET: ${LLM_THINKING_BUDGET:-}
+      LLM_TRUNCATION_RETRY_FACTOR: ${LLM_TRUNCATION_RETRY_FACTOR:-}
+      TOKENS_PER_WORD: ${TOKENS_PER_WORD:-}
+      SCENE_DESCRIPTION_MAX_WORDS: ${SCENE_DESCRIPTION_MAX_WORDS:-}
+      IMAGE_PROFILE_PORTRAIT: ${IMAGE_PROFILE_PORTRAIT:-}
+      IMAGE_PROFILE_SCENE: ${IMAGE_PROFILE_SCENE:-}
+      PRICE_TEXT_INPUT_PER_MTOK_MICROS: ${PRICE_TEXT_INPUT_PER_MTOK_MICROS:-}
+      PRICE_TEXT_OUTPUT_PER_MTOK_MICROS: ${PRICE_TEXT_OUTPUT_PER_MTOK_MICROS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      # Luu file: du 3 bien CLOUDINARY_* -> Cloudinary, khong thi Supabase, khong thi LocalStorage.
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-storyweaver}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-story-assets}
-      # CO Y khong co DATABASE_URL / JWT_SECRET: service nay khong duoc doc DB.
+      # CO Y khong co DATABASE_URL / REDIS_URL / JWT_SECRET: service nay khong duoc doc DB.
+    volumes:
+      # Model VieNeu (~580 MB) tai lan dau, giu qua cac lan tao lai container.
+      - hf-cache:/home/appuser/.cache/huggingface
     expose:
       # Chi service trong network cua compose goi duoc. Khong ai tu host hay LAN
       # choc truc tiep vao endpoint sinh noi dung duoc.
@@ -108,3 +165,4 @@ services:
 
 volumes:
   redis-data:
+  hf-cache:

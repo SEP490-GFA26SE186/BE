@@ -1,0 +1,24 @@
+# =============================================================================
+# ai/ CHAY NGOAI DOCKER (chi dev) — worker trong Docker goi ai/ tren may host.
+#
+# Vi sao: chu that cho dev dung `LLM_PROVIDER=claude_code` (CLI `claude` dang dang nhap tren may),
+# ma CLI do khong co trong image; VieNeu-TTS chay thang tren Windows cung nhanh gap ~2 lan trong
+# Docker Desktop (trang 51 tieng: 17 s vs 31-38 s, do 2026-10-18).
+#
+#   # 1. ai/ tren may (venv Python 3.12: VieNeu ho tro 3.10-3.13), doc ai/.env
+#   cd ai && .venv312/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+#   # 2. gop file nay vao lenh compose (hoac them vao COMPOSE_FILE trong .env)
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.hostai.yml up -d
+#
+# Container `ai` van chay (worker depends_on no) nhung khong ai goi toi; dat TTS_PROVIDER=mock
+# trong .env de no khong nap model giong doc vo ich.
+# Cong 8001 (khong phai 8000): dev compose da map container ai ra 8000.
+# =============================================================================
+
+services:
+  worker:
+    environment:
+      AI_SERVICE_URL: http://host.docker.internal:8001
+    extra_hosts:
+      # Docker Desktop tu co host.docker.internal; dong nay de chay duoc ca tren Linux.
+      - "host.docker.internal:host-gateway"

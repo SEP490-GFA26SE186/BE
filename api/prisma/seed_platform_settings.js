@@ -1,0 +1,100 @@
+// =============================================================================
+// Seed: platform_settings cho luong sinh truyen (spec story-generation-node §5.1)
+// Gia tri khop BE/ai/docs/03-story-structure.md.
+//
+// Phai chay sau seedTopics: updated_by tro vao moderator ma seedTopics tao.
+// upsert voi update: {} — chay lai KHONG ghi de gia tri Admin da chinh.
+// =============================================================================
+
+const MODERATOR_EMAIL = 'pedagogy@storyweaver.ai';
+
+export const platformSettingsData = [
+  {
+    key: 'story_layout.short',
+    value: {
+      pages: 6,
+      checkpoints: [
+        { type: 'emotion_self', after: 2 },
+        { type: 'perspective', after: 3 },
+        { type: 'problem_solving', after: 4 },
+        { type: 'reflection', after: 6 },
+      ],
+    },
+  },
+  {
+    key: 'story_layout.medium',
+    value: {
+      pages: 8,
+      checkpoints: [
+        { type: 'emotion_self', after: 2 },
+        { type: 'perspective', after: 4 },
+        { type: 'problem_solving', after: 5 },
+        { type: 'reflection', after: 8 },
+      ],
+    },
+  },
+  {
+    key: 'story_layout.long',
+    value: {
+      pages: 10,
+      checkpoints: [
+        { type: 'emotion_self', after: 2 },
+        { type: 'perspective', after: 4 },
+        { type: 'problem_solving', after: 6 },
+        { type: 'emotion_other', after: 8 },
+        { type: 'reflection', after: 10 },
+      ],
+    },
+  },
+  { key: 'limits.page_min_words', value: 20 },
+  { key: 'limits.page_max_words', value: 70 },
+  { key: 'limits.page_target_min_words', value: 40 },
+  { key: 'limits.page_target_max_words', value: 60 },
+  { key: 'limits.sentence_max_words', value: 15 },
+  { key: 'limits.question_max_words', value: 15 },
+  { key: 'limits.option_max_words', value: 12 },
+  { key: 'limits.hint_max_words', value: 20 },
+  { key: 'limits.feedback_max_words', value: 25 },
+  { key: 'limits.max_scenes', value: 4 },
+  { key: 'custom_limits.min_pages', value: 4 },
+  { key: 'custom_limits.max_pages', value: 20 },
+  { key: 'custom_limits.max_checkpoints', value: 6 },
+  // tạm — câu hỏi mở §10.3 của spec
+  { key: 'ai_cost.story_text', value: 1 },
+  // Giọng đọc kể truyện (spec TTS §5.2): preset VieNeu, Node luôn gửi tường minh. Đổi giọng làm
+  // lệch vân tay mọi đoạn -> các truyện phải hoàn tất lại để đọc bằng giọng mới.
+  { key: 'tts.voice', value: 'Kim Thanh' },
+  // Chợ truyện (người dùng chốt 2026-10-18): người bán nhận 80% giá niêm yết, doanh thu giữ 3 ngày
+  // (để xử lý hoàn tiền) rồi mới rút được. Rút tối thiểu 50.000đ.
+  { key: 'market.seller_share_rate', value: 0.8 },
+  { key: 'market.earning_hold_days', value: 3 },
+  { key: 'market.min_withdrawal_vnd', value: 50000 },
+  // Hoàn tiền: phụ huynh yêu cầu trong N ngày kể từ lúc trả tiền — bằng số ngày giữ doanh thu, để tiền
+  // hoàn luôn lấy lại được từ doanh thu đang chờ của người bán.
+  { key: 'market.refund_window_days', value: 3 },
+  // Giám sát (luồng 7): đủ 3 người khác nhau báo cáo trong 24 giờ -> tự tạm gỡ; cảnh cáo hiệu lực 90 ngày,
+  // 3 cảnh cáo còn hiệu lực -> khoá tài khoản bán; mỗi tuần chọn 3 truyện đang bán để kiểm tra ngẫu nhiên.
+  { key: 'moderation.report_threshold', value: 3 },
+  { key: 'moderation.strike_limit', value: 3 },
+  { key: 'moderation.strike_valid_days', value: 90 },
+  { key: 'moderation.audit_per_week', value: 3 },
+];
+
+export async function seedPlatformSettings(prisma) {
+  console.log('🌱 Seeding platform_settings...');
+
+  const moderator = await prisma.user.findUnique({ where: { email: MODERATOR_EMAIL } });
+  if (!moderator) {
+    throw new Error(`Không thấy ${MODERATOR_EMAIL} — seedTopics phải chạy trước seedPlatformSettings.`);
+  }
+
+  for (const { key, value } of platformSettingsData) {
+    await prisma.platformSetting.upsert({
+      where: { key },
+      update: {},
+      create: { key, value, updatedBy: moderator.id },
+    });
+  }
+
+  console.log(`✅ platform_settings done (${platformSettingsData.length} khoá).`);
+}

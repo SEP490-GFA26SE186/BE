@@ -1,0 +1,36 @@
+{
+  "request_id": "try-conflict-strong",
+  "topic": {
+    "title": "Khi con giận dữ",
+    "competency": "self_management",
+    "guidance": "Giúp trẻ nhận ra cơn giận trong cơ thể, dừng lại trước khi làm đau người khác, và biết cách làm lành."
+  },
+  "characters": [
+    {"token": "{NV1}", "description": "bé trai 6 tuổi, tóc ngắn, áo xanh", "is_main": true},
+    {"token": "{NV2}", "description": "em gái 4 tuổi, buộc tóc hai bên", "is_main": false},
+    {"token": "{NV3}", "description": "bà nội", "is_main": false}
+  ],
+  "situation": "{NV1} giật con khủng long đồ chơi khỏi tay {NV2}. {NV2} bị ngã ngồi xuống sàn, khóc to. {NV1} hét lên \"của anh!\" rồi ném đồ chơi vào tường.",
+  "tone": "gentle",
+  "pages": ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"],
+  "checkpoints": [
+    {"id": "k1", "type": "emotion_self", "after": "p2"},
+    {"id": "k2", "type": "perspective", "after": "p4", "target": "{NV2}"},
+    {"id": "k3", "type": "problem_solving", "after": "p5"},
+    {"id": "k4", "type": "reflection", "after": "p8"}
+  ],
+  "limits": {
+    "page_min_words": 20,
+    "page_max_words": 70,
+    "page_target_min_words": 40,
+    "page_target_max_words": 60,
+    "sentence_max_words": 15,
+    "question_max_words": 15,
+    "option_max_words": 12,
+    "hint_max_words": 20,
+    "feedback_max_words": 25,
+    "max_scenes": 4
+  },
+  "forbidden_terms": ["An", "Bin"],
+  "blocked_keywords": [{"keyword": "đánh", "severity": "warn"}]
+}

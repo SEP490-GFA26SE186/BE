@@ -1,0 +1,42 @@
+{
+  "request_id": "try-custom-long",
+  "topic": {
+    "title": "Chia sẻ với bạn mới",
+    "competency": "relationship_skills",
+    "guidance": "Giúp trẻ nhận ra cảm xúc của bạn mới ở lớp, thử đặt mình vào vị trí bạn, và tìm cách rủ bạn cùng chơi."
+  },
+  "characters": [
+    {"token": "{NV1}", "description": "bé gái 7 tuổi, tóc dài, đeo cặp màu hồng", "is_main": true},
+    {"token": "{NV2}", "description": "bạn trai mới chuyển đến lớp, ít nói", "is_main": false},
+    {"token": "{NV3}", "description": "cô giáo chủ nhiệm", "is_main": false},
+    {"token": "{NV4}", "description": "bạn gái thân của nhân vật chính", "is_main": false}
+  ],
+  "situation": "Lớp có bạn mới. Giờ ra chơi bạn ấy đứng một mình ở góc sân, còn {NV1} mải chơi nhảy dây với {NV4}.",
+  "tone": "playful",
+  "pages": [
+    "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10",
+    "p11", "p12", "p13", "p14", "p15", "p16", "p17", "p18", "p19", "p20"
+  ],
+  "checkpoints": [
+    {"id": "k1", "type": "emotion_other", "after": "p3", "target": "{NV2}"},
+    {"id": "k2", "type": "perspective", "after": "p6", "target": "{NV4}"},
+    {"id": "k3", "type": "emotion_self", "after": "p9"},
+    {"id": "k4", "type": "problem_solving", "after": "p12"},
+    {"id": "k5", "type": "emotion_other", "after": "p16", "target": "{NV2}"},
+    {"id": "k6", "type": "reflection", "after": "p20"}
+  ],
+  "limits": {
+    "page_min_words": 20,
+    "page_max_words": 70,
+    "page_target_min_words": 40,
+    "page_target_max_words": 60,
+    "sentence_max_words": 15,
+    "question_max_words": 15,
+    "option_max_words": 12,
+    "hint_max_words": 20,
+    "feedback_max_words": 25,
+    "max_scenes": 4
+  },
+  "forbidden_terms": ["An", "Bin"],
+  "blocked_keywords": []
+}

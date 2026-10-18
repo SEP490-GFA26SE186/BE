@@ -1,6 +1,7 @@
 # ---- dependencies ----
 node_modules/
 .venv/
+.venv312/
 __pycache__/
 *.py[cod]
 
@@ -20,6 +21,9 @@ ai/.env.local
 dist/
 build/
 *.egg-info/
+
+# ---- output cua script thu Gemini that (chua noi dung truyen) ----
+ai/out/
 
 # ---- test / cache ----
 coverage/
@@ -41,5 +45,3 @@ Thumbs.db
 
 # ---- bao cao capstone (ban .docx khong commit vao repo code) ----
 *.docx
-
-*.md

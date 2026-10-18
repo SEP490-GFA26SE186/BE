@@ -16,6 +16,11 @@ const auth = async (req, _res, next) => {
 
     const token = authHeader.split(' ')[1];
     const payload = jwt.verify(token, env.jwt.secret);
+    // Token Kid Mode cung ky bang JWT_SECRET va co sub = id phu huynh: khong chan thi be (dang cam
+    // may o Kid Mode) goi duoc moi API cua phu huynh. Route cua be dung kidAuth.
+    if (payload.type === 'kid_session') {
+      throw ApiError.forbidden('Đang ở Kid Mode: ba mẹ cần nhập PIN để thoát trước.');
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },

@@ -60,15 +60,6 @@ const getChildUsage = catchAsync(async (req, res) => {
   });
 });
 
-const logUsageSession = catchAsync(async (req, res) => {
-  const session = await childrenService.logUsageSession(req.user.id, req.params.id, req.body);
-
-  return ApiResponse.created(res, {
-    message: 'Ghi nhận thời lượng sử dụng thành công',
-    data: { session },
-  });
-});
-
 const getChildOverview = catchAsync(async (req, res) => {
   const overview = await childrenService.getChildOverview(req.user.id, req.params.id);
 
@@ -87,6 +78,10 @@ const getChildEqReport = catchAsync(async (req, res) => {
   });
 });
 
+const getChildEqJourney = catchAsync(async (req, res) =>
+  ApiResponse.success(res, { data: await childrenService.getChildEqJourney(req.user.id, req.params.id, req.query) }),
+);
+
 const getChildBookshelf = catchAsync(async (req, res) => {
   const bookshelf = await childrenService.getChildBookshelf(req.user, req.params.id, req.query);
 
@@ -103,8 +98,8 @@ export default {
   deleteChild,
   updateChildAvatar,
   getChildUsage,
-  logUsageSession,
   getChildOverview,
   getChildEqReport,
+  getChildEqJourney,
   getChildBookshelf,
 };

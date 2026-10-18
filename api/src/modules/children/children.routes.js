@@ -32,12 +32,15 @@ router
   .get(validate(childrenValidation.getEqReport), childrenController.getChildEqReport);
 
 router
+  .route('/:id/eq-journey')
+  .get(validate(childrenValidation.getEqJourney), childrenController.getChildEqJourney);
+
+router
   .route('/:id/bookshelf')
   .get(validate(childrenValidation.getChildBookshelf), childrenController.getChildBookshelf);
 
 router
   .route('/:id/usage')
-  .get(validate(childrenValidation.getUsage), childrenController.getChildUsage)
-  .post(validate(childrenValidation.logUsageSession), childrenController.logUsageSession);
+  .get(validate(childrenValidation.getUsage), childrenController.getChildUsage);
 
 export default router;

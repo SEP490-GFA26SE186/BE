@@ -1,181 +1,151 @@
 import { z } from 'zod';
 
-const STORY_KINDS = ['private', 'published'];
+const STORY_LENGTHS = ['short', 'medium', 'long', 'custom'];
 const STORY_STATUSES = ['draft', 'generating', 'ready'];
-const PAGE_KINDS = ['lead_in', 'situation', 'consequence', 'ending'];
-const CONTENT_ORIGINS = ['human', 'ai', 'ai_edited'];
+const CHECKPOINT_TYPES = ['emotion_self', 'emotion_other', 'perspective', 'problem_solving', 'reflection'];
+const EMOTIONS = ['happy', 'sad', 'angry', 'scared', 'neutral'];
+const OPTION_ROLES = ['constructive', 'avoidant', 'impulsive'];
+const NEEDS_TARGET = ['emotion_other', 'perspective'];
+
+const uuid = (label) => z.string().uuid(`${label} không hợp lệ`);
+
+const storyParams = z.object({ id: uuid('ID truyện') });
+const pageParams = storyParams.extend({ pageId: uuid('ID trang') });
+const checkpointParams = storyParams.extend({ cpId: uuid('ID điểm dừng') });
+
+const title = z
+  .string({ error: 'Tên truyện là bắt buộc' })
+  .trim()
+  .min(1, 'Tên truyện không được để trống')
+  .max(200, 'Tên truyện không quá 200 ký tự');
+
+const situation = z.string().trim().max(2000, 'Tình huống không quá 2000 ký tự');
+
+// Dung mot isMain, khong trung characterId. Thu tu gui len quyet dinh token {NV2}, {NV3}...
+const characters = z
+  .array(
+    z.object({
+      characterId: uuid('ID nhân vật'),
+      isMain: z.boolean(),
+    }),
+  )
+  .min(1, 'Truyện cần ít nhất một nhân vật')
+  .refine((list) => list.filter((c) => c.isMain).length === 1, {
+    message: 'Truyện phải có đúng một nhân vật chính',
+  })
+  .refine((list) => new Set(list.map((c) => c.characterId)).size === list.length, {
+    message: 'Mỗi nhân vật chỉ được chọn một lần',
+  });
 
 const createStory = z.object({
-  body: z
-    .object({
-      topicId: z.string().uuid('Invalid topic ID format').optional(),
-      templateId: z.string().uuid('Invalid template ID format').optional(),
-      length: z.enum(['short', 'medium', 'long', 'custom']).default('medium'),
-      situation: z.string().trim().max(1000).optional(),
-      title: z
-        .string({ required_error: 'Story title is required' })
-        .trim()
-        .min(1, 'Title cannot be empty')
-        .max(200, 'Title must not exceed 200 characters'),
-      useAiImage: z.boolean().default(false),
-      useTts: z.boolean().default(true),
-      autoInitializePages: z.boolean().default(true),
-      characters: z
-        .array(
-          z.object({
-            token: z.string().trim().min(1).max(30).optional(),
-            slotKey: z.string().trim().min(1).max(30).optional(),
-            characterId: z.string().uuid('Invalid character ID format').nullable().optional(),
-            aliasName: z.string().trim().max(100).nullable().optional(),
-            isMain: z.boolean().optional(),
-          })
-        )
-        .optional(),
-    })
-    .refine((data) => data.topicId || data.templateId, {
-      message: 'Topic ID is required',
-      path: ['topicId'],
-    }),
+  body: z.object({
+    topicId: uuid('ID chủ đề'),
+    length: z.enum(STORY_LENGTHS, { error: 'Độ dài truyện phải là short, medium, long hoặc custom' }),
+    title,
+    situation: situation.optional(),
+    characters,
+    useAiImage: z.boolean().default(false),
+    useTts: z.boolean().default(true),
+  }),
 });
 
 const getStories = z.object({
   query: z.object({
-    kind: z.enum(STORY_KINDS).optional(),
     status: z.enum(STORY_STATUSES).optional(),
-    topicId: z.string().uuid().optional(),
-    templateId: z.string().uuid().optional(),
-    search: z.string().trim().optional(),
-    page: z
-      .string()
-      .regex(/^\d+$/)
-      .transform(Number)
-      .default('1'),
-    limit: z
-      .string()
-      .regex(/^\d+$/)
-      .transform(Number)
-      .default('10'),
+    // false = chua xem lai (reviewed_at IS NULL), true = da xem lai
+    reviewed: z.enum(['true', 'false']).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(10),
   }),
 });
 
-const getStory = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-  }),
-});
+const getStory = z.object({ params: storyParams });
 
 const updateStory = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-  }),
-  body: z.object({
-    title: z.string().trim().min(1).max(200).optional(),
-    useAiImage: z.boolean().optional(),
-    useTts: z.boolean().optional(),
-    status: z.enum(STORY_STATUSES).optional(),
-  }),
+  params: storyParams,
+  body: z
+    .object({
+      title: title.optional(),
+      situation: situation.nullable().optional(),
+      useAiImage: z.boolean().optional(),
+      useTts: z.boolean().optional(),
+    })
+    .refine((b) => Object.values(b).some((v) => v !== undefined), {
+      message: 'Cần gửi ít nhất một trường để cập nhật',
+    }),
 });
 
-const deleteStory = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-  }),
-});
+const deleteStory = z.object({ params: storyParams });
 
 const bindCharacters = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-  }),
-  body: z.object({
-    characters: z
-      .array(
-        z.object({
-          slotKey: z.string().trim().min(1).max(30),
-          characterId: z.string().uuid('Invalid character ID format').nullable().optional(),
-        })
-      )
-      .min(1, 'At least one character slot mapping must be provided'),
-  }),
+  params: storyParams,
+  body: z.object({ characters }),
 });
 
+// ---------------------------------------------------------------------------
+// Editor (spec §4.2). Chu cho phep chuoi rong / null = xoa trang; luat theo kieu diem dung kiem o
+// service (lib/editorRules.js) vi kieu nam trong DB.
+// ---------------------------------------------------------------------------
+
+const text = (label, max) => z.string({ error: `${label} phải là chuỗi` }).max(max, `${label} không quá ${max} ký tự`);
+
+const pageText = text('Nội dung trang', 2000);
+
 const updatePage = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-    pageId: z.string().uuid('Invalid page ID format'),
-  }),
-  body: z.object({
-    contentText: z.string().trim().nullable().optional(),
-    backgroundId: z.string().uuid('Invalid background ID format').nullable().optional(),
-    imageKey: z.string().trim().max(300).nullable().optional(),
-    audioKey: z.string().trim().max(300).nullable().optional(),
-    origin: z.enum(CONTENT_ORIGINS).optional(),
-  }),
+  params: pageParams,
+  body: z.object({ contentText: pageText.nullable() }),
 });
 
 const createPage = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-  }),
-  body: z.object({
-    stageId: z.string().uuid('Invalid stage ID format'),
-    pageKind: z.enum(PAGE_KINDS),
-    pageOrder: z.number().int().positive().optional(),
-    fromChoiceId: z.string().uuid('Invalid choice ID format').nullable().optional(),
-    contentText: z.string().trim().optional(),
-    backgroundId: z.string().uuid('Invalid background ID format').nullable().optional(),
-    origin: z.enum(CONTENT_ORIGINS).default('human'),
-  }),
+  params: storyParams,
+  body: z.object({ contentText: pageText.nullable().optional() }).default({}),
 });
 
-const deletePage = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-    pageId: z.string().uuid('Invalid page ID format'),
-  }),
+const deletePage = z.object({ params: pageParams });
+
+const checkpointOption = z.object({
+  text: text('Phương án', 300).nullable().optional(),
+  role: z.enum(OPTION_ROLES, { error: 'Vai của phương án phải là constructive, avoidant hoặc impulsive' }).optional(),
+  isCorrect: z.boolean({ error: 'isCorrect phải là true/false' }).optional(),
+  feedback: text('Phản hồi', 500).nullable().optional(),
 });
 
-const updateChoice = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-    pageId: z.string().uuid('Invalid page ID format'),
-    choiceId: z.string().uuid('Invalid choice ID format'),
-  }),
-  body: z.object({
-    choiceText: z.string().trim().min(1, 'Choice text cannot be empty'),
-    audioKey: z.string().trim().max(300).nullable().optional(),
-  }),
-});
-
-const reviewStory = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-  }),
-});
-
-const publishStoryVersion = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid story ID format'),
-  }),
+const updateCheckpoint = z.object({
+  params: checkpointParams,
   body: z
     .object({
-      title: z.string().trim().min(1).max(200).optional(),
-      nameReplacements: z
-        .array(
-          z.object({
-            token: z.string().trim().min(1).max(10).optional(),
-            slotKey: z.string().trim().min(1).max(30).optional(),
-            fromName: z.string().trim().min(1).max(100).optional(),
-            customName: z
-              .string({ required_error: 'Tên thay thế là bắt buộc' })
-              .trim()
-              .min(1, 'Tên thay thế không được để trống')
-              .max(100, 'Tên không quá 100 ký tự'),
-          })
-        )
+      question: text('Câu hỏi', 500).nullable().optional(),
+      hint: text('Gợi ý', 500).nullable().optional(),
+      answerEmotion: z
+        .enum(EMOTIONS, { error: 'Cảm xúc phải là happy, sad, angry, scared hoặc neutral' })
         .optional(),
+      options: z.array(checkpointOption, { error: 'Phương án phải là danh sách' }).max(10).optional(),
     })
-    .optional(),
+    .refine((b) => Object.values(b).some((v) => v !== undefined), {
+      message: 'Cần gửi ít nhất một trường để cập nhật',
+    }),
 });
+
+const createCheckpoint = z.object({
+  params: storyParams,
+  body: z
+    .object({
+      type: z.enum(CHECKPOINT_TYPES, { error: 'Kiểu điểm dừng không hợp lệ' }),
+      afterPageId: uuid('ID trang'),
+      targetToken: z.string().regex(/^\{NV\d+\}$/, 'Nhân vật được hỏi không hợp lệ').optional(),
+    })
+    .refine((b) => b.targetToken === undefined || NEEDS_TARGET.includes(b.type), {
+      message: 'Chỉ điểm dừng emotion_other hoặc perspective mới chọn nhân vật được hỏi',
+      path: ['targetToken'],
+    }),
+});
+
+const deleteCheckpoint = z.object({ params: checkpointParams });
+
+const reviewStory = z.object({ params: storyParams });
+
+// Route sinh chu / publish-version: Task 9 bo sung body khi cai handler that.
+const storyOnly = z.object({ params: storyParams });
 
 export default {
   createStory,
@@ -187,7 +157,9 @@ export default {
   updatePage,
   createPage,
   deletePage,
-  updateChoice,
+  updateCheckpoint,
+  createCheckpoint,
+  deleteCheckpoint,
   reviewStory,
-  publishStoryVersion,
+  storyOnly,
 };

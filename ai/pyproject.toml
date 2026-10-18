@@ -12,13 +12,28 @@ dependencies = [
     # REST API. Khong dung SDK supabase-py vi service nay chi can Storage —
     # keo ca SDK vao la keo theo cả auth/realtime/postgrest khong dung tới.
     "httpx>=0.27",
+    "google-genai>=2.25.0",
+    # LLM_PROVIDER=claude (Anthropic API); also used for its transform_schema helper.
+    "anthropic>=1.11.0,<2",
+    "pyyaml>=6.0.3",
 ]
+
+[project.optional-dependencies]
+# LLM_PROVIDER=claude_code: drives the logged-in `claude` CLI. DEV ONLY - the Docker image
+# (`uv sync --no-dev`, no extras) never installs it. Pinned: the SDK is coupled to a CLI
+# version (claude_agent_sdk._cli_version).
+claude-code = ["claude-agent-sdk==0.2.163"]
+# TTS_PROVIDER=vieneu: VieNeu-TTS v3 Turbo on CPU via ONNX (no torch), ~580 MB of model weights
+# downloaded to the Hugging Face cache on first start. Brings numpy + soundfile (MP3 encoding).
+# Docker installs it with build arg AI_EXTRAS=tts. Upstream supports Python 3.10-3.13.
+tts = ["vieneu==3.8.3"]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "ruff>=0.7",
+    "respx>=0.23.1",
 ]
 
 [tool.ruff]
@@ -27,3 +42,8 @@ line-length = 100
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# Chi dong goi app/: thu muc out/ (ket qua script thu that, git-ignored) lam setuptools tu do
+# nham "nhieu package top-level" va `pip install -e .` that bai.
+[tool.setuptools.packages.find]
+include = ["app*"]

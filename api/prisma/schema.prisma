@@ -1,6 +1,6 @@
 // =============================================================================
 // StoryWeaver AI – Prisma Schema (PostgreSQL)
-// SEP490 / SE186 – revision 8 – 49 models, 32 enums
+// SEP490 / SE186 – revision 8 – 50 models, 32 enums
 //
 // Nguon su that: ai/StoryWeaver-docs/StoryWeaver-docs/db/schema_rev8.dbml
 // Sai khac co y so voi DBML:
@@ -207,13 +207,6 @@ enum OrderItemStatus {
   @@map("order_item_status")
 }
 
-enum VoucherDiscountType {
-  percent
-  fixed
-
-  @@map("voucher_discount_type")
-}
-
 enum RequestStatus {
   pending
   approved
@@ -225,6 +218,7 @@ enum RequestStatus {
 
 enum WithdrawalStatus {
   requested
+  processing
   paid
   rejected
   cancelled
@@ -332,6 +326,7 @@ model User {
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz()
   lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz()
   isActive        Boolean   @default(true) @map("is_active")
+  aiBlockedUntil  DateTime? @map("ai_blocked_until") @db.Timestamptz()
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz()
@@ -344,18 +339,14 @@ model User {
   backgroundsCreated        Background[]        @relation("BackgroundCreator")
   blockedKeywordsCreated    BlockedKeyword[]    @relation("KeywordCreator")
   stories                   Story[]
-  promptTemplatesCreated    PromptTemplate[]    @relation("PromptTemplateCreator")
   aiRequests                AiRequest[]
   sellerProfile             SellerProfile?      @relation("SellerUser")
   sellerProfilesReviewed    SellerProfile[]     @relation("SellerReviewer")
-  cartItems                 CartItem[]
   entitlements              Entitlement[]
   productReviews            ProductReview[]     @relation("ReviewAuthor")
   hiddenReviews             ProductReview[]     @relation("ReviewHiddenBy")
   subscriptions             Subscription[]
-  vouchersCreated           Voucher[]           @relation("VoucherCreator")
   orders                    Order[]
-  voucherUsages             VoucherUsage[]
   refundRequestsMade        RefundRequest[]     @relation("RefundRequester")
   refundRequestsHandled     RefundRequest[]     @relation("RefundHandler")
   wallet                    Wallet?
@@ -370,7 +361,6 @@ model User {
   auditLogs                 AdminAuditLog[]
 
   @@index([role])
-  @@index([deletedAt])
   @@map("users")
 }
 
@@ -401,22 +391,20 @@ model AuthToken {
 }
 
 model ChildProfile {
-  id                     String    @id @default(uuid()) @db.Uuid
-  parentId               String    @map("parent_id") @db.Uuid
-  name                   String    @db.VarChar(100)
-  birthDate              DateTime? @map("birth_date") @db.Date
-  dailyScreenTimeMinutes Int       @default(30) @map("daily_screen_time_minutes")
-  preferredVoice         String?   @map("preferred_voice") @db.VarChar(50)
-  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
-  deletedAt              DateTime? @map("deleted_at") @db.Timestamptz()
+  id             String    @id @default(uuid()) @db.Uuid
+  parentId       String    @map("parent_id") @db.Uuid
+  name           String    @db.VarChar(100)
+  birthDate      DateTime? @map("birth_date") @db.Date
+  preferredVoice String?   @map("preferred_voice") @db.VarChar(50)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz()
 
   parent User @relation(fields: [parentId], references: [id], onDelete: Restrict)
 
   // -- back-references --
   authTokens        AuthToken[]
   character         Character?
-  usageSessions     ChildUsageSession[]
   bookshelfItems    BookshelfItem[]
   playSessions      PlaySession[]
   eqCompetencyStats EqCompetencyStat[]
@@ -450,23 +438,6 @@ model Character {
 
   @@index([parentId])
   @@map("characters")
-}
-
-/// @note duration_seconds: GENERATED ALWAYS AS (extract(epoch from ended_at - started_at)::int) STORED
-/// @note usage_date: GENERATED ALWAYS AS ((started_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date) STORED
-/// @note Ca hai cot generated duoc viet tay trong migration; Prisma khong sinh duoc.
-model ChildUsageSession {
-  id              String    @id @default(uuid()) @db.Uuid
-  childId         String    @map("child_id") @db.Uuid
-  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz()
-  endedAt         DateTime? @map("ended_at") @db.Timestamptz()
-  durationSeconds Int?      @default(dbgenerated()) @map("duration_seconds")
-  usageDate       DateTime  @default(dbgenerated()) @map("usage_date") @db.Date
-
-  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
-
-  @@index([childId, usageDate])
-  @@map("child_usage_sessions")
 }
 
 // =============================================================================
@@ -598,10 +569,11 @@ model Story {
   deletedAt     DateTime?   @map("deleted_at") @db.Timestamptz()
 
   owner       User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: SetNull)
+  sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: Restrict)
   topic       Topic  @relation(fields: [topicId], references: [id], onDelete: Restrict)
 
   // -- back-references --
+  narrationClips  NarrationClip[]
   copies          Story[]           @relation("StorySource")
   storyCharacters StoryCharacter[]
   scenes          StoryScene[]
@@ -628,7 +600,7 @@ model StoryCharacter {
   isMain      Boolean @default(false) @map("is_main")
 
   story     Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  character Character? @relation(fields: [characterId], references: [id], onDelete: Restrict)
 
   @@id([storyId, token])
   @@index([characterId])
@@ -740,6 +712,29 @@ model CheckpointOption {
   @@map("checkpoint_options")
 }
 
+/// @note Ban ghi tung doan giong doc (spec TTS 2026-10-17 §5.2-5.3). Khong tinh credit -> khong dung ai_requests.
+/// @note "Co audio" = status ready VA fingerprint khop chu hien tai (lib/narration.js)
+model NarrationClip {
+  id              String           @id @default(uuid()) @db.Uuid
+  storyId         String           @map("story_id") @db.Uuid
+  segment         String           @db.VarChar(120)
+  fingerprint     String           @db.Char(64)
+  status          GenerationStatus @default(queued)
+  round           Int              @default(1)
+  attempts        Int              @default(0) @db.SmallInt
+  audioKey        String?          @map("audio_key") @db.VarChar(300)
+  durationSeconds Decimal?         @map("duration_seconds") @db.Decimal(7, 2)
+  errorCode       String?          @map("error_code") @db.VarChar(40)
+  errorMessage    String?          @map("error_message") @db.VarChar(500)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, segment])
+  @@map("narration_clips")
+}
+
 model BookshelfItem {
   childId String   @map("child_id") @db.Uuid
   storyId String   @map("story_id") @db.Uuid
@@ -809,7 +804,6 @@ model CheckpointAnswer {
   skill       EqSkill?          @relation(fields: [skillId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, checkpointId])
-  @@index([skillId, answeredAt])
   @@map("checkpoint_answers")
 }
 
@@ -835,27 +829,6 @@ model EqCompetencyStat {
 // 5. AI
 // =============================================================================
 
-/// @note Partial unique: UNIQUE (request_type) WHERE is_active
-model PromptTemplate {
-  id           String        @id @default(uuid()) @db.Uuid
-  requestType  AiRequestType @map("request_type")
-  version      String        @db.VarChar(30)
-  templateText String        @map("template_text")
-  modelName    String        @map("model_name") @db.VarChar(100)
-  isActive     Boolean       @default(false) @map("is_active")
-  activatedAt  DateTime?     @map("activated_at") @db.Timestamptz()
-  createdBy    String        @map("created_by") @db.Uuid
-  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz()
-
-  creator User @relation("PromptTemplateCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-
-  // -- back-references --
-  aiRequests AiRequest[]
-
-  @@unique([requestType, version])
-  @@map("prompt_templates")
-}
-
 /// @note credits_charged = don gia trong platform_settings (ai_cost.<type>) luc giu credit
 /// @note That bai -> hoan credit (credit_release)
 /// @note CHECK: attempts <= 3
@@ -869,7 +842,6 @@ model AiRequest {
   checkpointId       String?         @map("checkpoint_id") @db.Uuid
   sceneId            String?         @map("scene_id") @db.Uuid
   characterId        String?         @map("character_id") @db.Uuid
-  promptTemplateId   String?         @map("prompt_template_id") @db.Uuid
   provider           String          @default("mock") @db.VarChar(40)
   modelName          String?         @map("model_name") @db.VarChar(100)
   status             AiRequestStatus @default(queued)
@@ -885,17 +857,16 @@ model AiRequest {
   createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz()
   finishedAt         DateTime?       @map("finished_at") @db.Timestamptz()
 
-  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  story          Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
-  page           StoryPage?       @relation(fields: [pageId], references: [id], onDelete: SetNull)
-  checkpoint     StoryCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
-  scene          StoryScene?      @relation(fields: [sceneId], references: [id], onDelete: SetNull)
-  character      Character?       @relation(fields: [characterId], references: [id], onDelete: SetNull)
-  promptTemplate PromptTemplate?  @relation(fields: [promptTemplateId], references: [id], onDelete: SetNull)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  story      Story?           @relation(fields: [storyId], references: [id], onDelete: SetNull)
+  page       StoryPage?       @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  checkpoint StoryCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+  scene      StoryScene?      @relation(fields: [sceneId], references: [id], onDelete: SetNull)
+  character  Character?       @relation(fields: [characterId], references: [id], onDelete: SetNull)
 
-  @@index([status, createdAt])
   @@index([userId, createdAt])
   @@index([storyId])
+  @@index([createdAt])
   @@map("ai_requests")
 }
 
@@ -914,6 +885,7 @@ model SellerProfile {
   reviewedBy        String?      @map("reviewed_by") @db.Uuid
   reviewedAt        DateTime?    @map("reviewed_at") @db.Timestamptz()
   bankName          String?      @map("bank_name") @db.VarChar(100)
+  bankBin           String?      @map("bank_bin") @db.VarChar(20)
   bankAccountNumber String?      @map("bank_account_number") @db.VarChar(255)
   bankAccountHolder String?      @map("bank_account_holder") @db.VarChar(150)
   bankUpdatedAt     DateTime?    @map("bank_updated_at") @db.Timestamptz()
@@ -972,7 +944,6 @@ model Listing {
 
   // -- back-references --
   nextListings      Listing[]          @relation("ListingVersion")
-  cartItems         CartItem[]
   entitlements      Entitlement[]
   productReviews    ProductReview[]
   orderItems        OrderItem[]
@@ -982,18 +953,6 @@ model Listing {
   @@index([status, publishedAt])
   @@index([sellerId])
   @@map("listings")
-}
-
-model CartItem {
-  parentId  String   @map("parent_id") @db.Uuid
-  listingId String   @map("listing_id") @db.Uuid
-  addedAt   DateTime @default(now()) @map("added_at") @db.Timestamptz()
-
-  parent  User    @relation(fields: [parentId], references: [id], onDelete: Cascade)
-  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-
-  @@id([parentId, listingId])
-  @@map("cart_items")
 }
 
 /// @note order_item_id: moi quyen deu den tu mot don; truyen mien phi = don 0d
@@ -1100,33 +1059,7 @@ model Subscription {
   orderItem OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
 
   @@index([parentId, status])
-  @@index([status, periodEnd])
   @@map("subscriptions")
-}
-
-/// @note Voucher do nen tang chiu: doanh thu nguoi ban tinh tren gia niem yet
-model Voucher {
-  id             String              @id @default(uuid()) @db.Uuid
-  code           String              @unique @db.VarChar(40)
-  discountType   VoucherDiscountType @map("discount_type")
-  value          BigInt
-  maxDiscountVnd BigInt?             @map("max_discount_vnd")
-  minOrderVnd    BigInt              @default(0) @map("min_order_vnd")
-  startsAt       DateTime            @map("starts_at") @db.Timestamptz()
-  endsAt         DateTime            @map("ends_at") @db.Timestamptz()
-  usageLimit     Int?                @map("usage_limit")
-  perUserLimit   Int                 @default(1) @map("per_user_limit")
-  usedCount      Int                 @default(0) @map("used_count")
-  isActive       Boolean             @default(true) @map("is_active")
-  createdBy      String              @map("created_by") @db.Uuid
-
-  creator User @relation("VoucherCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-
-  // -- back-references --
-  orders Order[]
-  usages VoucherUsage[]
-
-  @@map("vouchers")
 }
 
 /// @note Webhook: UPDATE ... SET status = 'paid' WHERE id = ? AND status = 'pending'
@@ -1135,9 +1068,7 @@ model Voucher {
 model Order {
   id                 String      @id @default(uuid()) @db.Uuid
   buyerId            String      @map("buyer_id") @db.Uuid
-  voucherId          String?     @map("voucher_id") @db.Uuid
   subtotalVnd        BigInt      @map("subtotal_vnd")
-  discountVnd        BigInt      @default(0) @map("discount_vnd")
   totalVnd           BigInt      @map("total_vnd")
   status             OrderStatus @default(pending)
   payosOrderCode     BigInt?     @unique @map("payos_order_code")
@@ -1147,12 +1078,10 @@ model Order {
   expiresAt          DateTime?   @map("expires_at") @db.Timestamptz()
   createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz()
 
-  buyer   User     @relation(fields: [buyerId], references: [id], onDelete: Restrict)
-  voucher Voucher? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  buyer User @relation(fields: [buyerId], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  items         OrderItem[]
-  voucherUsages VoucherUsage[]
+  items OrderItem[]
 
   @@index([buyerId, createdAt])
   @@index([status, expiresAt])
@@ -1173,7 +1102,7 @@ model OrderItem {
   sellerAmountVnd BigInt?         @map("seller_amount_vnd")
   status          OrderItemStatus @default(active)
 
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
   plan    Plan?    @relation(fields: [planId], references: [id], onDelete: Restrict)
   listing Listing? @relation(fields: [listingId], references: [id], onDelete: Restrict)
 
@@ -1187,21 +1116,6 @@ model OrderItem {
   @@map("order_items")
 }
 
-model VoucherUsage {
-  voucherId String   @map("voucher_id") @db.Uuid
-  orderId   String   @map("order_id") @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  usedAt    DateTime @default(now()) @map("used_at") @db.Timestamptz()
-
-  voucher Voucher @relation(fields: [voucherId], references: [id], onDelete: Restrict)
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
-
-  @@id([voucherId, orderId])
-  @@index([voucherId, userId])
-  @@map("voucher_usages")
-}
-
 /// @note Chi trong 7 ngay ke tu orders.paid_at (validator tang service)
 model RefundRequest {
   id                 String        @id @default(uuid()) @db.Uuid
@@ -1212,6 +1126,7 @@ model RefundRequest {
   handledBy          String?       @map("handled_by") @db.Uuid
   handledAt          DateTime?     @map("handled_at") @db.Timestamptz()
   bankTransactionRef String?       @map("bank_transaction_ref") @db.VarChar(100)
+  decisionNote       String?       @map("decision_note")
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz()
 
   orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
@@ -1272,7 +1187,6 @@ model WalletLedger {
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId, walletType, createdAt])
-  @@index([refType, refId])
   @@index([entryType, availableAt])
   @@map("wallet_ledger")
 }
@@ -1329,7 +1243,7 @@ model ModerationReview {
   decidedAt      DateTime?            @map("decided_at") @db.Timestamptz()
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz()
 
-  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Restrict)
   moderator User?   @relation("ModReviewModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
 
   // -- back-references --
@@ -1384,7 +1298,7 @@ model ContentReport {
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz()
 
   reporter      User           @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
-  listing       Listing?       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing       Listing?       @relation(fields: [listingId], references: [id], onDelete: Restrict)
   page          StoryPage?     @relation(fields: [pageId], references: [id], onDelete: SetNull)
   productReview ProductReview? @relation(fields: [productReviewId], references: [id], onDelete: Cascade)
   handler       User?          @relation("ReportHandler", fields: [handledBy], references: [id], onDelete: SetNull)

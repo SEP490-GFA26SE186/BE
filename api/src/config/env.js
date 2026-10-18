@@ -22,21 +22,37 @@ const env = {
     // `api` khong nhan no, de moi request AI buoc phai di qua queue.
     serviceUrl: process.env.AI_SERVICE_URL,
     internalToken: process.env.INTERNAL_TOKEN,
-    // Node cat o 12s de con cho ghi DB + day WebSocket ma van trong NFR 15s.
-    timeoutMs: parseInt(process.env.AI_TIMEOUT_MS, 10) || 12000,
+    // Ghi de timeout theo job; khong dat thi aiClient.js dung mac dinh trong
+    // JOB_CONFIG (undefined).
+    timeoutMsByJob: {
+      story_text: parseInt(process.env.AI_TIMEOUT_MS_STORY_TEXT, 10) || undefined,
+      character_portrait: parseInt(process.env.AI_TIMEOUT_MS_CHARACTER_PORTRAIT, 10) || undefined,
+      scene_image: parseInt(process.env.AI_TIMEOUT_MS_SCENE_IMAGE, 10) || undefined,
+      narration: parseInt(process.env.AI_TIMEOUT_MS_NARRATION, 10) || undefined,
+    },
     attempts: parseInt(process.env.AI_JOB_ATTEMPTS, 10) || 3,
     concurrency: parseInt(process.env.AI_WORKER_CONCURRENCY, 10) || 3,
   },
+  // Ky link xem anh / audio cho client (src/clients/assetUrl.js). Phai cung tai khoan + folder voi ai/.
+  // CHI container api can (worker khong tra link cho ai).
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    apiSecret: process.env.CLOUDINARY_API_SECRET,
+    folder: process.env.CLOUDINARY_FOLDER || 'storyweaver',
+  },
+  // payOS: chi container api can (worker khong goi payOS). Xem src/clients/payos.js.
   payos: {
-    // De trong ca ba key -> khong tao link thanh toan (dev); don tra phi nam o pending
     clientId: process.env.PAYOS_CLIENT_ID,
     apiKey: process.env.PAYOS_API_KEY,
     checksumKey: process.env.PAYOS_CHECKSUM_KEY,
-    apiUrl: process.env.PAYOS_API_URL || 'https://api-merchant.payos.vn',
-    // Trang FE nhan nguoi dung sau khi thanh toan / huy
-    returnUrl: process.env.PAYOS_RETURN_URL || `${process.env.CORS_ORIGIN || 'http://localhost:3001'}/payment/success`,
-    cancelUrl: process.env.PAYOS_CANCEL_URL || `${process.env.CORS_ORIGIN || 'http://localhost:3001'}/payment/cancel`,
+    payout: {
+      clientId: process.env.PAYOS_PAYOUT_CLIENT_ID || undefined,
+      apiKey: process.env.PAYOS_PAYOUT_API_KEY || undefined,
+      checksumKey: process.env.PAYOS_PAYOUT_CHECKSUM_KEY || undefined,
+    },
   },
+  // Trang Web ma payOS tra nguoi dung ve sau khi thanh toan / huy (returnUrl, cancelUrl).
+  webUrl: (process.env.WEB_URL || 'http://localhost:5173').replace(/\/+$/, ''),
   brevo: {
     apiKey: process.env.BREVO_API_KEY,
     senderEmail: process.env.BREVO_SENDER_EMAIL || 'no-reply@storyweaver.ai',

@@ -1,0 +1,15 @@
+{
+  "request_id": "c7e81b24-tts-demo",
+  "audio_key": "stories/demo/audio/c7e81b24-tts-demo-1.mp3",
+  "duration_seconds": 5.68,
+  "usage": {
+    "provider": "vieneu",
+    "model": "vieneu-v3turbo-fp32",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "units": 6,
+    "estimated_cost_micros": 0,
+    "latency_ms": 11954,
+    "attempts": 1
+  }
+}

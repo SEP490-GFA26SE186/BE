@@ -1,97 +1,81 @@
+// Ho so be (child_profiles) + nhan vat dai dien cua be (characters, child_id unique) — schema rev8.
+// Rev8 bo bedtime; diem EQ lay tu eq_competency_stats (cong don toan bo lich su, docs/01);
+// usage_date / duration_seconds la cot DB tu sinh. Hinh dang tra ve: lib/childFormat.js.
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import bookshelfService from '../bookshelf/bookshelf.service.js';
-import reportsService from '../reports/reports.service.js';
+import { EQ_MIN_ITEMS, eqSkillsFromStats, formatChild, summarizeReading, vnDate } from './lib/childFormat.js';
+import { buildEqJourney, strengths } from './lib/eqJourney.js';
+import { detokenize } from '../stories/lib/narration.js';
 
-// Default free quota if user has no paid subscription
+// Supabase o xa: moi truy van vai tram ms, mac dinh 5 s cua Prisma khong du cho 4-5 truy van
+// (giong TX_OPTIONS cua module stories).
+const TX_OPTIONS = { timeout: 20000 };
+
+// Khong co goi dang hoat dong -> han muc cua goi Mien phi (plans.max_children).
 const DEFAULT_FREE_MAX_CHILDREN = 2;
 
-/**
- * Helper: Calculate age from birth date
- * @param {Date|string|null} birthDate
- * @returns {number|null} Age in years
- */
-const calculateAge = (birthDate) => {
-  if (!birthDate) return null;
-  const now = new Date();
-  const birth = new Date(birthDate);
-  let ageYears = now.getFullYear() - birth.getFullYear();
-  const monthDiff = now.getMonth() - birth.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
-    ageYears--;
-  }
-  return Math.max(0, ageYears);
+const CHILD_INCLUDE = {
+  character: true,
+  _count: {
+    select: {
+      bookshelfItems: true,
+      playSessions: { where: { status: 'completed' } },
+    },
+  },
 };
 
-/**
- * Helper: Format child profile database record for client response
- * @param {Object} child
- * @returns {Object}
- */
-const formatChildResponse = (child) => {
-  // Nhan vat dai dien cua tre (characters.child_id unique)
-  const selfChar = child.character && !child.character.deletedAt ? child.character : null;
-
-  return {
-    id: child.id,
-    parentId: child.parentId,
-    name: child.name,
-    birthDate: child.birthDate ? child.birthDate.toISOString().split('T')[0] : null,
-    age: calculateAge(child.birthDate),
-    dailyScreenTimeMinutes: child.dailyScreenTimeMinutes,
-    preferredVoice: child.preferredVoice,
-    avatar: selfChar
-      ? {
-          characterId: selfChar.id,
-          appearance: selfChar.appearance,
-          portraitImageKey: selfChar.portraitImageKey,
-          portraitStatus: selfChar.portraitStatus,
-        }
-      : null,
-    booksCount: child._count?.bookshelfItems ?? 0,
-    completedSessionsCount: child._count?.playSessions ?? 0,
-    createdAt: child.createdAt,
-    updatedAt: child.updatedAt,
-  };
+const findOwnChild = async (db, parentId, childId) => {
+  const child = await db.childProfile.findFirst({ where: { id: childId, parentId, deletedAt: null } });
+  if (!child) throw ApiError.notFound('Child profile not found');
+  return child;
 };
 
-/**
- * Get maximum children allowed based on parent active subscription
- * @param {string} parentId
- * @returns {Promise<number>}
- */
+const loadFormatted = async (db, childId) =>
+  formatChild(await db.childProfile.findUnique({ where: { id: childId }, include: CHILD_INCLUDE }));
+
 const getMaxChildrenQuota = async (parentId) => {
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      parentId,
-      status: 'active',
-      periodEnd: { gt: new Date() },
-    },
-    include: {
-      plan: {
-        select: { maxChildren: true },
-      },
-    },
+  const active = await prisma.subscription.findFirst({
+    where: { parentId, status: 'active', periodEnd: { gt: new Date() } },
+    include: { plan: { select: { maxChildren: true } } },
   });
-
-  return activeSubscription?.plan?.maxChildren ?? DEFAULT_FREE_MAX_CHILDREN;
+  return active?.plan?.maxChildren ?? DEFAULT_FREE_MAX_CHILDREN;
 };
 
 /**
- * Create a new child profile and auto-create self character
- * @param {string} parentId
- * @param {Object} data
- * @returns {Promise<Object>} Formatted child profile
+ * Dat nhan vat dai dien cua be theo `appearance`:
+ * - undefined: khong dong toi (chi dong bo ten neu co nhan vat);
+ * - chuoi rong / null: go nhan vat khoi be (xoa mem + bo child_id de sau nay tao lai duoc, vi child_id unique);
+ * - chuoi: tao moi neu chua co, nguoc lai cap nhat mo ta.
  */
+async function applyCharacter(tx, { parentId, childId, name, appearance, portraitImageKey }) {
+  const current = await tx.character.findFirst({ where: { childId, deletedAt: null } });
+  const text = typeof appearance === 'string' ? appearance.trim() : appearance;
+
+  if (appearance !== undefined && !text) {
+    if (current) {
+      await tx.character.update({ where: { id: current.id }, data: { deletedAt: new Date(), childId: null } });
+    }
+    return;
+  }
+  const portrait =
+    portraitImageKey === undefined
+      ? {}
+      : { portraitImageKey: portraitImageKey || null, portraitStatus: portraitImageKey ? 'ready' : 'none' };
+
+  if (current) {
+    await tx.character.update({
+      where: { id: current.id },
+      data: { ...(name && { name }), ...(text && { appearance: text }), ...portrait },
+    });
+  } else if (text) {
+    await tx.character.create({ data: { parentId, childId, name, appearance: text, ...portrait } });
+  }
+}
+
 const createChild = async (parentId, data) => {
   const maxAllowed = await getMaxChildrenQuota(parentId);
-  const currentCount = await prisma.childProfile.count({
-    where: {
-      parentId,
-      deletedAt: null,
-    },
-  });
-
+  const currentCount = await prisma.childProfile.count({ where: { parentId, deletedAt: null } });
   if (currentCount >= maxAllowed) {
     throw ApiError.forbidden(
       `You have reached the maximum limit of ${maxAllowed} child profiles for your current plan. Please upgrade to add more children.`,
@@ -99,444 +83,181 @@ const createChild = async (parentId, data) => {
   }
 
   return prisma.$transaction(async (tx) => {
-    // 1. Create Child Profile
+    const name = data.name.trim();
     const child = await tx.childProfile.create({
       data: {
         parentId,
-        name: data.name.trim(),
+        name,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        dailyScreenTimeMinutes: data.dailyScreenTimeMinutes ?? 30,
         preferredVoice: data.preferredVoice?.trim() || null,
       },
     });
-
-    // 2. Automatically create 'self' character for the child
-    await tx.character.create({
-      data: {
-        parentId,
-        childId: child.id,
-        name: data.name.trim(),
-        appearance: data.appearance?.trim() || '', // characters.appearance NOT NULL
-        portraitImageKey: data.portraitImageKey?.trim() || null,
-        portraitStatus: data.portraitImageKey ? 'ready' : 'none',
-      },
-    });
-
-    // 3. Return full formatted child
-    const result = await tx.childProfile.findUnique({
-      where: { id: child.id },
-      include: {
-        character: true,
-        _count: {
-          select: {
-            bookshelfItems: true,
-            playSessions: { where: { status: 'completed' } },
-          },
-        },
-      },
-    });
-
-    return formatChildResponse(result);
-  });
+    if (data.appearance?.trim()) {
+      await applyCharacter(tx, {
+        parentId, childId: child.id, name, appearance: data.appearance, portraitImageKey: data.portraitImageKey,
+      });
+    }
+    return loadFormatted(tx, child.id);
+  }, TX_OPTIONS);
 };
 
-/**
- * Get all active child profiles for parent
- * @param {string} parentId
- * @returns {Promise<Array>} List of child profiles
- */
 const getChildren = async (parentId) => {
   const children = await prisma.childProfile.findMany({
-    where: {
-      parentId,
-      deletedAt: null,
-    },
-    orderBy: {
-      createdAt: 'asc',
-    },
-    include: {
-      character: true,
-      _count: {
-        select: {
-          bookshelfItems: true,
-          playSessions: { where: { status: 'completed' } },
-        },
-      },
-    },
+    where: { parentId, deletedAt: null },
+    orderBy: { createdAt: 'asc' },
+    include: CHILD_INCLUDE,
   });
-
-  return children.map(formatChildResponse);
+  return children.map((c) => formatChild(c));
 };
 
-/**
- * Get single child profile by ID
- * @param {string} parentId
- * @param {string} childId
- * @returns {Promise<Object>} Formatted child profile
- */
 const getChildById = async (parentId, childId) => {
-  const child = await prisma.childProfile.findFirst({
-    where: {
-      id: childId,
-      parentId,
-      deletedAt: null,
-    },
-    include: {
-      character: true,
-      _count: {
-        select: {
-          bookshelfItems: true,
-          playSessions: { where: { status: 'completed' } },
-        },
-      },
-    },
-  });
-
-  if (!child) {
-    throw ApiError.notFound('Child profile not found or access denied');
-  }
-
-  return formatChildResponse(child);
+  await findOwnChild(prisma, parentId, childId);
+  return loadFormatted(prisma, childId);
 };
 
-/**
- * Update child profile
- * @param {string} parentId
- * @param {string} childId
- * @param {Object} data
- * @returns {Promise<Object>} Updated child profile
- */
 const updateChild = async (parentId, childId, data) => {
-  const existingChild = await prisma.childProfile.findFirst({
-    where: {
-      id: childId,
-      parentId,
-      deletedAt: null,
-    },
-  });
+  await findOwnChild(prisma, parentId, childId);
 
-  if (!existingChild) {
-    throw ApiError.notFound('Child profile not found');
-  }
-
-  const updatePayload = {};
-  if (data.name !== undefined) updatePayload.name = data.name.trim();
-  if (data.birthDate !== undefined) updatePayload.birthDate = data.birthDate ? new Date(data.birthDate) : null;
-  if (data.dailyScreenTimeMinutes !== undefined) updatePayload.dailyScreenTimeMinutes = data.dailyScreenTimeMinutes;
-  if (data.preferredVoice !== undefined) updatePayload.preferredVoice = data.preferredVoice?.trim() || null;
+  const payload = {};
+  if (data.name !== undefined) payload.name = data.name.trim();
+  if (data.birthDate !== undefined) payload.birthDate = data.birthDate ? new Date(data.birthDate) : null;
+  if (data.preferredVoice !== undefined) payload.preferredVoice = data.preferredVoice?.trim() || null;
 
   return prisma.$transaction(async (tx) => {
-    const updatedChild = await tx.childProfile.update({
-      where: { id: childId },
-      data: updatePayload,
-    });
-
-    // If name or avatar info changed, synchronize with the self character
-    if (data.name || data.appearance !== undefined || data.portraitImageKey !== undefined) {
-      const selfChar = await tx.character.findFirst({
-        where: { childId, deletedAt: null },
+    const child = await tx.childProfile.update({ where: { id: childId }, data: payload });
+    if (data.name !== undefined || data.appearance !== undefined || data.portraitImageKey !== undefined) {
+      await applyCharacter(tx, {
+        parentId, childId, name: child.name, appearance: data.appearance, portraitImageKey: data.portraitImageKey,
       });
-
-      if (selfChar) {
-        await tx.character.update({
-          where: { id: selfChar.id },
-          data: {
-            ...(data.name && { name: data.name.trim() }),
-            ...(data.appearance !== undefined && { appearance: data.appearance ? data.appearance.trim() : '' }),
-            ...(data.portraitImageKey !== undefined && {
-              portraitImageKey: data.portraitImageKey ? data.portraitImageKey.trim() : null,
-              portraitStatus: data.portraitImageKey ? 'ready' : 'none',
-            }),
-          },
-        });
-      }
     }
-
-    const fullChild = await tx.childProfile.findUnique({
-      where: { id: childId },
-      include: {
-        character: true,
-        _count: {
-          select: {
-            bookshelfItems: true,
-            playSessions: { where: { status: 'completed' } },
-          },
-        },
-      },
-    });
-
-    return formatChildResponse(fullChild);
-  });
+    return loadFormatted(tx, childId);
+  }, TX_OPTIONS);
 };
 
-/**
- * Soft delete child profile
- * @param {string} parentId
- * @param {string} childId
- */
 const deleteChild = async (parentId, childId) => {
-  const existingChild = await prisma.childProfile.findFirst({
-    where: {
-      id: childId,
-      parentId,
-      deletedAt: null,
-    },
-  });
-
-  if (!existingChild) {
-    throw ApiError.notFound('Child profile not found');
-  }
-
+  await findOwnChild(prisma, parentId, childId);
+  const now = new Date();
   await prisma.$transaction(async (tx) => {
-    // Soft delete child profile
-    await tx.childProfile.update({
-      where: { id: childId },
-      data: { deletedAt: new Date() },
-    });
-
-    // Soft delete associated self character
-    await tx.character.updateMany({
-      where: { childId, deletedAt: null },
-      data: { deletedAt: new Date() },
-    });
-
-    // Invalidate any active kid session token for this child
+    await tx.childProfile.update({ where: { id: childId }, data: { deletedAt: now } });
+    await tx.character.updateMany({ where: { childId, deletedAt: null }, data: { deletedAt: now } });
+    // Huy moi phien Kid Mode con mo cua be.
     await tx.authToken.updateMany({
-      where: {
-        childId,
-        type: 'kid_session',
-        consumedAt: null,
-      },
-      data: {
-        consumedAt: new Date(),
-      },
+      where: { childId, type: 'kid_session', consumedAt: null },
+      data: { consumedAt: now },
     });
-  });
-
+  }, TX_OPTIONS);
   return { message: 'Xóa hồ sơ bé thành công' };
 };
 
-/**
- * Update child avatar / portrait
- * @param {string} parentId
- * @param {string} childId
- * @param {Object} data
- * @returns {Promise<Object>}
- */
+/** PUT /children/:id/avatar — giu cho tuong thich; cung luat voi `appearance` cua updateChild. */
 const updateChildAvatar = async (parentId, childId, { appearance, portraitImageKey }) => {
-  const child = await prisma.childProfile.findFirst({
-    where: { id: childId, parentId, deletedAt: null },
+  const child = await findOwnChild(prisma, parentId, childId);
+  return prisma.$transaction(async (tx) => {
+    await applyCharacter(tx, { parentId, childId, name: child.name, appearance, portraitImageKey });
+    return (await loadFormatted(tx, childId)).character;
+  }, TX_OPTIONS);
+};
+
+/** Thoi gian doc trong ngay (gio VN), tinh tu cac luot doc that cua be. */
+const getChildUsage = async (parentId, childId, dateStr) => {
+  const child = await findOwnChild(prisma, parentId, childId);
+  const date = dateStr || vnDate();
+  const from = new Date(`${date}T00:00:00+07:00`);
+  const sessions = await prisma.playSession.findMany({
+    where: { childId, startedAt: { gte: from, lt: new Date(from.getTime() + 86_400_000) } },
+    select: { startedAt: true, lastActivityAt: true, completedAt: true, status: true },
   });
-
-  if (!child) {
-    throw ApiError.notFound('Child profile not found');
-  }
-
-  let selfChar = await prisma.character.findFirst({
-    where: { childId, deletedAt: null },
-  });
-
-  if (!selfChar) {
-    selfChar = await prisma.character.create({
-      data: {
-        parentId,
-        childId,
-        name: child.name,
-        appearance: appearance ? appearance.trim() : '',
-        portraitImageKey: portraitImageKey ? portraitImageKey.trim() : null,
-        portraitStatus: portraitImageKey ? 'ready' : 'none',
-      },
-    });
-  } else {
-    selfChar = await prisma.character.update({
-      where: { id: selfChar.id },
-      data: {
-        ...(appearance !== undefined && { appearance: appearance ? appearance.trim() : '' }),
-        ...(portraitImageKey !== undefined && {
-          portraitImageKey: portraitImageKey ? portraitImageKey.trim() : null,
-          portraitStatus: portraitImageKey ? 'ready' : 'none',
-        }),
-      },
-    });
-  }
-
-  return {
-    characterId: selfChar.id,
-    appearance: selfChar.appearance,
-    portraitImageKey: selfChar.portraitImageKey,
-    portraitStatus: selfChar.portraitStatus,
-  };
+  return summarizeReading(child, sessions, date);
 };
 
 /**
- * Get screen time usage statistics for a child
- * @param {string} parentId
- * @param {string} childId
- * @param {string} [dateStr] - YYYY-MM-DD (defaults to today)
- * @returns {Promise<Object>} Usage statistics
+ * Bao cao EQ chi tiet (trang "Bao cao EQ"): diem cong don 5 nang luc + xu huong theo tuan + theo loai cau hoi
+ * + cau tra loi gan day. Chi luot doc dau (luot doc lai khong tinh diem — giong eq_competency_stats).
  */
-const getChildUsage = async (parentId, childId, dateStr) => {
-  const child = await prisma.childProfile.findFirst({
-    where: {
-      id: childId,
-      parentId,
-      deletedAt: null,
-    },
-  });
-
-  if (!child) {
-    throw ApiError.notFound('Child profile not found');
-  }
-
-  // Hom nay theo gio Viet Nam (usage_date la cot generated theo Asia/Ho_Chi_Minh)
-  const targetDateStr =
-    dateStr || new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const targetDate = new Date(targetDateStr);
-
-  const sessions = await prisma.childUsageSession.findMany({
-    where: {
-      childId,
-      usageDate: targetDate,
-    },
-    orderBy: {
-      startedAt: 'desc',
-    },
-  });
-
-  const totalDurationSeconds = sessions.reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
-  const totalMinutes = Math.round(totalDurationSeconds / 60);
-  const remainingMinutes = Math.max(0, child.dailyScreenTimeMinutes - totalMinutes);
-  const isLimitReached = totalMinutes >= child.dailyScreenTimeMinutes;
-
+const getChildEqJourney = async (parentId, childId, { weeks = 8 } = {}) => {
+  const { childName, skills } = await getChildEqReport(parentId, childId);
+  const [answers, sessions] = await Promise.all([
+    prisma.checkpointAnswer.findMany({
+      where: { session: { childId, isFirstPlay: true } },
+      orderBy: { answeredAt: 'desc' },
+      take: 1000,
+      select: {
+        answeredAt: true, score: true, skipped: true, attempts: true, firstEmotion: true,
+        skill: { select: { caselCode: true } },
+        checkpoint: {
+          select: {
+            type: true, question: true, answerEmotion: true,
+            story: { select: { title: true, storyCharacters: { select: { token: true, aliasName: true, character: { select: { name: true } } } } } },
+          },
+        },
+      },
+    }),
+    prisma.playSession.groupBy({ by: ['status'], where: { childId }, _count: { _all: true } }),
+  ]);
+  const rows = answers.map((a) => ({
+    answeredAt: a.answeredAt, score: a.score == null ? null : Number(a.score), skipped: a.skipped, attempts: a.attempts,
+    caselCode: a.skill?.caselCode ?? null, type: a.checkpoint.type,
+    answerEmotion: a.checkpoint.answerEmotion ?? null, firstEmotion: a.firstEmotion ?? null,
+  }));
+  const { trend, byType, emotions } = buildEqJourney(rows, { weeks });
+  const count = (status) => sessions.find((s) => s.status === status)?._count._all ?? 0;
   return {
-    childId: child.id,
-    childName: child.name,
-    date: targetDateStr,
-    dailyLimitMinutes: child.dailyScreenTimeMinutes,
-    usedMinutes: totalMinutes,
-    usedSeconds: totalDurationSeconds,
-    remainingMinutes,
-    isLimitReached,
-    sessionsCount: sessions.length,
-    sessions: sessions.map((s) => ({
-      id: s.id,
-      startedAt: s.startedAt,
-      endedAt: s.endedAt,
-      durationSeconds: s.durationSeconds,
+    childId,
+    childName,
+    minItems: EQ_MIN_ITEMS,
+    skills,
+    ...strengths(skills),
+    totals: { answers: rows.filter((r) => !r.skipped).length, sessions: sessions.reduce((n, s) => n + s._count._all, 0), completed: count('completed') },
+    trend,
+    byType,
+    emotions,
+    recent: answers.slice(0, 10).map((a) => ({
+      answeredAt: a.answeredAt,
+      storyTitle: a.checkpoint.story.title,
+      type: a.checkpoint.type,
+      question: detokenize(a.checkpoint.question, a.checkpoint.story.storyCharacters),
+      caselCode: a.skill?.caselCode ?? null,
+      score: a.score == null ? null : Math.round(Number(a.score) * 100),
+      attempts: a.attempts,
+      skipped: a.skipped,
     })),
   };
 };
 
-/**
- * Log a usage session for a child (e.g. after reading a story)
- * @param {string} parentId
- * @param {string} childId
- * @param {Object} sessionData
- * @returns {Promise<Object>} Recorded session
- */
-const logUsageSession = async (parentId, childId, { startedAt, endedAt, durationSeconds }) => {
-  const child = await prisma.childProfile.findFirst({
-    where: {
-      id: childId,
-      parentId,
-      deletedAt: null,
-    },
-  });
-
-  if (!child) {
-    throw ApiError.notFound('Child profile not found');
-  }
-
-  const end = endedAt
-    ? new Date(endedAt)
-    : startedAt
-      ? new Date(new Date(startedAt).getTime() + durationSeconds * 1000)
-      : new Date();
-  const start = startedAt ? new Date(startedAt) : new Date(end.getTime() - durationSeconds * 1000);
-
-  if (end <= start) {
-    throw ApiError.badRequest('endedAt must be after startedAt');
-  }
-
-  // duration_seconds va usage_date la cot GENERATED trong DB, khong duoc ghi
-  const session = await prisma.childUsageSession.create({
-    data: {
-      childId,
-      startedAt: start,
-      endedAt: end,
-    },
-  });
-
-  return session;
+const getChildEqReport = async (parentId, childId) => {
+  const child = await findOwnChild(prisma, parentId, childId);
+  const [skills, stats] = await Promise.all([
+    prisma.eqSkill.findMany({ orderBy: { displayOrder: 'asc' } }),
+    prisma.eqCompetencyStat.findMany({ where: { childId } }),
+  ]);
+  return { childId: child.id, childName: child.name, skills: eqSkillsFromStats(skills, stats) };
 };
 
-/**
- * Get EQ report for child (Radar Chart data) - dung chung voi /reports/eq/children/:childId
- * @param {string} parentId
- * @param {string} childId
- * @param {Object} filter - { startDate, endDate }
- * @returns {Promise<Object>}
- */
-const getChildEqReport = (parentId, childId, filter = {}) =>
-  reportsService.getChildEqReport(parentId, childId, filter);
-
-/**
- * Get comprehensive child dashboard overview
- * @param {string} parentId
- * @param {string} childId
- * @returns {Promise<Object>}
- */
 const getChildOverview = async (parentId, childId) => {
-  const child = await getChildById(parentId, childId);
-  const todayUsage = await getChildUsage(parentId, childId);
-  const eqReport = await getChildEqReport(parentId, childId);
-
-  // Get most recent reading session
-  const lastSession = await prisma.playSession.findFirst({
-    where: { childId },
-    orderBy: { startedAt: 'desc' },
-    include: {
-      story: {
-        select: {
-          id: true,
-          title: true,
-        },
-      },
-    },
-  });
-
+  const profile = await getChildById(parentId, childId);
+  const [todayUsage, eqReport, lastSession] = await Promise.all([
+    getChildUsage(parentId, childId),
+    getChildEqReport(parentId, childId),
+    prisma.playSession.findFirst({
+      where: { childId },
+      orderBy: { lastActivityAt: 'desc' },
+      select: { lastActivityAt: true, story: { select: { id: true, title: true } } },
+    }),
+  ]);
   return {
-    profile: child,
-    todayUsage: {
-      dailyLimitMinutes: todayUsage.dailyLimitMinutes,
-      usedMinutes: todayUsage.usedMinutes,
-      remainingMinutes: todayUsage.remainingMinutes,
-      isLimitReached: todayUsage.isLimitReached,
-    },
+    profile,
+    todayUsage,
     readingStats: {
-      booksInBookshelf: child.booksCount,
-      completedStories: child.completedSessionsCount,
-      lastReadStory: lastSession?.story || null,
-      lastReadAt: lastSession?.startedAt || null,
+      booksInBookshelf: profile.booksCount,
+      completedStories: profile.completedSessionsCount,
+      lastReadStory: lastSession?.story ?? null,
+      lastReadAt: lastSession?.lastActivityAt ?? null,
     },
-    eqRadar: {
-      skills: eqReport.radarMetrics,
-      focusSkill: eqReport.summary.focusSkill,
-      strongestSkill: eqReport.summary.strongestSkill,
-    },
+    eqReport,
   };
 };
 
-/**
- * Get bookshelf for child directly
- * @param {Object} user
- * @param {string} childId
- * @param {Object} query
- * @returns {Promise<Object>}
- */
-const getChildBookshelf = async (user, childId, query) => {
-  return bookshelfService.getBookshelf(user, { ...query, childId });
-};
+const getChildBookshelf = async (user, childId, query) => bookshelfService.getBookshelf(user, { ...query, childId });
 
 export default {
   createChild,
@@ -546,8 +267,8 @@ export default {
   deleteChild,
   updateChildAvatar,
   getChildUsage,
-  logUsageSession,
   getChildEqReport,
+  getChildEqJourney,
   getChildOverview,
   getChildBookshelf,
 };

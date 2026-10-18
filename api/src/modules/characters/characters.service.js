@@ -1,5 +1,6 @@
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
+import { assetUrl } from '../../clients/assetUrl.js';
 
 // Default free quota if user has no paid subscription
 const DEFAULT_FREE_MAX_CHARACTERS = 5;
@@ -16,15 +17,16 @@ const formatCharacterResponse = (character) => {
     parentId: character.parentId,
     childId: character.childId,
     name: character.name,
-    // Nhan vat dai dien cho mot dua con (characters.child_id unique)
-    isChildAvatar: Boolean(character.childId),
     appearance: character.appearance,
     portraitImageKey: character.portraitImageKey,
+    portraitImageUrl: assetUrl(character.portraitImageKey),
     genPrompt: character.genPrompt,
     genSeed: character.genSeed !== null && character.genSeed !== undefined ? character.genSeed.toString() : null,
     portraitStatus: character.portraitStatus,
     createdAt: character.createdAt,
     updatedAt: character.updatedAt,
+    // So truyen rieng (chua xoa) dang dung nhan vat — doi ten se doi ten trong cac truyen nay.
+    storiesCount: character._count?.storyCharacters ?? undefined,
     child: character.child
       ? {
           id: character.child.id,
@@ -62,33 +64,16 @@ const getMaxCharactersQuota = async (parentId) => {
 };
 
 /**
- * Dam bao dua con thuoc phu huynh va chua co nhan vat dai dien khac
- * (characters.child_id unique: moi con toi da 1 nhan vat dai dien)
- * @param {string} parentId
- * @param {string} childId
- * @param {string} [exceptCharacterId] - nhan vat dang duoc cap nhat
+ * Moi be chi co mot nhan vat "la be" (characters.child_id unique, ke ca dong da xoa mem). Be da co nhan
+ * vat song -> 409 ro rang thay vi loi P2002; dong da xoa mem dang giu cho -> nha ra (child_id = null).
+ * (Y tuong tu origin/main assertChildAvatarSlot.)
  */
-const assertChildAvatarSlot = async (parentId, childId, exceptCharacterId = null) => {
-  const child = await prisma.childProfile.findFirst({
-    where: {
-      id: childId,
-      parentId,
-      deletedAt: null,
-    },
-  });
-
-  if (!child) {
-    throw ApiError.badRequest('Linked child profile does not exist or has been deleted');
-  }
-
+const claimChildSlot = async (childId, exceptCharacterId = null) => {
   const holder = await prisma.character.findUnique({ where: { childId } });
   if (!holder || holder.id === exceptCharacterId) return;
-
   if (!holder.deletedAt) {
-    throw ApiError.conflict('This child already has a representative character');
+    throw ApiError.conflict(`Bé đã có nhân vật “${holder.name}” — ba mẹ sửa nhân vật đó thay vì tạo thêm.`);
   }
-
-  // Nhan vat da xoa mem van giu child_id -> giai phong cho nhan vat moi
   await prisma.character.update({ where: { id: holder.id }, data: { childId: null } });
 };
 
@@ -101,9 +86,20 @@ const assertChildAvatarSlot = async (parentId, childId, exceptCharacterId = null
 const createCharacter = async (parentId, characterData) => {
   const { name, appearance, childId, portraitImageKey, genPrompt } = characterData;
 
-  // 1. If childId provided, verify it belongs to this parent and has no representative yet
+  // 1. If childId provided, verify it belongs to this parent and is active
   if (childId) {
-    await assertChildAvatarSlot(parentId, childId);
+    const child = await prisma.childProfile.findFirst({
+      where: {
+        id: childId,
+        parentId,
+        deletedAt: null,
+      },
+    });
+
+    if (!child) {
+      throw ApiError.badRequest('Hồ sơ bé không tồn tại hoặc đã bị xoá.');
+    }
+    await claimChildSlot(childId);
   }
 
   // 2. Check character quota for current subscription
@@ -117,7 +113,7 @@ const createCharacter = async (parentId, characterData) => {
 
   if (currentCount >= maxQuota) {
     throw ApiError.forbidden(
-      `You have reached the maximum limit of ${maxQuota} characters for your current subscription. Please upgrade to create more characters.`,
+      `Gói hiện tại cho tối đa ${maxQuota} nhân vật. Ba mẹ xoá bớt nhân vật không dùng hoặc nâng cấp gói nhé.`,
     );
   }
 
@@ -175,6 +171,7 @@ const getCharacters = async (parentId, filter = {}) => {
           birthDate: true,
         },
       },
+      _count: { select: { storyCharacters: { where: { story: { deletedAt: null, kind: 'private' } } } } },
     },
   });
 
@@ -206,7 +203,7 @@ const getCharacterById = async (parentId, characterId) => {
   });
 
   if (!character) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
   }
 
   return formatCharacterResponse(character);
@@ -229,12 +226,32 @@ const updateCharacter = async (parentId, characterId, updateData) => {
   });
 
   if (!existingCharacter) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
+  }
+  // Nhan vat cua be: ten di theo ho so be (sua o trang "Be nha minh"), khong sua rieng o day.
+  if (existingCharacter.childId && updateData.name && updateData.name.trim() !== existingCharacter.name) {
+    throw new ApiError(422, 'Nhân vật này là bé — ba mẹ đổi tên ở trang “Bé nhà mình”.');
+  }
+
+  // Nhan vat cua be gan co dinh voi be (go / chuyen sang be khac = xoa ho so be, khong lam o day).
+  if (existingCharacter.childId && updateData.childId !== undefined && updateData.childId !== existingCharacter.childId) {
+    throw new ApiError(422, 'Nhân vật này là bé — không gỡ hay chuyển sang bé khác được.');
   }
 
   // If childId is provided/updated, verify validity
-  if (updateData.childId && updateData.childId !== existingCharacter.childId) {
-    await assertChildAvatarSlot(parentId, updateData.childId, characterId);
+  if (updateData.childId !== undefined && updateData.childId !== null && updateData.childId !== existingCharacter.childId) {
+    const child = await prisma.childProfile.findFirst({
+      where: {
+        id: updateData.childId,
+        parentId,
+        deletedAt: null,
+      },
+    });
+
+    if (!child) {
+      throw ApiError.badRequest('Hồ sơ bé không tồn tại hoặc đã bị xoá.');
+    }
+    await claimChildSlot(updateData.childId, characterId);
   }
 
   const updatedCharacter = await prisma.character.update({
@@ -243,7 +260,7 @@ const updateCharacter = async (parentId, characterId, updateData) => {
       ...(updateData.name && { name: updateData.name }),
       ...(updateData.appearance !== undefined && { appearance: updateData.appearance }),
       ...(updateData.childId !== undefined && { childId: updateData.childId }),
-      // portrait_status do he thong quan ly: co anh -> ready, bo anh -> none
+      // Trang thai chan dung do server suy ra tu anh (client khong tu dat duoc).
       ...(updateData.portraitImageKey !== undefined && {
         portraitImageKey: updateData.portraitImageKey,
         portraitStatus: updateData.portraitImageKey ? 'ready' : 'none',
@@ -280,13 +297,15 @@ const deleteCharacter = async (parentId, characterId) => {
   });
 
   if (!existingCharacter) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
+  }
+  if (existingCharacter.childId) {
+    throw new ApiError(422, 'Nhân vật này là bé — muốn bỏ thì xoá hồ sơ bé ở trang “Bé nhà mình”.');
   }
 
   await prisma.character.update({
     where: { id: characterId },
-    // Bo lien ket con de child_id (unique) duoc dung lai cho nhan vat dai dien moi
-    data: { deletedAt: new Date(), childId: null },
+    data: { deletedAt: new Date() },
   });
 
   return { message: 'Xóa nhân vật thành công' };
@@ -318,7 +337,7 @@ const requestPortraitGeneration = async (parentId, characterId, options = {}) =>
   });
 
   if (!character) {
-    throw ApiError.notFound('Character not found');
+    throw ApiError.notFound('Không tìm thấy nhân vật.');
   }
 
   const styleDescriptions = {

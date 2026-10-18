@@ -1,6 +1,7 @@
 /**
- * Bo sung goi Mien phi + credit thang dau cho phu huynh dang ky TRUOC khi register tu tao goi.
- * Chay mot lan. Mac dinh chi in ra (dry run), them --apply moi ghi DB.
+ * Bo sung goi Mien phi + credit thang dau cho phu huynh chua co goi active (vd. dang ky truoc khi
+ * register tu tao goi). Chay mot lan. Mac dinh chi in ra (dry run), them --apply moi ghi DB.
+ * (Y tuong + khung script tu origin/main cua datnt; doi sang billing.store.ensureFreeSubscription.)
  *
  *   node scripts/backfill-free-subscriptions.js           # xem ai se duoc bo sung
  *   node scripts/backfill-free-subscriptions.js --apply   # ghi that
@@ -8,32 +9,30 @@
  * Trong Docker:
  *   docker compose exec api node scripts/backfill-free-subscriptions.js --apply
  *
- * Chay lai nhieu lan van an toan: chi xu ly phu huynh CHUA CO subscription nao (ke ca da het han),
- * nen nguoi tung co goi tra phi roi het han se khong bi cap them.
+ * Chay lai nhieu lan van an toan: ensureFreeSubscription giu nguyen goi dang active, va credit thang
+ * dau ghi theo khoa idempotent grant:<subId>:0. Binh thuong cron runBillingCycle da tu chuyen goi tra
+ * phi het han ve Free; script vot moi phu huynh dang KHONG co ky active nao (vi bat ky ly do gi).
  */
 import prisma from '../src/config/prisma.js';
-import plansService from '../src/modules/plans/plans.service.js';
+import { FREE_PLAN_CODE } from '../src/modules/billing/lib/billing.js';
+import { ensureFreeSubscription } from '../src/modules/billing/billing.store.js';
 
 const apply = process.argv.includes('--apply');
 
-const freePlan = await plansService.getFreePlan();
-if (!freePlan) {
-  console.error('Khong co goi Mien phi dang hoat dong (code FREE hoac gia 0d). Dung lai.');
+const freePlan = await prisma.plan.findUnique({ where: { code: FREE_PLAN_CODE } });
+if (!freePlan?.isActive) {
+  console.error(`Khong co goi ${FREE_PLAN_CODE} dang hoat dong (chay lai seed). Dung lai.`);
   process.exit(1);
 }
 
 const parents = await prisma.user.findMany({
-  where: {
-    role: 'parent',
-    deletedAt: null,
-    subscriptions: { none: {} },
-  },
+  where: { role: 'parent', deletedAt: null, subscriptions: { none: { status: 'active' } } },
   select: { id: true, username: true, email: true },
   orderBy: { createdAt: 'asc' },
 });
 
 console.log(`Goi: ${freePlan.code} (${freePlan.creditsPerMonth} credit/thang)`);
-console.log(`Phu huynh chua co subscription: ${parents.length}`);
+console.log(`Phu huynh chua co goi active: ${parents.length}`);
 
 let done = 0;
 let failed = 0;
@@ -43,9 +42,7 @@ for (const parent of parents) {
     continue;
   }
   try {
-    await prisma.$transaction((tx) =>
-      plansService.activateSubscription(tx, { userId: parent.id, plan: freePlan }),
-    );
+    await prisma.$transaction((tx) => ensureFreeSubscription(tx, parent.id), { timeout: 20000 });
     done += 1;
     console.log(`  ok   ${parent.username}`);
   } catch (err) {
@@ -54,11 +51,7 @@ for (const parent of parents) {
   }
 }
 
-if (apply) {
-  console.log(`Xong: ${done} thanh cong, ${failed} loi`);
-} else {
-  console.log('Dry run, chua ghi gi. Them --apply de ghi that.');
-}
+console.log(apply ? `Xong: ${done} thanh cong, ${failed} loi` : 'Dry run, chua ghi gi. Them --apply de ghi that.');
 
 await prisma.$disconnect();
 process.exit(failed > 0 ? 1 : 0);

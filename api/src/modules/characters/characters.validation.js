@@ -1,18 +1,19 @@
 import { z } from 'zod';
 
+// Rev8: characters khong con cot role — vai cua nhan vat trong truyen do story_characters.is_main quyet.
 
 const createCharacter = z.object({
   body: z.object({
     name: z
-      .string({ required_error: 'Character name is required' })
+      .string({ required_error: 'Nhập tên nhân vật' })
       .trim()
-      .min(1, 'Character name cannot be empty')
-      .max(100, 'Character name must not exceed 100 characters'),
+      .min(1, 'Nhập tên nhân vật')
+      .max(100, 'Tên nhân vật tối đa 100 ký tự'),
     appearance: z
-      .string({ required_error: 'Character appearance description is required' })
+      .string({ required_error: 'Mô tả nhân vật (ngoại hình, tính cách) để AI viết đúng' })
       .trim()
-      .min(3, 'Appearance description must be at least 3 characters')
-      .max(1000, 'Appearance description must not exceed 1000 characters'),
+      .min(3, 'Mô tả nhân vật tối thiểu 3 ký tự')
+      .max(1000, 'Mô tả nhân vật tối đa 1000 ký tự'),
     childId: z
       .string()
       .uuid('Invalid child ID format')
@@ -33,20 +34,20 @@ const createCharacter = z.object({
 
 const updateCharacter = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid character ID format'),
+    id: z.string().uuid('Mã nhân vật không hợp lệ'),
   }),
   body: z.object({
     name: z
       .string()
       .trim()
-      .min(1, 'Character name cannot be empty')
-      .max(100, 'Character name must not exceed 100 characters')
+      .min(1, 'Nhập tên nhân vật')
+      .max(100, 'Tên nhân vật tối đa 100 ký tự')
       .optional(),
     appearance: z
       .string()
       .trim()
-      .min(3, 'Appearance description must be at least 3 characters')
-      .max(1000, 'Appearance description must not exceed 1000 characters')
+      .min(3, 'Mô tả nhân vật tối thiểu 3 ký tự')
+      .max(1000, 'Mô tả nhân vật tối đa 1000 ký tự')
       .optional(),
     childId: z
       .string()
@@ -77,19 +78,19 @@ const getCharacters = z.object({
 
 const getCharacter = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid character ID format'),
+    id: z.string().uuid('Mã nhân vật không hợp lệ'),
   }),
 });
 
 const deleteCharacter = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid character ID format'),
+    id: z.string().uuid('Mã nhân vật không hợp lệ'),
   }),
 });
 
 const generatePortrait = z.object({
   params: z.object({
-    id: z.string().uuid('Invalid character ID format'),
+    id: z.string().uuid('Mã nhân vật không hợp lệ'),
   }),
   body: z.object({
     style: z

@@ -5,28 +5,25 @@ import childrenRoutes from '../../modules/children/children.routes.js';
 import charactersRoutes from '../../modules/characters/characters.routes.js';
 import eqSkillsRoutes from '../../modules/eq-skills/eq-skills.routes.js';
 import bookshelfRoutes from '../../modules/bookshelf/bookshelf.routes.js';
-import readingSessionsRoutes from '../../modules/reading-sessions/reading-sessions.routes.js';
-import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
-import moderationRoutes from '../../modules/moderation/moderation.routes.js';
+import kidRoutes from '../../modules/kid/kid.routes.js';
+import billingRoutes from '../../modules/billing/billing.routes.js';
+import marketRoutes from '../../modules/market/market.routes.js';
+import keywordsRouter from '../../modules/keywords/keywords.routes.js';
+import { appealsAdminRouter, moderationMonitoringRouter, reportRouter, sellerStrikesRouter } from '../../modules/monitoring/monitoring.routes.js';
+import { adminWithdrawalsRouter, sellerMoneyRouter } from '../../modules/market/withdrawals.routes.js';
+import { listingsRouter, moderationReviewRouter, sellersRouter } from '../../modules/publishing/publishing.routes.js';
 import { plansRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
 import storiesRoutes from '../../modules/stories/stories.routes.js';
-import paymentsRoutes from '../../modules/payments/payments.routes.js';
-import walletsRoutes from '../../modules/wallets/wallets.routes.js';
+import topicsRoutes from '../../modules/topics/topics.routes.js';
 
 import contentLibraryRouter, {
   backgroundsRouter,
   uiAudioAssetsRouter,
   checklistItemsRouter,
-  topicsRouter,
 } from '../../modules/content-library/content-library.routes.js';
-import reportsRoutes from '../../modules/reports/reports.routes.js';
-import platformRoutes from '../../modules/platform/platform.routes.js';
+import adminRouter, { parentRefundRouter } from '../../modules/admin/admin.routes.js';
+import { reviewModerationRouter, reviewsRouter } from '../../modules/reviews/reviews.routes.js';
 
-import {
-  cartRouter,
-  ordersRouter,
-  entitlementsRouter,
-} from '../../modules/orders/orders.routes.js';
 
 const router = express.Router();
 
@@ -38,29 +35,34 @@ router.get('/health', (_req, res) => {
 // Module routes
 router.use('/auth', authRoutes);
 router.use('/children', childrenRoutes);
-router.use('/child-profiles', childrenRoutes);
 router.use('/characters', charactersRoutes);
 router.use('/eq-skills', eqSkillsRoutes);
 router.use('/stories', storiesRoutes);
+router.use('/topics', topicsRoutes);
 router.use('/backgrounds', backgroundsRouter);
 router.use('/ui-audio-assets', uiAudioAssetsRouter);
 router.use('/checklist-items', checklistItemsRouter);
-router.use('/topics', topicsRouter);
 router.use('/content-library', contentLibraryRouter);
 router.use('/bookshelf', bookshelfRoutes);
-router.use('/reading-sessions', readingSessionsRoutes);
-router.use('/marketplace', marketplaceRoutes);
-router.use('/moderation', moderationRoutes);
-router.use('/reports', reportsRoutes);
-router.use('/admin', platformRoutes);
-router.use('/platform', platformRoutes);
+router.use('/kid', kidRoutes);
+router.use('/payments', billingRoutes);
+router.use('/payments', parentRefundRouter);
+router.use('/market', marketRoutes);
+router.use('/market', reportRouter);
+router.use('/market', reviewsRouter);
+router.use('/sellers', sellersRouter);
+router.use('/sellers', sellerMoneyRouter);
+router.use('/sellers', sellerStrikesRouter);
+router.use('/listings', listingsRouter);
+router.use('/moderation', moderationReviewRouter);
+router.use('/moderation', keywordsRouter);
+router.use('/moderation', moderationMonitoringRouter);
+router.use('/moderation', reviewModerationRouter);
+router.use('/admin', adminWithdrawalsRouter);
+router.use('/admin', appealsAdminRouter);
+router.use('/admin', adminRouter);
 router.use('/plans', plansRouter);
 router.use('/subscriptions', subscriptionsRouter);
-router.use('/wallets', walletsRoutes);
-router.use('/cart', cartRouter);
-router.use('/orders', ordersRouter);
-router.use('/entitlements', entitlementsRouter);
-router.use('/payments', paymentsRoutes);
 
 export default router;
 

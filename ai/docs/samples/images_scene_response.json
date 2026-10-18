@@ -1,0 +1,15 @@
+{
+  "request_id": "9a4d2e60-scene-demo",
+  "image_key": "stories/demo/scenes/9a4d2e60-scene-demo-1.png",
+  "reference_used": true,
+  "usage": {
+    "provider": "mock",
+    "model": "mock-image-v1",
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "units": 1,
+    "estimated_cost_micros": 0,
+    "latency_ms": 9,
+    "attempts": 1
+  }
+}

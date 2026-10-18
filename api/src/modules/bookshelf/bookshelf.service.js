@@ -1,5 +1,8 @@
+import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
+import { loadReadiness, notReadyMessage } from '../stories/stories.narration.store.js';
+import { buildShelf, readingProgress } from './lib/shelf.js';
 
 /**
  * Verify child access permission for current user
@@ -31,299 +34,127 @@ const verifyChildAccess = async (user, childId) => {
 };
 
 /**
- * Get stories on child's bookshelf with reading progress
- * @param {Object} user - Authenticated user
- * @param {Object} query - Query parameters
- * @returns {Promise<Object>} Bookshelf items and pagination
+ * Gia sach cua be (rev8): { child, items, pagination, counts, continueReading }.
+ * query: { childId, page, limit, search, status: all|reading|completed|not_started, competency: all|<casel_code> }.
+ * Lay het muc tren gia (vai chuc) roi loc / dem / phan trang trong bo nho — lib/shelf.js.
  */
 const getBookshelf = async (user, query) => {
-  const childId = query.childId;
-  const child = await verifyChildAccess(user, childId);
-
+  const child = await verifyChildAccess(user, query.childId);
   const page = Math.max(1, Number(query.page) || 1);
   const limit = Math.min(50, Math.max(1, Number(query.limit) || 10));
-  const skip = (page - 1) * limit;
 
-  const storyWhere = {
-    deletedAt: null,
-    ...(query.search && {
-      title: { contains: query.search, mode: 'insensitive' },
-    }),
-  };
-
-  const [total, items] = await Promise.all([
-    prisma.bookshelfItem.count({
-      where: {
-        childId: child.id,
-        story: storyWhere,
-      },
-    }),
-    prisma.bookshelfItem.findMany({
-      where: {
-        childId: child.id,
-        story: storyWhere,
-      },
-      take: limit,
-      skip,
-      orderBy: { addedAt: 'desc' },
-      include: {
-        story: {
-          select: {
-            id: true,
-            title: true,
-            kind: true,
-            status: true,
-            useAiImage: true,
-            useTts: true,
-            createdAt: true,
-            topic: {
-              select: {
-                id: true,
-                title: true,
-                ageMin: true,
-                ageMax: true,
-                skill: {
-                  select: {
-                    id: true,
-                    caselCode: true,
-                    nameVi: true,
-                    nameEn: true,
-                  },
-                },
-              },
-            },
-            _count: {
-              select: { pages: true },
-            },
-          },
-        },
-      },
-    }),
-  ]);
-
-  // Fetch latest play session for each story to report reading progress
-  const storyIds = items.map((item) => item.storyId);
-  const latestSessions = await prisma.playSession.findMany({
-    where: {
-      childId: child.id,
-      storyId: { in: storyIds },
-    },
-    orderBy: { lastActivityAt: 'desc' },
-    include: {
-      currentPage: {
+  const rows = await prisma.bookshelfItem.findMany({
+    where: { childId: child.id, story: { deletedAt: null } },
+    orderBy: { addedAt: 'desc' },
+    select: {
+      addedAt: true,
+      story: {
         select: {
           id: true,
-          pageOrder: true,
-          pageKind: true,
+          title: true,
+          kind: true,
+          length: true,
+          useAiImage: true,
+          useTts: true,
+          topic: { select: { title: true, skill: { select: { caselCode: true } } } },
+          _count: { select: { pages: true } },
         },
       },
     },
   });
 
-  // Group latest session by storyId
-  const sessionByStoryId = {};
-  for (const session of latestSessions) {
-    if (!sessionByStoryId[session.storyId]) {
-      sessionByStoryId[session.storyId] = session;
-    }
-  }
+  // Lan choi gan nhat cua moi truyen (findMany da sap xep moi nhat truoc -> giu ban dau tien).
+  const sessions = await prisma.playSession.findMany({
+    where: { childId: child.id, storyId: { in: rows.map((r) => r.story.id) } },
+    orderBy: { lastActivityAt: 'desc' },
+    select: { storyId: true, status: true, lastActivityAt: true, currentPage: { select: { pageOrder: true } } },
+  });
+  const latest = new Map();
+  for (const s of sessions) if (!latest.has(s.storyId)) latest.set(s.storyId, s);
 
-  const formattedItems = items.map((item) => {
-    const story = item.story;
-    const session = sessionByStoryId[story.id];
+  const items = rows.map(({ addedAt, story }) => {
+    const session = latest.get(story.id);
     const totalPages = story._count.pages;
-    const currentPageOrder = session?.currentPage?.pageOrder || 0;
-    const isCompleted = session?.status === 'completed';
-
-    let progressPercentage = 0;
-    if (isCompleted) {
-      progressPercentage = 100;
-    } else if (totalPages > 0 && currentPageOrder > 0) {
-      progressPercentage = Math.round((currentPageOrder / totalPages) * 100);
-    }
-
     return {
       storyId: story.id,
       title: story.title,
       kind: story.kind,
-      status: story.status,
-      useAiImage: story.useAiImage,
-      useTts: story.useTts,
-      addedAt: item.addedAt,
+      length: story.length,
       totalPages,
-      topic: story.topic,
-      readingProgress: session
-        ? {
-            sessionId: session.id,
-            status: session.status,
-            isCompleted,
-            currentPageOrder,
-            progressPercentage,
-            lastActivityAt: session.lastActivityAt,
-          }
-        : null,
+      useTts: story.useTts,
+      useAiImage: story.useAiImage,
+      topic: { title: story.topic.title, competency: story.topic.skill.caselCode },
+      addedAt,
+      readingProgress: readingProgress(
+        session && { ...session, currentPageOrder: session.currentPage?.pageOrder ?? null },
+        totalPages,
+      ),
     };
   });
 
   return {
-    child: {
-      id: child.id,
-      name: child.name,
-    },
-    items: formattedItems,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit) || 1,
-    },
+    child: { id: child.id, name: child.name },
+    ...buildShelf(items, { search: query.search, status: query.status, competency: query.competency, page, limit }),
   };
 };
 
+/** Phu huynh duoc dua truyen nay len gia: truyen rieng cua minh, hoac ban dang ban da mua (entitlement). */
+async function canShelve(user, story) {
+  if (story.kind === 'private') return story.ownerId === user.id;
+  const listing = await prisma.listing.findUnique({ where: { publishedStoryId: story.id }, select: { id: true } });
+  if (!listing) return false;
+  return Boolean(await prisma.entitlement.findFirst({ where: { parentId: user.id, listingId: listing.id, revokedAt: null }, select: { id: true } }));
+}
+
 /**
- * Add a story to child's bookshelf
- * @param {Object} user - Authenticated user
- * @param {Object} payload - { childId, storyId }
- * @returns {Promise<Object>} Added bookshelf item
+ * Dua truyen len gia sach cua be (rev8). Truyen rieng cua phu huynh, hoac ban dang ban da mua (dung
+ * nguyen trang, DBML). Phai "san sang cho tre": da hoan tat + du giong doc khop chu (spec TTS §5.5)
+ * -> 422 kem tien do neu chua. Da co tren gia -> tra lai muc cu (idempotent).
  */
 const addToBookshelf = async (user, { childId, storyId }) => {
   const child = await verifyChildAccess(user, childId);
-
-  const story = await prisma.story.findFirst({
-    where: {
-      id: storyId,
-      deletedAt: null,
-    },
-    include: {
-      topic: {
-        select: {
-          id: true,
-          title: true,
-          skill: {
-            select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-          },
-        },
-      },
-    },
-  });
-
-  if (!story) {
-    throw ApiError.notFound('Story not found');
+  const check = await loadReadiness(prisma, storyId);
+  if (!check || !(await canShelve(user, check.story))) throw ApiError.notFound('Không tìm thấy truyện.');
+  if (!check.ready) {
+    throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, notReadyMessage(check), [
+      { path: 'storyId', message: check.reason, narration: check.narration },
+    ]);
   }
 
-  // Access check: story is owned by parent OR is published
-  const isOwner = story.ownerId === user.id;
-  const isPublished = story.kind === 'published';
-  const isElevated = ['admin', 'moderator'].includes(user.role);
-
-  if (!isOwner && !isPublished && !isElevated) {
-    throw ApiError.forbidden('You do not have permission to add this story');
-  }
-
-  // Check if already in bookshelf
-  const existing = await prisma.bookshelfItem.findUnique({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId: story.id,
-      },
-    },
-  });
-
-  if (existing) {
-    return {
-      childId: child.id,
-      storyId: story.id,
-      addedAt: existing.addedAt,
-      alreadyInBookshelf: true,
-      story: {
-        id: story.id,
-        title: story.title,
-      },
-    };
-  }
-
-  const newItem = await prisma.bookshelfItem.create({
-    data: {
-      childId: child.id,
-      storyId: story.id,
-    },
-    include: {
-      story: {
-        select: {
-          id: true,
-          title: true,
-        },
-      },
-    },
-  });
-
-  return {
-    childId: newItem.childId,
-    storyId: newItem.storyId,
-    addedAt: newItem.addedAt,
-    alreadyInBookshelf: false,
-    story: newItem.story,
-  };
-};
-
-/**
- * Remove a story from child's bookshelf
- * @param {Object} user - Authenticated user
- * @param {Object} payload - { childId, storyId }
- * @returns {Promise<Object>} Success message
- */
-const removeFromBookshelf = async (user, { childId, storyId }) => {
-  const child = await verifyChildAccess(user, childId);
-
-  const existing = await prisma.bookshelfItem.findUnique({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId,
-      },
-    },
-  });
-
-  if (!existing) {
-    throw ApiError.notFound('Story is not in child bookshelf');
-  }
-
-  await prisma.bookshelfItem.delete({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId,
-      },
-    },
-  });
-
-  return { message: 'Story removed from bookshelf successfully' };
-};
-
-/**
- * Check if a story is present in child's bookshelf
- * @param {Object} user - Authenticated user
- * @param {Object} payload - { childId, storyId }
- * @returns {Promise<Object>} Status info
- */
-const checkBookshelf = async (user, { childId, storyId }) => {
-  const child = await verifyChildAccess(user, childId);
-
-  const existing = await prisma.bookshelfItem.findUnique({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId,
-      },
-    },
-  });
-
+  const key = { childId_storyId: { childId: child.id, storyId } };
+  const existing = await prisma.bookshelfItem.findUnique({ where: key });
+  const item = existing ?? (await prisma.bookshelfItem.create({ data: { childId: child.id, storyId } }));
   return {
     childId: child.id,
     storyId,
-    inBookshelf: !!existing,
-    addedAt: existing?.addedAt || null,
+    addedAt: item.addedAt,
+    alreadyInBookshelf: Boolean(existing),
+    story: { id: storyId, title: check.story.title },
+  };
+};
+
+/** Bo truyen khoi gia sach. Lich su doc (play_sessions) giu nguyen. */
+const removeFromBookshelf = async (user, { childId, storyId }) => {
+  const child = await verifyChildAccess(user, childId);
+  const { count } = await prisma.bookshelfItem.deleteMany({ where: { childId: child.id, storyId } });
+  if (count === 0) throw ApiError.notFound('Truyện không có trên giá sách của bé.');
+  return { message: 'Đã bỏ truyện khỏi giá sách' };
+};
+
+/** Truyen co tren gia cua be nao (cua phu huynh nay) — cho nut "Dua len gia sach" o editor. */
+const checkBookshelf = async (user, { childId, storyId }) => {
+  const children = childId ? [await verifyChildAccess(user, childId)] : await prisma.childProfile.findMany({
+    where: { parentId: user.id, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  const rows = await prisma.bookshelfItem.findMany({
+    where: { storyId, childId: { in: children.map((c) => c.id) } },
+    select: { childId: true, addedAt: true },
+  });
+  const added = new Map(rows.map((r) => [r.childId, r.addedAt]));
+  return {
+    storyId,
+    children: children.map((c) => ({ childId: c.id, name: c.name, inBookshelf: added.has(c.id), addedAt: added.get(c.id) ?? null })),
   };
 };
 

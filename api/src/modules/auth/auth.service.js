@@ -3,7 +3,7 @@ import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import tokenService from './token.service.js';
 import emailService from '../../services/email.service.js';
-import plansService from '../plans/plans.service.js';
+import { ensureFreeSubscription } from '../billing/billing.store.js';
 
 /**
  * Register a new user
@@ -38,13 +38,7 @@ const register = async ({ username, email, password, fullName, phone }) => {
   // Hash the password with bcrypt (cost factor = 10)
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Moi tai khoan bat dau voi goi Mien phi (schema-guide: dang ky -> subscriptions + credit_grant)
-  const freePlan = await plansService.getFreePlan();
-  if (!freePlan) {
-    console.warn('No active free plan configured: new user starts without subscription');
-  }
-
-  // Create user, wallet, free subscription and first month credits inside an atomic transaction
+  // Create user and initialize wallet inside an atomic transaction
   const newUser = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
@@ -54,7 +48,6 @@ const register = async ({ username, email, password, fullName, phone }) => {
         fullName: fullName?.trim() || normalizedUsername,
         phone: phone?.trim() || null,
         role: 'parent',
-        isActive: false, // Inactive until email is verified
       },
       select: {
         id: true,
@@ -79,12 +72,15 @@ const register = async ({ username, email, password, fullName, phone }) => {
       },
     });
 
-    if (freePlan) {
-      await plansService.activateSubscription(tx, { userId: user.id, plan: freePlan });
-    }
+    // rev8: goi Mien phi cung la mot dong subscriptions (cap credit thang dau). Thieu seed plans ->
+    // bo qua, GET /subscriptions/me dung goi du phong; cron khong cap credit cho tai khoan nay.
+    await ensureFreeSubscription(tx, user.id).catch((error) => console.warn('[auth] chua tao goi Mien phi:', error.message));
 
     return user;
-  });
+  }, { timeout: 20000 });
+
+  // Generate initial auth tokens
+  const tokens = await tokenService.generateAuthTokens(newUser);
 
   // Send email verification asynchronously without blocking registration
   tokenService
@@ -98,6 +94,7 @@ const register = async ({ username, email, password, fullName, phone }) => {
 
   return {
     user: newUser,
+    tokens,
   };
 };
 
@@ -120,16 +117,13 @@ const login = async ({ emailOrUsername, email, username, password }) => {
     throw ApiError.unauthorized('Invalid email/username or password');
   }
 
-  // Verify password
+  // Kiem mat khau TRUOC khi bao "bi khoa": khong lo trang thai tai khoan cho nguoi khong biet mat khau.
   const isPasswordMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isPasswordMatch) {
     throw ApiError.unauthorized('Invalid email/username or password');
   }
 
   if (!user.isActive) {
-    if (!user.emailVerifiedAt) {
-      throw ApiError.forbidden('Account has not been activated. Please check your email for the verification token to activate your account.');
-    }
     throw ApiError.forbidden('Your account has been deactivated. Please contact support.');
   }
 
@@ -322,9 +316,6 @@ const enterKidMode = async (parentId, childId) => {
       id: true,
       name: true,
       birthDate: true,
-      dailyScreenTimeMinutes: true,
-      bedtimeStart: true,
-      bedtimeEnd: true,
       preferredVoice: true,
     },
   });
@@ -438,83 +429,46 @@ const verifyEmail = async (rawToken) => {
   };
 };
 
+// ---- Mat khau ----
+
 /**
- * Request password reset email
- * @param {string} email
+ * Quen mat khau: email ton tai + tai khoan con hoat dong -> gui ma. Luon tra cung mot ket qua (khong de lo
+ * email nao da dang ky). Loi gui mail chi ghi log.
  */
-const forgotPassword = async (email) => {
-  const normalizedEmail = email.toLowerCase().trim();
-  const user = await prisma.user.findFirst({
-    where: { email: normalizedEmail, deletedAt: null },
-  });
-
-  if (!user) {
-    // Return success message even if not found to prevent user enumeration
-    return { message: 'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.' };
+const forgotPassword = async ({ email }) => {
+  const user = await prisma.user.findFirst({ where: { email: { equals: email.trim(), mode: 'insensitive' }, isActive: true, deletedAt: null } });
+  if (user) {
+    try {
+      const rawToken = await tokenService.generatePasswordResetToken(user.id);
+      await emailService.sendPasswordResetEmail(user.email, rawToken, user.fullName || user.username);
+    } catch (error) {
+      console.error('[auth] gui ma khoi phuc that bai:', error.message);
+    }
   }
-
-  const resetToken = await tokenService.generatePasswordResetToken(user.id);
-  await emailService.sendPasswordResetEmail(user.email, resetToken, user.fullName || user.username);
-
-  return { message: 'Email hướng dẫn đặt lại mật khẩu đã được gửi.' };
+  return { message: 'Nếu email đã đăng ký, mã khôi phục sẽ được gửi trong ít phút.' };
 };
 
-/**
- * Reset password using token
- * @param {Object} param0
- * @param {string} param0.token
- * @param {string} param0.newPassword
- */
+/** Dat lai mat khau bang ma trong email -> moi phien dang nhap cu bi thu hoi. */
 const resetPassword = async ({ token, newPassword }) => {
-  const user = await tokenService.verifyAndConsumePasswordResetToken(token);
-
-  const passwordHash = await bcrypt.hash(newPassword, 10);
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash },
-  });
-
-  // Revoke all active refresh tokens for safety
-  await prisma.authToken.deleteMany({
-    where: { userId: user.id, type: 'refresh' },
-  });
-
-  return { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' };
+  await tokenService.resetPasswordWithToken(token, await bcrypt.hash(newPassword, 10));
+  return { message: 'Đã đặt lại mật khẩu. Ba mẹ đăng nhập bằng mật khẩu mới nhé.' };
 };
 
-/**
- * Change password when logged in
- * @param {string} userId
- * @param {Object} param1
- * @param {string} param1.currentPassword
- * @param {string} param1.newPassword
- */
+/** Doi mat khau khi dang dang nhap (can mat khau hien tai). */
 const changePassword = async (userId, { currentPassword, newPassword }) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-
-  if (!user) {
-    throw ApiError.notFound('Người dùng không tồn tại');
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw ApiError.badRequest('Account password is incorrect');
   }
-
-  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
-  if (!isMatch) {
-    throw ApiError.badRequest('Mật khẩu hiện tại không chính xác');
-  }
-
-  const passwordHash = await bcrypt.hash(newPassword, 10);
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { passwordHash },
-  });
-
-  return { message: 'Đổi mật khẩu thành công.' };
+  if (await bcrypt.compare(newPassword, user.passwordHash)) throw ApiError.badRequest('Mật khẩu mới phải khác mật khẩu hiện tại.');
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } });
+  return { message: 'Đã đổi mật khẩu.' };
 };
 
 export default {
+  forgotPassword,
+  resetPassword,
+  changePassword,
   register,
   login,
   refreshTokens,
@@ -526,7 +480,4 @@ export default {
   exitKidMode,
   sendVerificationEmail,
   verifyEmail,
-  forgotPassword,
-  resetPassword,
-  changePassword,
 };

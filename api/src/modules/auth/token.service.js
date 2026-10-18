@@ -244,7 +244,7 @@ export const verifyEmailToken = async (rawToken) => {
     throw ApiError.badRequest('Email verification token has expired. Please request a new one.');
   }
 
-  // Atomically mark token consumed and activate user account
+  // Atomically mark token consumed and verify user email
   const updatedUser = await prisma.$transaction(async (tx) => {
     await tx.authToken.update({
       where: { id: tokenRecord.id },
@@ -253,21 +253,51 @@ export const verifyEmailToken = async (rawToken) => {
 
     return await tx.user.update({
       where: { id: tokenRecord.userId },
-      data: {
-        emailVerifiedAt: new Date(),
-        isActive: true,
-      },
+      data: { emailVerifiedAt: new Date() },
       select: {
         id: true,
         username: true,
         email: true,
-        isActive: true,
         emailVerifiedAt: true,
       },
     });
   });
 
   return updatedUser;
+};
+
+/**
+ * Token dat lai mat khau (hieu luc 1 gio, dung mot lan). Token cu chua dung bi vo hieu.
+ * @param {string} userId
+ * @returns {Promise<string>} raw token (gui qua email)
+ */
+export const generatePasswordResetToken = async (userId) => {
+  const rawToken = crypto.randomBytes(24).toString('hex');
+  await prisma.$transaction(async (tx) => {
+    await tx.authToken.updateMany({ where: { userId, type: 'password_reset', consumedAt: null }, data: { consumedAt: new Date() } });
+    await tx.authToken.create({
+      data: { userId, type: 'password_reset', tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+    });
+  });
+  return rawToken;
+};
+
+/**
+ * Dat lai mat khau bang token: danh dau token da dung, doi mat khau, thu hoi moi phien dang nhap (refresh token).
+ * @returns {Promise<string>} userId
+ */
+export const resetPasswordWithToken = async (rawToken, passwordHash) => {
+  const record = await prisma.authToken.findUnique({ where: { tokenHash: hashToken(rawToken.trim()) } });
+  if (!record || record.type !== 'password_reset' || record.consumedAt !== null || record.expiresAt < new Date()) {
+    throw ApiError.badRequest('Mã khôi phục không đúng, đã dùng hoặc đã hết hạn. Ba mẹ gửi lại mã mới nhé.');
+  }
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.authToken.updateMany({ where: { id: record.id, consumedAt: null }, data: { consumedAt: new Date() } });
+    if (count !== 1) throw ApiError.badRequest('Mã khôi phục đã được dùng.');
+    await tx.user.update({ where: { id: record.userId }, data: { passwordHash } });
+    await tx.authToken.updateMany({ where: { userId: record.userId, type: 'refresh', consumedAt: null }, data: { consumedAt: new Date() } });
+  });
+  return record.userId;
 };
 
 /**
@@ -365,58 +395,9 @@ export const consumeKidSessionToken = async (tokenId) => {
   });
 };
 
-/**
- * Generate password reset token
- * @param {string} userId
- * @returns {Promise<string>} rawToken
- */
-export const generatePasswordResetToken = async (userId) => {
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-  await prisma.authToken.create({
-    data: {
-      userId,
-      type: 'password_reset',
-      tokenHash,
-      expiresAt,
-    },
-  });
-
-  return rawToken;
-};
-
-/**
- * Verify and consume password reset token
- * @param {string} rawToken
- * @returns {Promise<Object>} user record
- */
-export const verifyAndConsumePasswordResetToken = async (rawToken) => {
-  const tokenHash = hashToken(rawToken);
-
-  const tokenRecord = await prisma.authToken.findUnique({
-    where: { tokenHash },
-    include: { user: true },
-  });
-
-  if (!tokenRecord || tokenRecord.type !== 'password_reset' || tokenRecord.consumedAt !== null) {
-    throw ApiError.badRequest('Mã khôi phục mật khẩu không hợp lệ hoặc đã được sử dụng');
-  }
-
-  if (tokenRecord.expiresAt < new Date()) {
-    throw ApiError.badRequest('Mã khôi phục mật khẩu đã hết hạn');
-  }
-
-  await prisma.authToken.update({
-    where: { id: tokenRecord.id },
-    data: { consumedAt: new Date() },
-  });
-
-  return tokenRecord.user;
-};
-
 export default {
+  generatePasswordResetToken,
+  resetPasswordWithToken,
   hashToken,
   parseDuration,
   generateAuthTokens,
@@ -427,6 +408,4 @@ export default {
   generateKidSessionToken,
   verifyKidSessionToken,
   consumeKidSessionToken,
-  generatePasswordResetToken,
-  verifyAndConsumePasswordResetToken,
 };

@@ -7,8 +7,9 @@ Backend gồm **hai source riêng biệt** trong cùng một repo:
 | `api/` | Node 22 / Express 5 / Prisma | Nghiệp vụ: auth, CRUD, thương mại, webhook, **và BullMQ worker** |
 | `ai/` | Python 3.12 / FastAPI | Sinh nội dung AI (văn bản / ảnh / TTS). Stateless, **không đọc DB** |
 
-Database là **Supabase** (đám mây) nên không có container Postgres. Queue là
-**Redis + BullMQ**, nằm hoàn toàn ở phía Node.
+Database dùng chung là **Supabase** (đám mây). Lúc dev nên chạy **Postgres local trong
+Docker** (`docker-compose.localdb.yml`, xem [DB local](#db-local--khuyên-dùng-khi-dev)) vì
+qua Supabase mỗi truy vấn mất gần 1 giây. Queue là **Redis + BullMQ**, nằm hoàn toàn ở phía Node.
 
 ---
 
@@ -46,8 +47,9 @@ Project Settings → Database → Connection string:
 `JWT_SECRET` và `INTERNAL_TOKEN` đã có giá trị dev sẵn trong `.env.example`,
 đổi trước khi deploy là được.
 
-**Không cần API key AI.** Mặc định `AI_PROVIDER=mock` — trả dữ liệu giả nhưng
-đúng cấu trúc thật, đủ để chạy trọn luồng từ đầu đến cuối.
+**Không cần API key AI.** Mặc định `LLM_PROVIDER=mock` và `TTS_PROVIDER=mock` — trả truyện giả
+nhưng đúng khung request và đi qua validator thật, đủ để chạy trọn luồng từ đầu đến cuối. Đặt
+`LLM_PROVIDER=gemini` + `GEMINI_API_KEY` + `GEMINI_TEXT_MODEL` mới gọi Gemini thật (tốn tiền).
 
 Nếu quên tạo `.env`, compose **dừng lại ngay** và nói rõ thiếu biến nào:
 
@@ -68,6 +70,59 @@ docker compose exec api npx prisma db seed           # eq_skills + topics
 
 Migration **phải** đi qua `DIRECT_URL` (port **5432**). Port 6543 là pgbouncer ở
 chế độ transaction, nó không giữ session nên Prisma migrate sẽ lỗi.
+
+### `ai` chạy ngoài Docker — chữ thật bằng Claude CLI + giọng đọc VieNeu (chỉ dev)
+
+Container `ai` mặc định là **mock**: chữ là vài câu cố định lặp lại (các trang gần như y hệt nhau,
+không có mạch truyện) — chỉ để chạy thử luồng. Muốn truyện thật mà không có `ANTHROPIC_API_KEY`, chạy
+`ai` trên máy với `LLM_PROVIDER=claude_code` (dùng CLI `claude` đang đăng nhập; image không có CLI).
+VieNeu cũng nhanh gấp ~2 lần khi chạy thẳng trên Windows (trang 51 tiếng: 17 s so với 31–38 s).
+
+```bash
+# 1. Một lần: venv Python 3.12 (VieNeu chỉ hỗ trợ 3.10–3.13)
+cd ai
+py -3.12 -m venv .venv312          # hoặc python 3.12 do uv cài
+.venv312/Scripts/python -m pip install -e ".[tts,claude-code]"
+# ai/.env: INTERNAL_TOKEN (bằng BE/.env), LLM_PROVIDER=claude_code, LLM_CLAUDE_MODEL=sonnet,
+#          LLM_CLAUDE_EFFORT=low, LLM_THINKING_BUDGET=12000, LLM_CLAUDE_CLI_PATH=<...\claude.exe>,
+#          TTS_PROVIDER=vieneu, CLOUDINARY_* (xem ai/README "Claude", "TTS")
+
+# 2. Mỗi lần dev: chạy ai trên máy, cổng 8001
+.venv312/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
+
+# 3. Worker trong Docker gọi sang máy: thêm docker-compose.hostai.yml vào COMPOSE_FILE (.env)
+COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.localdb.yml;docker-compose.hostai.yml
+docker compose up -d
+```
+
+`curl localhost:8001/health` phải báo `"llm_provider":"claude_code"` và `"tts_provider":"vieneu"`.
+Container `ai` vẫn chạy (worker phụ thuộc nó) nhưng không ai gọi — đặt `TTS_PROVIDER=mock` trong `.env`
+để nó khỏi nạp model giọng đọc. **Không dùng `claude_code` để phục vụ người dùng thật** (gói CLI là
+dùng cá nhân); production dùng `LLM_PROVIDER=claude` + API key.
+
+### DB local — khuyên dùng khi dev
+
+Qua pooler Supabase mỗi truy vấn mất ~600–900 ms (editor lưu một trang 3–19 s, có lúc 500
+vì quá thời gian transaction). Postgres chạy cùng máy chỉ ~1 ms, API trả về trong 20–50 ms.
+
+```bash
+# Gộp thêm file localdb (thêm dòng COMPOSE_FILE vào .env cho đỡ gõ — xem mục Chế độ dev)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.localdb.yml up -d
+# Lần đầu, và mỗi khi có migration mới: tạo bảng + chủ đề, kỹ năng EQ, platform_settings + tài khoản demo
+docker compose exec api npm run db:setup
+```
+
+- `DATABASE_URL` / `DIRECT_URL` của api + worker bị file này **ghi đè** sang container
+  `postgres`, nên `.env` vẫn giữ link Supabase được. Bỏ file localdb ra là quay lại Supabase.
+- Cổng 5432 mở ra máy để dùng Prisma Studio / DBeaver
+  (`postgresql://storyweaver:storyweaver@localhost:5432/storyweaver`). Máy đã có Postgres
+  chiếm 5432 thì đặt `POSTGRES_HOST_PORT=5433` trong `.env`.
+- Dữ liệu nằm trong volume `pg-data`. `docker compose down -v` **xoá sạch**, chạy lại
+  `db:setup` là có lại dữ liệu mẫu. Ở đây được dùng `prisma migrate reset` thoải mái.
+- Mỗi người một DB riêng, không thấy dữ liệu test của nhau. Dữ liệu demo cần dùng chung
+  thì thêm vào `api/prisma/seed_demo.js`.
+- Sửa `package.json` (thêm script / dependency) thì phải `up --build`: chế độ dev chỉ
+  mount `src/`, `prisma/`, `scripts/`.
 
 #### Ba điều cần biết khi làm việc với Supabase
 
@@ -111,16 +166,9 @@ docker compose ps                      # cả 4 service phải là (healthy)
 curl localhost:3000/api/v1/health      # {"status":"ok",...}
 ```
 
-Đẩy thử một AI job qua queue:
-
-```bash
-docker compose exec worker node scripts/enqueue-ai-job.js narration '{"text":"xin chao"}'
-docker compose logs worker --tail 5    # phải thấy "succeeded"
-```
-
-Lệnh trên là bài kiểm quan trọng nhất: nó đi qua **toàn bộ** chuỗi — enqueue →
-Redis → BullMQ → worker → HTTP sang FastAPI → upload Storage → trả `usage`. Nếu
-nó `succeeded` thì cả hệ đã nối đúng.
+Đẩy thử một AI job qua queue — xem mục **Kiểm đầu-cuối** ở cuối file
+bên dưới. Đó là bài kiểm quan trọng nhất: nó đi qua **toàn bộ** chuỗi — enqueue → Redis → BullMQ →
+worker → HTTP sang FastAPI → ghi DB. Nếu nó `succeeded` thì cả hệ đã nối đúng.
 
 | Địa chỉ | Là gì |
 |---|---|
@@ -149,6 +197,8 @@ Nếu bạn làm dev cả ngày và không muốn gõ lại mỗi lần, thêm d
 ```bash
 # Windows — dấu phân cách là  ;
 COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml
+# … hoặc kèm DB local:
+COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.localdb.yml
 
 # Linux / macOS — dấu phân cách là  :
 COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
@@ -175,6 +225,35 @@ Chỉ `up` mới cần truyền file.
 
 ---
 
+## Chạy cả hệ thống với dữ liệu demo (BE + AI + Web)
+
+Ba repo nằm cạnh nhau: `BE/`, `Web/`. Lộ trình tích hợp: [`docs/roadmap-tich-hop.md`](docs/roadmap-tich-hop.md).
+
+```bash
+# 1. BE + AI (repo này) — như mục "Clone về và chạy" ở trên
+docker compose up -d --build
+docker compose exec api npx prisma migrate deploy
+docker compose exec api npm run db:seed          # chủ đề, kỹ năng EQ, platform_settings
+docker compose exec api npm run db:seed:demo     # tài khoản demo (KHÔNG chạy trên production)
+
+# 2. Web (repo Web/, terminal khác)
+cd ../Web
+cp .env.example .env        # VITE_API_URL=/api/v1 — Vite proxy chuyển /api sang localhost:3000
+npm install
+npm run dev                 # http://localhost:5173
+```
+
+`db:seed:demo` tạo đúng các tài khoản trong `Web/docs/DEMO_ACCOUNTS.md` (mật khẩu chung `123456`,
+PIN Kid Mode `1234`), cấp 50 credit cho phụ huynh (một lần, qua sổ cái `credit_grant`), một bé
+"Bin" kèm nhân vật của bé và nhân vật "Bà". Chạy lại nhiều lần không nhân đôi dữ liệu, chỉ đặt lại mật
+khẩu / PIN về mặc định.
+
+AI chữ mặc định là mock (truyện mẫu hợp lệ, không tốn tiền). Muốn AI thật: `LLM_PROVIDER=claude` +
+`ANTHROPIC_API_KEY` trong container, hoặc chạy `ai/` ngoài Docker với `claude_code` trên máy dev —
+xem `ai/README.md` mục "Claude".
+
+---
+
 ## Ai gọi ai
 
 ```
@@ -184,13 +263,14 @@ Client ──> api (Express)          KHÔNG gọi ai/ trực tiếp
            BullMQ (Redis)         attempts=3, backoff exponential 2s
              │
              ↓
-           worker (Node)          CÙNG image với api, khác command
-             │  POST http://ai:8000/v1/generate/...
+           worker (Node)          CÙNG image với api, khác command; job chỉ mang { ai_request_id }
+             │  đọc DB -> dựng payload -> POST http://ai:8000/v1/story/generate
+             │  (ảnh: /v1/images/portrait, /v1/images/scene; giọng: /v1/tts/synthesize)
              ↓
-           ai (FastAPI)  ──> provider (Gemini / TTS)
-             │             └──> Supabase Storage (file ảnh / audio)
+           ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh + TTS: mock)
+             │             └──> Cloudinary / Supabase Storage (ảnh / audio — ai upload, trả key)
              ↓
-           worker ghi kết quả vào DB + commit credit
+           worker ghi kết quả vào DB + chốt / hoàn credit
 ```
 
 Vì sao phải vòng qua queue thay vì để API gọi thẳng Python: nếu AI chậm hoặc
@@ -213,12 +293,13 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 | `DATABASE_URL`, `DIRECT_URL` | ✓ | ✓ | — |
 | `JWT_SECRET`, `JWT_*` | ✓ | — | — |
 | `BREVO_*`, `CORS_ORIGIN`, `APP_URL` | ✓ | — | — |
-| `PAYOS_*` (để trống = không tạo link thanh toán) | ✓ | — | — |
 | `REDIS_URL` | ✓ | ✓ | — |
 | `AI_SERVICE_URL` | **—** | ✓ | — |
 | `INTERNAL_TOKEN` | — | ✓ | ✓ |
-| `AI_PROVIDER`, `GEMINI_API_KEY` | — | — | ✓ |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
+| `AI_TIMEOUT_MS_<JOB>`, `AI_JOB_ATTEMPTS`, `AI_WORKER_CONCURRENCY` | — | ✓ | — |
+| `LLM_PROVIDER`, `TTS_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `LLM_*`, `TOKENS_PER_WORD`, `PRICE_TEXT_*` | — | — | ✓ |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_FOLDER` | ✓ | — | ✓ |
+| `CLOUDINARY_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
 
 Hai ô đáng chú ý:
 
@@ -246,7 +327,7 @@ npm run worker:dev          # worker, mở terminal khác
 
 # Python
 cd ai/
-cp .env.example .env
+cp .env.example .env        # LLM_PROVIDER=mock mặc định; KHÔNG đặt gemini nếu không định tốn tiền
 uv sync                     # cài uv: https://docs.astral.sh/uv/getting-started/installation/
 uv run uvicorn app.main:app --reload
 ```
@@ -259,8 +340,8 @@ Chạy ngoài Docker vẫn cần Redis. Cách nhanh nhất là bật riêng nó 
 ## Test
 
 ```bash
-cd api/ && npm test          # node:test — phân loại lỗi của aiClient
-cd ai/  && uv run pytest     # pytest — auth, envelope, bảng lỗi
+cd api/ && npm test          # node:test — aiClient, processor, lib; integration bỏ qua nếu không có TEST_DATABASE_URL
+cd ai/  && uv run pytest     # pytest — không chạm mạng; gồm tests/api/test_node_contract.py (payload y hệt Node)
 ```
 
 ---
@@ -299,10 +380,42 @@ BE/
     └── app/
         ├── main.py              # FastAPI + exception handler
         ├── errors.py            # bảng phân loại lỗi
-        ├── api/v1/              # story_page.py, narration.py
-        ├── providers/           # base (Protocol), mock, gemini (chưa làm)
+        ├── api/v1/              # story.py, images.py, tts.py
+        ├── core/                # orchestrator, validator, prompt, guards, usage
+        ├── providers/           # llm/ (mock, gemini, claude, claude_code), image/ (mock), tts/ (mock)
         └── storage/             # supabase, local (dự phòng)
 ```
+
+---
+
+## Kiểm đầu-cuối (queue → worker → ai → DB)
+
+Cần `.env` ở root có `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `INTERNAL_TOKEN`; DB đã migrate +
+seed (`platform_settings` có `ai_cost.story_text`); một truyện `medium` đã có khung (trang + điểm dừng)
+và chủ truyện còn credit. **Script ghi thật vào DB đang cấu hình và trừ credit thật** — dùng DB test
+riêng, đừng chạy trên DB Supabase dùng chung của nhóm.
+
+```bash
+# 1. Chạy toàn bộ với mock (không gọi Gemini)
+LLM_PROVIDER=mock docker compose up --build -d
+docker compose exec ai env | grep -E "DATABASE_URL|REDIS_URL"   # phải RỖNG
+
+# 2. Nhánh thành công
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId>
+docker compose logs worker --tail 20        # job succeeded; GET /api/v1/stories/<storyId>/generation
+
+# 3. Các nhánh lỗi (cờ --force chỉ có tác dụng khi NODE_ENV != production và provider là mock)
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId> --force SAFETY_BLOCKED
+#    -> dừng ở attempt 1/3 (KHÔNG có attempt 2, 3); ai_request `blocked`; credit hoàn
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId> --force INVALID_OUTPUT_ONCE
+#    -> succeeded (service tự thử lại nội bộ, usage.attempts = 2)
+docker compose exec worker node scripts/enqueue-ai-job.js story_text <storyId> --force PROVIDER_ERROR
+#    -> retry có backoff tới attempt 3/3 rồi `failed`; credit hoàn
+```
+
+Mỗi lần chạy tạo một `ai_request` mới cho cùng truyện; truyện đang sinh dở thì `startGeneration` từ
+chối — chờ lần trước kết thúc. Kiểm tương thích **không cần DB** (payload Node thật → ai/ mock →
+`planPersist`) đã có ở `ai/tests/api/test_node_contract.py`.
 
 ---
 
@@ -311,13 +424,18 @@ BE/
 Đã xong và kiểm chứng được bằng lệnh:
 
 - Tách source, Docker hoá, queue + worker + retry, phân loại lỗi khớp nhau ở cả
-  hai đầu, upload Storage, mock provider có thể kích lỗi để test.
+  hai đầu (`NON_RETRYABLE_ERROR_CODES` ↔ `NON_RETRYABLE`), mock provider có thể kích lỗi để test.
+- `/v1/story/generate` (M1–M3): prompt, validator tất định, thử lại nội bộ một lần, `GeminiLLMProvider`
+  cho chữ. Worker dựng payload từ DB và ghi kết quả (`persistPlan.js`) cho job `story_text`.
+- Ảnh / TTS: endpoint + mock, upload Storage và trả key.
 
 **Chưa xong** — đừng tưởng đã có:
 
-- `GeminiProvider` chưa hiện thực (đặt `AI_PROVIDER=gemini` sẽ trả lỗi rõ ràng,
-  không im lặng).
-- Bước **ghi kết quả vào DB** trong `api/src/workers/ai.processor.js` chưa làm,
-  vì schema chưa chốt. Đó là **duy nhất một chỗ** cần sửa khi schema chốt.
-- **NFR 15s chưa đo được** vì mock trả về gần như tức thì.
-- Hình dạng của `input` trong request AI chưa chốt (đang để passthrough).
+- Model ảnh thật (M4b, mã nguồn mở) và TTS thật (M5). Worker chưa xử lý job `character_portrait`,
+  `scene_image`, `narration` (trả `UnrecoverableError` "chưa hỗ trợ").
+- Spike Gemini mới làm một phần: mức bị bộ lọc an toàn chặn và hành vi cắt cụt còn mở
+  (`ai/docs/01-decisions.md`).
+- **NFR 15s** được hiểu là **độ trễ nhận việc** — từ lúc phụ huynh bấm tạo truyện tới lúc giao diện
+  phản hồi (request trả ngay sau khi enqueue, UI hiện tiến trình). AI viết cả truyện một lần, nên
+  không còn đơn vị "một trang". Thời gian sinh truyện thật là số đo riêng
+  (`ai/scripts/try_story.py`), chưa đo trên Gemini.

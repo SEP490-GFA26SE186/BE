@@ -17,6 +17,8 @@
     "db:migrate:prod": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:seed:demo": "node prisma/seed_demo.js",
+    "db:setup": "prisma migrate deploy && prisma db seed && node prisma/seed_demo.js",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset"
   },
@@ -31,6 +33,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@payos/node": "2.0.5",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.56.0",

@@ -1,75 +1,103 @@
 from enum import StrEnum
 
-
-class ErrorKind(StrEnum):
-    """Phan loai loi — quyet dinh worker ben Node co retry hay khong.
-
-    Nguon su that cua bang nay la docs/contracts/ai-service.md. Phia Node,
-    tap hop khong-retry duoc khai bao o src/clients/aiClient.js
-    (NON_RETRYABLE_ERROR_KINDS). Hai ben phai khop nhau.
-    """
-
-    BLOCKED_CONTENT = "blocked_content"
-    INVALID_INPUT = "invalid_input"
-    PROVIDER_THROTTLED = "provider_throttled"
-    PROVIDER_ERROR = "provider_error"
-    TIMEOUT = "timeout"
+from app.schemas.common import Usage
 
 
-# HTTP status cho tung loai loi. `blocked_content` dung 422 va `invalid_input`
-# dung 400 — day la ly do vi sao handler cua RequestValidationError phai duoc
-# ghi de o main.py: mac dinh FastAPI tra 422 cho payload sai, se bi doc lam
-# "noi dung bi chan".
-STATUS_BY_KIND: dict[ErrorKind, int] = {
-    ErrorKind.BLOCKED_CONTENT: 422,
-    ErrorKind.INVALID_INPUT: 400,
-    ErrorKind.PROVIDER_THROTTLED: 429,
-    ErrorKind.PROVIDER_ERROR: 500,
-    ErrorKind.TIMEOUT: 504,
+class ErrorCode(StrEnum):
+    INVALID_INPUT = "INVALID_INPUT"
+    FORBIDDEN_TERM_DETECTED = "FORBIDDEN_TERM_DETECTED"
+    SAFETY_BLOCKED = "SAFETY_BLOCKED"
+    OUTPUT_INVALID = "OUTPUT_INVALID"
+    PROVIDER_ERROR = "PROVIDER_ERROR"
+    TIMEOUT = "TIMEOUT"
+
+
+# HTTP status per code (spec 4.3). INVALID_INPUT is 422, so the RequestValidationError
+# handler in main.py must be overridden: FastAPI's default 422 body has no `error.code`.
+STATUS_BY_CODE: dict[ErrorCode, int] = {
+    ErrorCode.INVALID_INPUT: 422,
+    ErrorCode.FORBIDDEN_TERM_DETECTED: 422,
+    ErrorCode.SAFETY_BLOCKED: 422,
+    ErrorCode.OUTPUT_INVALID: 502,
+    ErrorCode.PROVIDER_ERROR: 502,
+    ErrorCode.TIMEOUT: 504,
 }
 
-# Loai loi ma Node se KHONG retry. Giu o day de test doi chieu duoc voi Node.
-NON_RETRYABLE: frozenset[ErrorKind] = frozenset(
-    {ErrorKind.BLOCKED_CONTENT, ErrorKind.INVALID_INPUT}
+# Codes Node will NOT retry. Must match NON_RETRYABLE_ERROR_CODES in
+# api/src/clients/aiClient.js; tests compare against a hand-written copy.
+NON_RETRYABLE: frozenset[ErrorCode] = frozenset(
+    {
+        ErrorCode.INVALID_INPUT,
+        ErrorCode.FORBIDDEN_TERM_DETECTED,
+        ErrorCode.SAFETY_BLOCKED,
+        ErrorCode.OUTPUT_INVALID,
+    }
 )
 
 
 class AiError(Exception):
-    """Loi duy nhat ma endpoint duoc phep raise.
+    """The only error an endpoint may raise.
 
-    Endpoint KHONG tu dat HTTP status code. Viec doi AiError thanh response do
-    exception handler o main.py lam, de bang loi chi ton tai o mot cho.
+    Endpoints never pick an HTTP status; the single handler in main.py turns this into a
+    response. `usage` is set once at least one LLM call returned a response (spec 3.11.3).
+    `call_tokens` = (input, output) tokens of a blocked response: the provider sets it,
+    the orchestrator adds it to the usage.
     """
 
-    def __init__(self, kind: ErrorKind, message: str) -> None:
+    def __init__(
+        self,
+        code: ErrorCode,
+        message: str,
+        *,
+        usage: Usage | None = None,
+        call_tokens: tuple[int, int] | None = None,
+    ) -> None:
         super().__init__(message)
-        self.kind = kind
+        self.code = code
         self.message = message
+        self.usage = usage
+        self.call_tokens = call_tokens
 
     @property
     def status_code(self) -> int:
-        return STATUS_BY_KIND[self.kind]
+        return STATUS_BY_CODE[self.code]
 
     @property
     def retryable(self) -> bool:
-        return self.kind not in NON_RETRYABLE
+        return self.code not in NON_RETRYABLE
 
     @classmethod
-    def blocked(cls, message: str = "Noi dung bi bo loc an toan chan") -> "AiError":
-        return cls(ErrorKind.BLOCKED_CONTENT, message)
+    def invalid_input(cls, message: str, *, usage: Usage | None = None) -> "AiError":
+        return cls(ErrorCode.INVALID_INPUT, message, usage=usage)
 
     @classmethod
-    def invalid_input(cls, message: str) -> "AiError":
-        return cls(ErrorKind.INVALID_INPUT, message)
+    def forbidden_term(cls, message: str, *, usage: Usage | None = None) -> "AiError":
+        return cls(ErrorCode.FORBIDDEN_TERM_DETECTED, message, usage=usage)
 
     @classmethod
-    def throttled(cls, message: str = "Provider dang qua tai") -> "AiError":
-        return cls(ErrorKind.PROVIDER_THROTTLED, message)
+    def safety_blocked(
+        cls,
+        message: str,
+        *,
+        usage: Usage | None = None,
+        call_tokens: tuple[int, int] | None = None,
+    ) -> "AiError":
+        return cls(ErrorCode.SAFETY_BLOCKED, message, usage=usage, call_tokens=call_tokens)
 
     @classmethod
-    def provider_error(cls, message: str) -> "AiError":
-        return cls(ErrorKind.PROVIDER_ERROR, message)
+    def output_invalid(
+        cls,
+        message: str,
+        *,
+        usage: Usage | None = None,
+        call_tokens: tuple[int, int] | None = None,
+    ) -> "AiError":
+        return cls(ErrorCode.OUTPUT_INVALID, message, usage=usage, call_tokens=call_tokens)
 
     @classmethod
-    def timeout(cls, message: str = "Provider khong tra loi kip") -> "AiError":
-        return cls(ErrorKind.TIMEOUT, message)
+    def provider_error(cls, message: str, *, usage: Usage | None = None) -> "AiError":
+        return cls(ErrorCode.PROVIDER_ERROR, message, usage=usage)
+
+    @classmethod
+    def timeout(cls, message: str, *, usage: Usage | None = None) -> "AiError":
+        return cls(ErrorCode.TIMEOUT, message, usage=usage)

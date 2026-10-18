@@ -1,26 +1,22 @@
 from fastapi import APIRouter
 
-from app.config import get_settings
-from app.storage import get_storage
+from app.deps import SettingsDep
+from app.storage import storage_backend_name
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    """Liveness. KHONG goi provider — de healthcheck cua Docker khong tieu quota."""
-    return {"status": "ok"}
-
-
-@router.get("/ready")
-async def ready() -> dict[str, object]:
-    """Readiness: da du cau hinh de xu ly job that chua?"""
-    settings = get_settings()
-    storage = get_storage()
-    provider_ready = settings.ai_provider == "mock" or bool(settings.gemini_api_key)
+@router.get("/ready", include_in_schema=False)
+async def health(settings: SettingsDep) -> dict[str, str]:
+    """Liveness + active providers. Never calls a provider (no quota use); no token needed."""
     return {
-        "status": "ok" if provider_ready else "degraded",
-        "provider": settings.ai_provider,
-        "providerConfigured": provider_ready,
-        "storageBackend": storage.backend,
+        "status": "ok",
+        "llm_provider": settings.llm_provider,
+        "llm_model": settings.llm_model,
+        "image_profile_portrait": settings.image_profile_portrait,
+        "image_profile_scene": settings.image_profile_scene,
+        "tts_provider": settings.tts_provider,
+        "tts_default_voice": settings.tts_default_voice,
+        "storage_backend": storage_backend_name(settings),
     }

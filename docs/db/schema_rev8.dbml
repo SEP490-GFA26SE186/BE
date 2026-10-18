@@ -162,10 +162,6 @@ Enum order_item_status {
   refunded
 }
 
-Enum voucher_discount_type {
-  percent
-  fixed
-}
 
 Enum request_status {
   pending
@@ -176,6 +172,7 @@ Enum request_status {
 
 Enum withdrawal_status {
   requested
+  processing [note: 'Admin da duyet, lenh chi ho payOS dang chay (2026-10-18)']
   paid
   rejected
   cancelled
@@ -264,13 +261,13 @@ Table users {
   email_verified_at timestamptz
   last_login_at timestamptz
   is_active boolean [not null, default: true]
+  ai_blocked_until timestamptz [note: 'Moderator tam khoa quyen dung AI (luong 7.6); NULL = khong khoa (2026-10-18)']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
   deleted_at timestamptz [note: 'soft delete']
 
   indexes {
     role
-    deleted_at
   }
 }
 
@@ -303,7 +300,6 @@ Table child_profiles {
   parent_id uuid [not null]
   name varchar(100) [not null]
   birth_date date
-  daily_screen_time_minutes int [not null, default: 30]
   preferred_voice varchar(50)
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
@@ -334,18 +330,6 @@ Table characters {
   }
 }
 
-Table child_usage_sessions {
-  id uuid [pk, default: `gen_random_uuid()`]
-  child_id uuid [not null]
-  started_at timestamptz [not null, default: `now()`]
-  ended_at timestamptz
-  duration_seconds int [note: 'GENERATED ALWAYS STORED']
-  usage_date date [not null, note: 'GENERATED ALWAYS STORED, Asia/Ho_Chi_Minh']
-
-  indexes {
-    (child_id, usage_date)
-  }
-}
 
 // ---------------------------------------------------------------------------
 // 2. CONTENT LIBRARY (Moderator quan ly)
@@ -558,6 +542,32 @@ Table checkpoint_options {
   '''
 }
 
+Table narration_clips {
+  id uuid [pk, default: `gen_random_uuid()`]
+  story_id uuid [not null]
+  segment varchar(120) [not null, note: 'page:<id> | checkpoint:<id>:question|hint | option:<id>:text|feedback']
+  fingerprint char(64) [not null, note: 'sha256(giong + chu da thay ten that) cua lan dua di doc gan nhat']
+  status generation_status [not null, default: 'queued', note: 'queued | generating | ready | failed']
+  round int [not null, default: 1, note: 'tang moi lan dua di doc lai; nam trong jobId BullMQ']
+  attempts smallint [not null, default: 0, note: 'so lan goi ai/ cua luot hien tai']
+  audio_key varchar(300)
+  duration_seconds numeric(7,2)
+  error_code varchar(40)
+  error_message varchar(500)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (story_id, segment) [unique]
+  }
+
+  Note: '''
+  Ban ghi tung doan giong doc (spec TTS 2026-10-17 §5.2-5.3). Khong tinh credit nen khong dung ai_requests.
+  Doan "co audio" = status ready VA fingerprint khop chu hien tai; key cung duoc ghi vao cot *_audio_key
+  cua trang / diem dung / phuong an de FE doc truc tiep.
+  '''
+}
+
 Table bookshelf_items {
   child_id uuid [not null]
   story_id uuid [not null]
@@ -610,7 +620,6 @@ Table checkpoint_answers {
 
   indexes {
     (session_id, checkpoint_id) [unique]
-    (skill_id, answered_at)
   }
 
   Note: '''
@@ -645,23 +654,6 @@ Table eq_competency_stats {
 // 5. AI
 // ---------------------------------------------------------------------------
 
-Table prompt_templates {
-  id uuid [pk, default: `gen_random_uuid()`]
-  request_type ai_request_type [not null]
-  version varchar(30) [not null]
-  template_text text [not null]
-  model_name varchar(100) [not null]
-  is_active boolean [not null, default: false]
-  activated_at timestamptz
-  created_by uuid [not null, note: 'admin']
-  created_at timestamptz [not null, default: `now()`]
-
-  indexes {
-    (request_type, version) [unique]
-  }
-
-  Note: 'Partial unique: UNIQUE (request_type) WHERE is_active'
-}
 
 Table ai_requests {
   id uuid [pk, default: `gen_random_uuid()`]
@@ -672,7 +664,6 @@ Table ai_requests {
   checkpoint_id uuid
   scene_id uuid
   character_id uuid
-  prompt_template_id uuid
   provider varchar(40) [not null, default: 'mock']
   model_name varchar(100)
   status ai_request_status [not null, default: 'queued']
@@ -689,9 +680,9 @@ Table ai_requests {
   finished_at timestamptz
 
   indexes {
-    (status, created_at)
     (user_id, created_at)
     story_id
+    created_at
   }
 
   Note: '''
@@ -714,6 +705,7 @@ Table seller_profiles {
   reviewed_by uuid
   reviewed_at timestamptz
   bank_name varchar(100)
+  bank_bin varchar(20) [note: 'ma BIN ngan hang (VietQR) — chi ho payOS dung BIN (2026-10-18)']
   bank_account_number varchar(255) [note: 'ma hoa khi luu']
   bank_account_holder varchar(150)
   bank_updated_at timestamptz [note: 'chan rut tien 24 gio sau khi doi']
@@ -756,15 +748,6 @@ Table listings {
   Note: 'Bo dem cap nhat trong cung transaction + cron doi soat hang dem'
 }
 
-Table cart_items {
-  parent_id uuid [not null]
-  listing_id uuid [not null]
-  added_at timestamptz [not null, default: `now()`]
-
-  indexes {
-    (parent_id, listing_id) [pk]
-  }
-}
 
 Table entitlements {
   id uuid [pk, default: `gen_random_uuid()`]
@@ -842,41 +825,22 @@ Table subscriptions {
 
   indexes {
     (parent_id, status)
-    (status, period_end)
   }
 
   Note: '''
   Tra truoc, gia han thu cong. Partial unique: UNIQUE (parent_id) WHERE status = active
+  Partial index: (next_credit_grant_at) WHERE status = active — cron cap credit
   Cron hang ngay: toi next_credit_grant_at -> credit_expire phan con lai, credit_grant thang moi.
   Nang goi giua ky: ky moi bat dau ngay, cap du credit goi moi, credit con lai giu mot lan.
   Goi Mien phi cung la mot dong subscriptions.
   '''
 }
 
-Table vouchers {
-  id uuid [pk, default: `gen_random_uuid()`]
-  code varchar(40) [unique, not null]
-  discount_type voucher_discount_type [not null]
-  value bigint [not null]
-  max_discount_vnd bigint
-  min_order_vnd bigint [not null, default: 0]
-  starts_at timestamptz [not null]
-  ends_at timestamptz [not null]
-  usage_limit int
-  per_user_limit int [not null, default: 1]
-  used_count int [not null, default: 0]
-  is_active boolean [not null, default: true]
-  created_by uuid [not null]
-
-  Note: 'Voucher do nen tang chiu: doanh thu nguoi ban tinh tren gia niem yet'
-}
 
 Table orders {
   id uuid [pk, default: `gen_random_uuid()`]
   buyer_id uuid [not null]
-  voucher_id uuid
   subtotal_vnd bigint [not null]
-  discount_vnd bigint [not null, default: 0]
   total_vnd bigint [not null]
   status order_status [not null, default: 'pending']
   payos_order_code bigint [unique, note: 'NULL voi don 0d (nhan truyen mien phi)']
@@ -894,6 +858,8 @@ Table orders {
   Note: '''
   Webhook: UPDATE ... SET status = paid WHERE id = ? AND status = pending
   CHECK: total_vnd = 0 OR payos_order_code IS NOT NULL
+  CHECK: total_vnd = subtotal_vnd (khong voucher / giam gia — bo 2026-10-18)
+  Partial index: (paid_at) WHERE status = paid — bao cao tai chinh
   Don 0d: tao xong chuyen paid ngay, khong goi payOS
   '''
 }
@@ -920,17 +886,6 @@ Table order_items {
   '''
 }
 
-Table voucher_usages {
-  voucher_id uuid [not null]
-  order_id uuid [not null]
-  user_id uuid [not null]
-  used_at timestamptz [not null, default: `now()`]
-
-  indexes {
-    (voucher_id, order_id) [pk]
-    (voucher_id, user_id)
-  }
-}
 
 Table refund_requests {
   id uuid [pk, default: `gen_random_uuid()`]
@@ -940,10 +895,14 @@ Table refund_requests {
   status request_status [not null, default: 'pending']
   handled_by uuid [note: 'admin']
   handled_at timestamptz
-  bank_transaction_ref varchar(100)
+  bank_transaction_ref varchar(100) [note: 'ma giao dich Admin chuyen tra (thu cong)']
+  decision_note text [note: 'ly do tu choi / ghi chu cho phu huynh (2026-10-18)']
   created_at timestamptz [not null, default: `now()`]
 
-  Note: 'Chi trong 7 ngay ke tu paid_at'
+  Note: '''
+  Chi trong market.refund_window_days (mac dinh 3 = so ngay giu doanh thu) ke tu paid_at.
+  Doanh thu cua item dang co yeu cau cho xu ly khong duoc mo khoa (cron giu lai).
+  '''
 }
 
 Table webhook_logs {
@@ -991,7 +950,6 @@ Table wallet_ledger {
 
   indexes {
     (user_id, wallet_type, created_at)
-    (ref_type, ref_id)
     (entry_type, available_at)
   }
 
@@ -1006,7 +964,7 @@ Table withdrawal_requests {
   status withdrawal_status [not null, default: 'requested']
   handled_by uuid [note: 'admin']
   handled_at timestamptz
-  bank_transaction_ref varchar(100)
+  bank_transaction_ref varchar(100) [note: 'id lenh chi ho payOS (payouts)']
   reject_reason text
   created_at timestamptz [not null, default: `now()`]
 
@@ -1017,12 +975,12 @@ Table withdrawal_requests {
 
   Note: '''
   CHECK amount_vnd >= muc toi thieu (platform_settings)
-  Partial unique: UNIQUE (seller_id) WHERE status = requested
+  Partial unique: UNIQUE (seller_id) WHERE status IN (requested, processing)
   '''
 }
 
 Table platform_settings {
-  key varchar(60) [pk, note: 'commission_rate | holding_days | min_withdrawal | report_threshold | ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*']
+  key varchar(60) [pk, note: 'market.* (seller_share_rate, earning_hold_days, min_withdrawal_vnd) | moderation.* (report_threshold, strike_limit, strike_valid_days, audit_per_week) | ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*']
   value jsonb [not null]
   updated_by uuid [not null]
   updated_at timestamptz [not null, default: `now()`]
@@ -1050,7 +1008,11 @@ Table moderation_reviews {
     listing_id
   }
 
-  Note: 'Chi quyet dinh approved khi da xem 100% trang va tick du checklist'
+  Note: '''
+  Chi quyet dinh approved khi da xem 100% trang va tick du checklist
+  Partial unique: UNIQUE (listing_id) WHERE decided_at IS NULL (moi truyen mot luot duyet dang mo)
+  CHECK: (decision IS NULL) = (decided_at IS NULL)
+  '''
 }
 
 Table review_checklist_results {
@@ -1093,7 +1055,7 @@ Table content_reports {
   }
 
   Note: '''
-  CHECK: dung mot trong listing_id / product_review_id
+  CHECK: dung mot trong listing_id / product_review_id (num_nonnulls = 1)
   Partial unique: UNIQUE (reporter_id, listing_id) WHERE listing_id IS NOT NULL
   Tu tam go: >= N nguoi bao cao khac nhau trong 24 gio -> listing suspended
   '''
@@ -1155,19 +1117,18 @@ Ref: auth_tokens.replaced_by_id > auth_tokens.id [delete: set null]
 Ref: auth_tokens.child_id > child_profiles.id [delete: cascade]
 Ref: child_profiles.parent_id > users.id [delete: restrict]
 Ref: characters.parent_id > users.id [delete: restrict]
-Ref: child_usage_sessions.child_id > child_profiles.id [delete: cascade]
 
 Ref: backgrounds.created_by > users.id [delete: restrict]
 Ref: blocked_keywords.created_by > users.id [delete: restrict]
 
 Ref: stories.owner_id > users.id [delete: restrict]
-Ref: stories.source_story_id > stories.id [delete: set null]
+Ref: stories.source_story_id > stories.id [delete: restrict]
 Ref: characters.child_id - child_profiles.id [delete: set null]
 Ref: topics.skill_id > eq_skills.id [delete: restrict]
 Ref: topics.created_by > users.id [delete: restrict]
 Ref: stories.topic_id > topics.id [delete: restrict]
 Ref: story_characters.story_id > stories.id [delete: cascade]
-Ref: story_characters.character_id > characters.id [delete: set null]
+Ref: story_characters.character_id > characters.id [delete: restrict]
 Ref: story_scenes.story_id > stories.id [delete: cascade]
 Ref: story_scenes.background_id > backgrounds.id [delete: restrict]
 Ref: story_pages.story_id > stories.id [delete: cascade]
@@ -1175,6 +1136,7 @@ Ref: story_pages.scene_id > story_scenes.id [delete: restrict]
 Ref: story_checkpoints.story_id > stories.id [delete: cascade]
 Ref: story_checkpoints.after_page_id - story_pages.id [delete: cascade]
 Ref: checkpoint_options.checkpoint_id > story_checkpoints.id [delete: cascade]
+Ref: narration_clips.story_id > stories.id [delete: cascade]
 Ref: checkpoint_answers.session_id > play_sessions.id [delete: cascade]
 Ref: checkpoint_answers.checkpoint_id > story_checkpoints.id [delete: restrict]
 Ref: checkpoint_answers.first_option_id > checkpoint_options.id [delete: restrict]
@@ -1191,12 +1153,10 @@ Ref: play_sessions.child_id > child_profiles.id [delete: restrict]
 Ref: play_sessions.story_id > stories.id [delete: restrict]
 Ref: play_sessions.current_page_id > story_pages.id [delete: set null]
 
-Ref: prompt_templates.created_by > users.id [delete: restrict]
 Ref: ai_requests.user_id > users.id [delete: restrict]
 Ref: ai_requests.story_id > stories.id [delete: set null]
 Ref: ai_requests.page_id > story_pages.id [delete: set null]
 Ref: ai_requests.character_id > characters.id [delete: set null]
-Ref: ai_requests.prompt_template_id > prompt_templates.id [delete: set null]
 
 Ref: seller_profiles.user_id - users.id [delete: restrict]
 Ref: seller_profiles.reviewed_by > users.id [delete: set null]
@@ -1204,8 +1164,6 @@ Ref: listings.seller_id > seller_profiles.user_id [delete: restrict]
 Ref: listings.published_story_id - stories.id [delete: restrict]
 Ref: listings.previous_listing_id > listings.id [delete: set null]
 Ref: listings.price_tier_id > price_tiers.id [delete: restrict]
-Ref: cart_items.parent_id > users.id [delete: cascade]
-Ref: cart_items.listing_id > listings.id [delete: cascade]
 Ref: entitlements.parent_id > users.id [delete: restrict]
 Ref: entitlements.listing_id > listings.id [delete: restrict]
 Ref: entitlements.order_item_id > order_items.id [delete: set null]
@@ -1217,15 +1175,10 @@ Ref: product_review_tags.review_id > product_reviews.id [delete: cascade]
 Ref: subscriptions.parent_id > users.id [delete: restrict]
 Ref: subscriptions.plan_id > plans.id [delete: restrict]
 Ref: subscriptions.order_item_id > order_items.id [delete: set null]
-Ref: vouchers.created_by > users.id [delete: restrict]
 Ref: orders.buyer_id > users.id [delete: restrict]
-Ref: orders.voucher_id > vouchers.id [delete: restrict]
-Ref: order_items.order_id > orders.id [delete: cascade]
+Ref: order_items.order_id > orders.id [delete: restrict]
 Ref: order_items.plan_id > plans.id [delete: restrict]
 Ref: order_items.listing_id > listings.id [delete: restrict]
-Ref: voucher_usages.voucher_id > vouchers.id [delete: restrict]
-Ref: voucher_usages.order_id > orders.id [delete: cascade]
-Ref: voucher_usages.user_id > users.id [delete: restrict]
 Ref: refund_requests.order_item_id - order_items.id [delete: restrict]
 Ref: refund_requests.requester_id > users.id [delete: restrict]
 Ref: refund_requests.handled_by > users.id [delete: set null]
@@ -1235,14 +1188,14 @@ Ref: withdrawal_requests.seller_id > seller_profiles.user_id [delete: restrict]
 Ref: withdrawal_requests.handled_by > users.id [delete: set null]
 Ref: platform_settings.updated_by > users.id [delete: restrict]
 
-Ref: moderation_reviews.listing_id > listings.id [delete: cascade]
+Ref: moderation_reviews.listing_id > listings.id [delete: restrict]
 Ref: moderation_reviews.moderator_id > users.id [delete: set null]
 Ref: review_checklist_results.review_id > moderation_reviews.id [delete: cascade]
 Ref: review_checklist_results.checklist_item_id > checklist_items.id [delete: restrict]
 Ref: review_page_views.review_id > moderation_reviews.id [delete: cascade]
 Ref: review_page_views.page_id > story_pages.id [delete: cascade]
 Ref: content_reports.reporter_id > users.id [delete: restrict]
-Ref: content_reports.listing_id > listings.id [delete: cascade]
+Ref: content_reports.listing_id > listings.id [delete: restrict]
 Ref: content_reports.page_id > story_pages.id [delete: set null]
 Ref: content_reports.product_review_id > product_reviews.id [delete: cascade]
 Ref: content_reports.handled_by > users.id [delete: set null]
@@ -1262,7 +1215,6 @@ TableGroup accounts {
   auth_tokens
   child_profiles
   characters
-  child_usage_sessions
 }
 
 TableGroup content_library {
@@ -1291,7 +1243,6 @@ TableGroup learning {
 }
 
 TableGroup ai {
-  prompt_templates
   ai_requests
 }
 
@@ -1299,7 +1250,6 @@ TableGroup marketplace {
   seller_profiles
   price_tiers
   listings
-  cart_items
   entitlements
   product_reviews
   product_review_tags
@@ -1308,10 +1258,8 @@ TableGroup marketplace {
 TableGroup commerce {
   plans
   subscriptions
-  vouchers
   orders
   order_items
-  voucher_usages
   refund_requests
   webhook_logs
   wallets

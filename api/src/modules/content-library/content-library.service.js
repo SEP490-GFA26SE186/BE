@@ -41,7 +41,7 @@ const getBackgrounds = async (filter = {}) => {
       take: limitNum,
       orderBy: { createdAt: 'desc' },
       include: {
-        createdBy: {
+        creator: {
           select: {
             id: true,
             username: true,
@@ -49,7 +49,7 @@ const getBackgrounds = async (filter = {}) => {
           },
         },
         _count: {
-          select: { storyPages: true },
+          select: { storyScenes: true },
         },
       },
     }),
@@ -66,8 +66,8 @@ const getBackgrounds = async (filter = {}) => {
       imageKey: bg.imageKey,
       tags: bg.tags,
       isActive: bg.isActive,
-      usageCount: bg._count.storyPages,
-      createdBy: bg.createdBy,
+      usageCount: bg._count.storyScenes,
+      createdBy: bg.creator,
       createdAt: bg.createdAt,
     })),
   };
@@ -82,7 +82,7 @@ const getBackgroundById = async (id) => {
   const background = await prisma.background.findUnique({
     where: { id },
     include: {
-      createdBy: {
+      creator: {
         select: {
           id: true,
           username: true,
@@ -90,7 +90,7 @@ const getBackgroundById = async (id) => {
         },
       },
       _count: {
-        select: { storyPages: true },
+        select: { storyScenes: true },
       },
     },
   });
@@ -105,8 +105,8 @@ const getBackgroundById = async (id) => {
     imageKey: background.imageKey,
     tags: background.tags,
     isActive: background.isActive,
-    usageCount: background._count.storyPages,
-    createdBy: background.createdBy,
+    usageCount: background._count.storyScenes,
+    createdBy: background.creator,
     createdAt: background.createdAt,
   };
 };
@@ -126,10 +126,10 @@ const createBackground = async (userId, data) => {
       imageKey,
       tags: tags || null,
       isActive,
-      createdById: userId,
+      createdBy: userId,
     },
     include: {
-      createdBy: {
+      creator: {
         select: {
           id: true,
           username: true,
@@ -177,7 +177,7 @@ const deleteBackground = async (id) => {
     where: { id },
     include: {
       _count: {
-        select: { storyPages: true },
+        select: { storyScenes: true },
       },
     },
   });
@@ -186,13 +186,13 @@ const deleteBackground = async (id) => {
     throw ApiError.notFound('Background not found');
   }
 
-  if (existing._count.storyPages > 0) {
+  if (existing._count.storyScenes > 0) {
     await prisma.background.update({
       where: { id },
       data: { isActive: false },
     });
     return {
-      message: `Ảnh nền đã được ${existing._count.storyPages} trang truyện sử dụng, đã chuyển sang trạng thái ngưng hoạt động (isActive: false)`,
+      message: `Ảnh nền đã được ${existing._count.storyScenes} cảnh truyện sử dụng, đã chuyển sang trạng thái ngưng hoạt động (isActive: false)`,
       deactivated: true,
     };
   }
@@ -500,89 +500,8 @@ const deleteChecklistItem = async (id) => {
 // 4. BLOCKED KEYWORDS BULK & UPDATE SERVICE
 // =============================================================================
 
-/**
- * Bulk import or upsert blocked keywords
- * @param {Object} user
- * @param {Array<{ keyword: string, severity?: string }>} keywords
- * @returns {Promise<Object>}
- */
-const bulkImportKeywords = async (user, keywords) => {
-  let createdCount = 0;
-  let updatedCount = 0;
-
-  await prisma.$transaction(async (tx) => {
-    for (const item of keywords) {
-      const normalized = item.keyword.trim().toLowerCase();
-      const severity = item.severity || 'block';
-
-      const existing = await tx.blockedKeyword.findUnique({
-        where: { keyword: normalized },
-      });
-
-      if (existing) {
-        await tx.blockedKeyword.update({
-          where: { id: existing.id },
-          data: {
-            severity,
-            isActive: true,
-          },
-        });
-        updatedCount++;
-      } else {
-        await tx.blockedKeyword.create({
-          data: {
-            keyword: normalized,
-            severity,
-            isActive: true,
-            createdById: user.id,
-          },
-        });
-        createdCount++;
-      }
-    }
-  });
-
-  return {
-    totalProcessed: keywords.length,
-    createdCount,
-    updatedCount,
-    message: `Đã xử lý ${keywords.length} từ khóa (${createdCount} thêm mới, ${updatedCount} cập nhật)`,
-  };
-};
-
-/**
- * Update single keyword
- * @param {string} id
- * @param {Object} data
- * @returns {Promise<Object>}
- */
-const updateKeyword = async (id, data) => {
-  const existing = await prisma.blockedKeyword.findUnique({ where: { id } });
-  if (!existing) {
-    throw ApiError.notFound('Blocked keyword not found');
-  }
-
-  if (data.keyword && data.keyword.trim().toLowerCase() !== existing.keyword) {
-    const normalized = data.keyword.trim().toLowerCase();
-    const duplicate = await prisma.blockedKeyword.findUnique({ where: { keyword: normalized } });
-    if (duplicate && duplicate.id !== id) {
-      throw ApiError.conflict(`Keyword '${normalized}' already exists`);
-    }
-    data.keyword = normalized;
-  }
-
-  return prisma.blockedKeyword.update({
-    where: { id },
-    data: {
-      ...(data.keyword !== undefined && { keyword: data.keyword }),
-      ...(data.severity !== undefined && { severity: data.severity }),
-      ...(data.isActive !== undefined && { isActive: data.isActive }),
-    },
-  });
-};
-
 // =============================================================================
-// 5. CONTENT LIBRARY STATS SERVICE
+// 6. CONTENT LIBRARY STATS SERVICE
 // =============================================================================
 
 /**
@@ -654,8 +573,7 @@ export default {
   deleteChecklistItem,
 
   // Blocked Keywords
-  bulkImportKeywords,
-  updateKeyword,
+
 
   // Stats
   getContentLibraryStats,

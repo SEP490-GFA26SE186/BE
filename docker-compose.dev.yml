@@ -14,7 +14,9 @@
 
 services:
   api:
-    command: ["npm", "run", "dev"]
+    # --legacy-watch (polling): bind mount tu Windows vao Docker Desktop khong phat su kien doi file,
+    # nodemon thuong khong thay code moi -> container chay code cu ma khong bao loi.
+    command: ["npx", "nodemon", "--legacy-watch", "src/server.js"]
     volumes:
       # Chi mount source, KHONG mount ca thu muc: mount ./api:/app se
       # che mat node_modules da cai trong image.
@@ -23,7 +25,7 @@ services:
       - ./api/scripts:/app/scripts
 
   worker:
-    command: ["npm", "run", "worker:dev"]
+    command: ["npx", "nodemon", "--legacy-watch", "src/worker.js"]
     volumes:
       - ./api/src:/app/src
       - ./api/prisma:/app/prisma

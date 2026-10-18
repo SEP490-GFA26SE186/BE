@@ -16,22 +16,18 @@ const aiQueue = new Queue(AI_QUEUE_NAME, {
 /**
  * Day mot job sinh noi dung vao queue.
  *
- * `idempotencyKey` duoc dung lam jobId: BullMQ tu chan job trung id, nen day
- * la lop chong trung o phia Node. ai/ KHONG tu dedupe duoc (no
- * stateless, khong co Redis lan DB) — dung dua vao no.
+ * `jobId` (thuong la khoa idempotency cua ai_request) duoc dung lam BullMQ
+ * jobId: BullMQ tu chan job trung id, nen day la lop chong trung o phia Node.
+ * ai/ KHONG tu dedupe duoc (no stateless, khong co Redis lan DB) — dung dua
+ * vao no.
  *
- * @param {string} jobName      mot gia tri trong AI_JOB
- * @param {object} params
- * @param {string} params.idempotencyKey
- * @param {string} params.storagePrefix  duong dan Storage do Node quyet dinh
- * @param {object} params.input          payload nghiep vu, ai/ khong validate sau
+ * @param {string} jobName   mot gia tri trong AI_JOB
+ * @param {object} data      du lieu job (processor doc lai DB, chi mang id)
+ * @param {object} options
+ * @param {string} options.jobId
  */
-export const enqueueAiJob = (jobName, { idempotencyKey, storagePrefix, input }) =>
-  aiQueue.add(
-    jobName,
-    { idempotencyKey, storagePrefix, input },
-    { jobId: idempotencyKey },
-  );
+export const enqueueAiJob = (jobName, data, { jobId }) =>
+  aiQueue.add(jobName, data, { jobId });
 
 export default aiQueue;
 

@@ -10,6 +10,9 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { seedEqSkills } from './seed_eq_skills.js';
 import { seedTopics } from './seed_topics.js';
+import { seedPlatformSettings } from './seed_platform_settings.js';
+import { seedPlans } from './seed_plans.js';
+import { seedMarket } from './seed_market.js';
 
 const prisma = new PrismaClient();
 
@@ -17,6 +20,10 @@ async function main() {
   // Thu tu quan trong: topics.skill_id tro vao eq_skills.
   await seedEqSkills(prisma);
   await seedTopics(prisma);
+  // updated_by tro vao moderator do seedTopics tao.
+  await seedPlatformSettings(prisma);
+  await seedPlans(prisma);
+  await seedMarket(prisma);
 }
 
 main()
