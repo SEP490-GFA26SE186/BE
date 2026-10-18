@@ -1,5 +1,7 @@
+import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
+import { loadReadiness, notReadyMessage } from '../stories/stories.narration.store.js';
 import { buildShelf, readingProgress } from './lib/shelf.js';
 
 /**
@@ -97,151 +99,54 @@ const getBookshelf = async (user, query) => {
 };
 
 /**
- * Add a story to child's bookshelf
- * @param {Object} user - Authenticated user
- * @param {Object} payload - { childId, storyId }
- * @returns {Promise<Object>} Added bookshelf item
+ * Dua truyen len gia sach cua be (rev8). Chi truyen cua chinh phu huynh (ban rieng, hoac ban sao da
+ * mua) va phai "san sang cho tre": da hoan tat + du giong doc khop chu (spec TTS §5.5) -> 422 kem
+ * tien do neu chua. Da co tren gia -> tra lai muc cu (idempotent).
  */
 const addToBookshelf = async (user, { childId, storyId }) => {
   const child = await verifyChildAccess(user, childId);
-
-  const story = await prisma.story.findFirst({
-    where: {
-      id: storyId,
-      deletedAt: null,
-    },
-    include: {
-      template: {
-        select: {
-          id: true,
-          title: true,
-          primarySkill: {
-            select: { id: true, caselCode: true, nameVi: true, nameEn: true },
-          },
-        },
-      },
-    },
-  });
-
-  if (!story) {
-    throw ApiError.notFound('Story not found');
+  const check = await loadReadiness(prisma, storyId);
+  if (!check || check.story.ownerId !== user.id) throw ApiError.notFound('Không tìm thấy truyện.');
+  if (!check.ready) {
+    throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, notReadyMessage(check), [
+      { path: 'storyId', message: check.reason, narration: check.narration },
+    ]);
   }
 
-  // Access check: story is owned by parent OR is published
-  const isOwner = story.ownerId === user.id;
-  const isPublished = story.kind === 'published';
-  const isElevated = ['admin', 'moderator'].includes(user.role);
-
-  if (!isOwner && !isPublished && !isElevated) {
-    throw ApiError.forbidden('You do not have permission to add this story');
-  }
-
-  // Check if already in bookshelf
-  const existing = await prisma.bookshelfItem.findUnique({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId: story.id,
-      },
-    },
-  });
-
-  if (existing) {
-    return {
-      childId: child.id,
-      storyId: story.id,
-      addedAt: existing.addedAt,
-      alreadyInBookshelf: true,
-      story: {
-        id: story.id,
-        title: story.title,
-        coverImageKey: story.coverImageKey,
-      },
-    };
-  }
-
-  const newItem = await prisma.bookshelfItem.create({
-    data: {
-      childId: child.id,
-      storyId: story.id,
-    },
-    include: {
-      story: {
-        select: {
-          id: true,
-          title: true,
-          coverImageKey: true,
-        },
-      },
-    },
-  });
-
-  return {
-    childId: newItem.childId,
-    storyId: newItem.storyId,
-    addedAt: newItem.addedAt,
-    alreadyInBookshelf: false,
-    story: newItem.story,
-  };
-};
-
-/**
- * Remove a story from child's bookshelf
- * @param {Object} user - Authenticated user
- * @param {Object} payload - { childId, storyId }
- * @returns {Promise<Object>} Success message
- */
-const removeFromBookshelf = async (user, { childId, storyId }) => {
-  const child = await verifyChildAccess(user, childId);
-
-  const existing = await prisma.bookshelfItem.findUnique({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId,
-      },
-    },
-  });
-
-  if (!existing) {
-    throw ApiError.notFound('Story is not in child bookshelf');
-  }
-
-  await prisma.bookshelfItem.delete({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId,
-      },
-    },
-  });
-
-  return { message: 'Story removed from bookshelf successfully' };
-};
-
-/**
- * Check if a story is present in child's bookshelf
- * @param {Object} user - Authenticated user
- * @param {Object} payload - { childId, storyId }
- * @returns {Promise<Object>} Status info
- */
-const checkBookshelf = async (user, { childId, storyId }) => {
-  const child = await verifyChildAccess(user, childId);
-
-  const existing = await prisma.bookshelfItem.findUnique({
-    where: {
-      childId_storyId: {
-        childId: child.id,
-        storyId,
-      },
-    },
-  });
-
+  const key = { childId_storyId: { childId: child.id, storyId } };
+  const existing = await prisma.bookshelfItem.findUnique({ where: key });
+  const item = existing ?? (await prisma.bookshelfItem.create({ data: { childId: child.id, storyId } }));
   return {
     childId: child.id,
     storyId,
-    inBookshelf: !!existing,
-    addedAt: existing?.addedAt || null,
+    addedAt: item.addedAt,
+    alreadyInBookshelf: Boolean(existing),
+    story: { id: storyId, title: check.story.title },
+  };
+};
+
+/** Bo truyen khoi gia sach. Lich su doc (play_sessions) giu nguyen. */
+const removeFromBookshelf = async (user, { childId, storyId }) => {
+  const child = await verifyChildAccess(user, childId);
+  const { count } = await prisma.bookshelfItem.deleteMany({ where: { childId: child.id, storyId } });
+  if (count === 0) throw ApiError.notFound('Truyện không có trên giá sách của bé.');
+  return { message: 'Đã bỏ truyện khỏi giá sách' };
+};
+
+/** Truyen co tren gia cua be nao (cua phu huynh nay) — cho nut "Dua len gia sach" o editor. */
+const checkBookshelf = async (user, { childId, storyId }) => {
+  const children = childId ? [await verifyChildAccess(user, childId)] : await prisma.childProfile.findMany({
+    where: { parentId: user.id, deletedAt: null },
+    select: { id: true, name: true },
+  });
+  const rows = await prisma.bookshelfItem.findMany({
+    where: { storyId, childId: { in: children.map((c) => c.id) } },
+    select: { childId: true, addedAt: true },
+  });
+  const added = new Map(rows.map((r) => [r.childId, r.addedAt]));
+  return {
+    storyId,
+    children: children.map((c) => ({ childId: c.id, name: c.name, inBookshelf: added.has(c.id), addedAt: added.get(c.id) ?? null })),
   };
 };
 

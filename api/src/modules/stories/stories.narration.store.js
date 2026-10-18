@@ -1,7 +1,7 @@
 // Doc / ghi narration_clips (spec TTS §5.2-5.4). `db` la prisma hoac transaction client.
 // Khong tinh credit (nguoi dung chot 2026-10-17): khong dung ai_requests, khong giu / hoan credit.
 import ApiError from '../../utils/ApiError.js';
-import { SEGMENT_TARGETS, fingerprintOf, narrationSegments, planNarration } from './lib/narration.js';
+import { SEGMENT_TARGETS, childReadiness, fingerprintOf, narrationSegments, planNarration } from './lib/narration.js';
 
 export const VOICE_KEY = 'tts.voice';
 
@@ -19,6 +19,31 @@ export const NARRATION_STORY_INCLUDE = {
   },
   storyCharacters: { include: { character: { select: { name: true } } } },
 };
+
+/**
+ * "San sang cho tre" cua mot truyen (spec TTS §5.5) — ham kiem dung chung cho cong chan o giá sach
+ * va luc be bat dau doc. null = khong co truyen.
+ * @returns {Promise<{ story, ready, reason, narration } | null>}
+ */
+export async function loadReadiness(db, storyId) {
+  const story = await db.story.findFirst({
+    where: { id: storyId, deletedAt: null },
+    include: { ...NARRATION_STORY_INCLUDE, narrationClips: { select: { segment: true, fingerprint: true, status: true } } },
+  });
+  if (!story) return null;
+  const row = await db.platformSetting.findUnique({ where: { key: VOICE_KEY }, select: { value: true } });
+  const voice = typeof row?.value === 'string' ? row.value.trim() : '';
+  return { story, ...childReadiness(story, story.narrationClips, voice) };
+}
+
+/** Cau bao tieng Viet khi truyen chua san sang (422) — FE hien nguyen van. */
+export function notReadyMessage({ reason, narration }) {
+  if (reason === 'not_reviewed') return 'Truyện chưa được ba mẹ bấm hoàn tất.';
+  const left = narration.total - narration.ready;
+  return narration.pending > 0
+    ? `Giọng đọc đang được tạo (còn ${left}/${narration.total} đoạn). Vui lòng chờ ít phút.`
+    : `Giọng đọc còn thiếu ${left}/${narration.total} đoạn. Hãy bấm hoàn tất lại hoặc thử lại giọng đọc.`;
+}
 
 /** Giong do Node quyet (§5.2), luon gui tuong minh cho ai/. Thieu / sai -> loi cau hinh 500. */
 export async function loadVoice(db) {
