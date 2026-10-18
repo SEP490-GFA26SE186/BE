@@ -333,6 +333,7 @@ model User {
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz()
   lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz()
   isActive        Boolean   @default(true) @map("is_active")
+  aiBlockedUntil  DateTime? @map("ai_blocked_until") @db.Timestamptz()
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz()
@@ -599,7 +600,7 @@ model Story {
   deletedAt     DateTime?   @map("deleted_at") @db.Timestamptz()
 
   owner       User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: SetNull)
+  sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: Restrict)
   topic       Topic  @relation(fields: [topicId], references: [id], onDelete: Restrict)
 
   // -- back-references --
@@ -630,7 +631,7 @@ model StoryCharacter {
   isMain      Boolean @default(false) @map("is_main")
 
   story     Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  character Character? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+  character Character? @relation(fields: [characterId], references: [id], onDelete: Restrict)
 
   @@id([storyId, token])
   @@index([characterId])
@@ -921,6 +922,7 @@ model AiRequest {
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@index([storyId])
+  @@index([createdAt])
   @@map("ai_requests")
 }
 
@@ -1199,7 +1201,7 @@ model OrderItem {
   sellerAmountVnd BigInt?         @map("seller_amount_vnd")
   status          OrderItemStatus @default(active)
 
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
   plan    Plan?    @relation(fields: [planId], references: [id], onDelete: Restrict)
   listing Listing? @relation(fields: [listingId], references: [id], onDelete: Restrict)
 
@@ -1356,7 +1358,7 @@ model ModerationReview {
   decidedAt      DateTime?            @map("decided_at") @db.Timestamptz()
   createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz()
 
-  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Restrict)
   moderator User?   @relation("ModReviewModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
 
   // -- back-references --
@@ -1411,7 +1413,7 @@ model ContentReport {
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz()
 
   reporter      User           @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Restrict)
-  listing       Listing?       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing       Listing?       @relation(fields: [listingId], references: [id], onDelete: Restrict)
   page          StoryPage?     @relation(fields: [pageId], references: [id], onDelete: SetNull)
   productReview ProductReview? @relation(fields: [productReviewId], references: [id], onDelete: Cascade)
   handler       User?          @relation("ReportHandler", fields: [handledBy], references: [id], onDelete: SetNull)

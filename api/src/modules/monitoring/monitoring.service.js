@@ -355,7 +355,14 @@ export async function scheduleRandomAudits(db = prisma, { now = new Date(), forc
     LIMIT ${take}`;
   const reviewIds = [];
   for (const { id } of picked) {
-    reviewIds.push((await db.moderationReview.create({ data: { listingId: id, reviewType: 'random_audit', createdAt: now } })).id);
+    // Khoa dong truyen nhu suspendListing / createReport (cung khoa listing) roi kiem lai: DB chi cho mot luot
+    // duyet dang mo moi truyen (unique moderation_reviews_listing_id_open_key).
+    const reviewId = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM listings WHERE id = ${id}::uuid AND status = 'published' FOR UPDATE`;
+      if (await tx.moderationReview.findFirst({ where: { listingId: id, decidedAt: null }, select: { id: true } })) return null;
+      return (await tx.moderationReview.create({ data: { listingId: id, reviewType: 'random_audit', createdAt: now } })).id;
+    }, TX);
+    if (reviewId) reviewIds.push(reviewId);
   }
   return { created: reviewIds.length, reviewIds };
 }
