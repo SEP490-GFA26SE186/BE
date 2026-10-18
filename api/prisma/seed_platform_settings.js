@@ -64,6 +64,11 @@ export const platformSettingsData = [
   // Giọng đọc kể truyện (spec TTS §5.2): preset VieNeu, Node luôn gửi tường minh. Đổi giọng làm
   // lệch vân tay mọi đoạn -> các truyện phải hoàn tất lại để đọc bằng giọng mới.
   { key: 'tts.voice', value: 'Kim Thanh' },
+  // Chợ truyện (người dùng chốt 2026-10-18): người bán nhận 80% giá niêm yết, doanh thu giữ 3 ngày
+  // (để xử lý hoàn tiền) rồi mới rút được. Rút tối thiểu 50.000đ.
+  { key: 'market.seller_share_rate', value: 0.8 },
+  { key: 'market.earning_hold_days', value: 3 },
+  { key: 'market.min_withdrawal_vnd', value: 50000 },
 ];
 
 export async function seedPlatformSettings(prisma) {

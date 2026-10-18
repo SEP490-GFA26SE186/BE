@@ -5,6 +5,7 @@ import { AI_QUEUE_NAME, NARRATION_QUEUE_NAME } from './queues/ai.jobs.js';
 import processAiJob from './workers/ai.processor.js';
 import processNarrationJob from './workers/narration.processor.js';
 import { runBillingCycle } from './modules/billing/billing.store.js';
+import { releaseDueEarnings } from './modules/wallets/earningLedger.js';
 
 // Bien chi worker can. Container `api` khong duoc cap AI_SERVICE_URL, nen moi
 // yeu cau sinh noi dung buoc phai di qua queue thay vi goi truc tiep.
@@ -43,7 +44,8 @@ const BILLING_EVERY_MS = (Number(process.env.BILLING_CYCLE_MINUTES) || 15) * 60_
 const billingTick = async () => {
   try {
     const r = await runBillingCycle(prisma);
-    if (r.granted || r.renewedFree || r.expired || r.ordersExpired) console.log('[billing]', JSON.stringify(r));
+    r.earningsReleased = await releaseDueEarnings(prisma); // doanh thu nguoi ban het han giu (3 ngay)
+    if (r.granted || r.renewedFree || r.expired || r.ordersExpired || r.earningsReleased) console.log('[billing]', JSON.stringify(r));
   } catch (error) {
     console.error('[billing] chu ky loi:', error);
   }

@@ -11,7 +11,7 @@ import { ORDER_TTL_MINUTES, formatOrder, formatPlan, newOrderCode, payosDescript
 import { closeOrder, ensureFreeSubscription, fulfillOrder } from './billing.store.js';
 
 const TX = { timeout: 20000 };
-const ORDER_INCLUDE = { items: { include: { plan: true } } };
+const ORDER_INCLUDE = { items: { include: { plan: true, listing: { select: { id: true, title: true } } } } };
 
 const unavailable = (error) => {
   console.error('[payos]', error);
@@ -26,19 +26,15 @@ export async function listPlans() {
 }
 
 /**
- * POST /payments/plans/checkout { planId } -> { order, checkoutUrl }.
- * Goi 0d: kich hoat ngay, khong qua payOS. Goi tra phi: tao don pending + link payOS (han 15 phut).
+ * Tao don mot item + link payOS (dung chung cho goi va truyen). Gia 0d: giao ngay, khong qua payOS.
+ * `item`: du lieu order_items (itemType + planId | listingId + snapshot gia / ti le nguoi ban).
+ * payOS tra nguoi dung ve `<WEB_URL><returnPath>?orderId=...` (huy: them `&cancelled=1`).
+ * @returns {Promise<{ order, checkoutUrl: string | null }>}
  */
-export async function checkoutPlan(user, planId, { now = new Date() } = {}) {
-  const plan = await prisma.plan.findFirst({ where: { id: planId, isActive: true } });
-  if (!plan) throw ApiError.notFound('Không tìm thấy gói.');
-  const price = plan.priceVnd;
-
+export async function checkoutOrder(user, { price, itemName, item, returnPath }, { now = new Date() } = {}) {
   if (price === 0n) {
     const order = await prisma.$transaction(async (tx) => {
-      const o = await tx.order.create({
-        data: { buyerId: user.id, subtotalVnd: 0n, totalVnd: 0n, items: { create: { itemType: 'plan', planId: plan.id, unitPriceVnd: 0n } } },
-      });
+      const o = await tx.order.create({ data: { buyerId: user.id, subtotalVnd: 0n, totalVnd: 0n, items: { create: item } } });
       await fulfillOrder(tx, o.id, { now });
       return tx.order.findUniqueOrThrow({ where: { id: o.id }, include: ORDER_INCLUDE });
     }, TX);
@@ -48,14 +44,7 @@ export async function checkoutPlan(user, planId, { now = new Date() } = {}) {
   const orderCode = newOrderCode();
   const expiresAt = new Date(now.getTime() + ORDER_TTL_MINUTES * 60_000);
   const order = await prisma.order.create({
-    data: {
-      buyerId: user.id,
-      subtotalVnd: price,
-      totalVnd: price,
-      payosOrderCode: BigInt(orderCode),
-      expiresAt,
-      items: { create: { itemType: 'plan', planId: plan.id, unitPriceVnd: price } },
-    },
+    data: { buyerId: user.id, subtotalVnd: price, totalVnd: price, payosOrderCode: BigInt(orderCode), expiresAt, items: { create: item } },
     include: ORDER_INCLUDE,
   });
 
@@ -65,10 +54,10 @@ export async function checkoutPlan(user, planId, { now = new Date() } = {}) {
       orderCode,
       amount: Number(price),
       description: payosDescription(orderCode),
-      returnUrl: `${env.webUrl}/parent/billing/result?orderId=${order.id}`,
-      cancelUrl: `${env.webUrl}/parent/billing/result?orderId=${order.id}&cancelled=1`,
+      returnUrl: `${env.webUrl}${returnPath}?orderId=${order.id}`,
+      cancelUrl: `${env.webUrl}${returnPath}?orderId=${order.id}&cancelled=1`,
       expiredAt: Math.floor(expiresAt.getTime() / 1000), // payOS: Unix giay
-      items: [{ name: plan.name.slice(0, 100), quantity: 1, price: Number(price) }],
+      items: [{ name: itemName.slice(0, 100), quantity: 1, price: Number(price) }],
     });
   } catch (error) {
     await prisma.order.update({ where: { id: order.id }, data: { status: 'failed' } });
@@ -76,6 +65,17 @@ export async function checkoutPlan(user, planId, { now = new Date() } = {}) {
   }
   await prisma.order.update({ where: { id: order.id }, data: { payosPaymentLinkId: link.paymentLinkId } });
   return { order: formatOrder(order), checkoutUrl: link.checkoutUrl };
+}
+
+/** POST /payments/plans/checkout { planId } -> { order, checkoutUrl }. */
+export async function checkoutPlan(user, planId, options) {
+  const plan = await prisma.plan.findFirst({ where: { id: planId, isActive: true } });
+  if (!plan) throw ApiError.notFound('Không tìm thấy gói.');
+  return checkoutOrder(
+    user,
+    { price: plan.priceVnd, itemName: plan.name, item: { itemType: 'plan', planId: plan.id, unitPriceVnd: plan.priceVnd }, returnPath: '/parent/billing/result' },
+    options,
+  );
 }
 
 /** Doi trang thai don theo payOS (PAID -> giao hang, CANCELLED / EXPIRED -> dong don). */
@@ -150,4 +150,4 @@ export async function handleWebhook(body, { now = new Date() } = {}) {
 /** Phu huynh moi dang ky / seed: goi Mien phi (cap credit thang dau). */
 export const ensureFreePlan = (userId) => prisma.$transaction((tx) => ensureFreeSubscription(tx, userId), TX);
 
-export default { listPlans, checkoutPlan, getOrder, handleWebhook, ensureFreePlan };
+export default { listPlans, checkoutPlan, checkoutOrder, getOrder, handleWebhook, ensureFreePlan };

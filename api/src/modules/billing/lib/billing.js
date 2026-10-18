@@ -89,5 +89,12 @@ export const formatOrder = (o) => ({
   paidAt: o.paidAt,
   expiresAt: o.expiresAt,
   createdAt: o.createdAt,
-  items: (o.items ?? []).map((i) => ({ itemType: i.itemType, planId: i.planId, listingId: i.listingId, unitPriceVnd: vnd(i.unitPriceVnd), plan: i.plan ? formatPlan(i.plan) : undefined })),
+  items: (o.items ?? []).map((i) => ({
+    itemType: i.itemType,
+    planId: i.planId,
+    listingId: i.listingId,
+    unitPriceVnd: vnd(i.unitPriceVnd),
+    plan: i.plan ? formatPlan(i.plan) : undefined,
+    listing: i.listing ? { id: i.listing.id, title: i.listing.title } : undefined,
+  })),
 });

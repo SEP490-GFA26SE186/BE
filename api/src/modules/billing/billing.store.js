@@ -1,8 +1,44 @@
 // Doc / ghi goi, don, ky cap credit (rev8). `tx` la transaction client Prisma.
 import { expireCredit, grantCredit } from '../wallets/creditLedger.js';
+import { recordEarning } from '../wallets/earningLedger.js';
 import { FREE_PLAN_CODE, cycleAction, monthsBetween, newPeriod } from './lib/billing.js';
 
 const TX = { timeout: 20000 };
+
+/** Tham so cho truyen (platform_settings market.*): ti le nguoi ban nhan, so ngay giu doanh thu. */
+export async function loadMarketSettings(db) {
+  const rows = await db.platformSetting.findMany({ where: { key: { startsWith: 'market.' } }, select: { key: true, value: true } });
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+  const rate = Number(map.get('market.seller_share_rate'));
+  const holdDays = Number(map.get('market.earning_hold_days'));
+  const minWithdrawal = Number(map.get('market.min_withdrawal_vnd'));
+  if (!(rate > 0 && rate <= 1) || !(holdDays >= 0) || !(minWithdrawal > 0)) {
+    throw new Error('Thiếu / sai cấu hình market.* trong platform_settings (chạy lại seed).');
+  }
+  return { sellerShareRate: rate, earningHoldDays: holdDays, minWithdrawalVnd: minWithdrawal };
+}
+
+/**
+ * Giao mot item truyen: quyen doc (entitlement) + bo dem; truyen co gia -> doanh thu nguoi ban
+ * (seller_amount_vnd da chot trong don) giu `holdDays` ngay. Da co quyen (mua trung) -> chi them doanh thu.
+ */
+async function deliverListing(tx, { buyerId, item, now }) {
+  const listing = await tx.listing.findUniqueOrThrow({ where: { id: item.listingId } });
+  const active = await tx.entitlement.findFirst({ where: { parentId: buyerId, listingId: listing.id, revokedAt: null } });
+  if (!active) await tx.entitlement.create({ data: { parentId: buyerId, listingId: listing.id, orderItemId: item.id, grantedAt: now } });
+  const paid = item.unitPriceVnd > 0n;
+  await tx.listing.update({ where: { id: listing.id }, data: paid ? { purchaseCount: { increment: 1 } } : { freeClaimCount: { increment: 1 } } });
+  if (paid) {
+    await tx.sellerProfile.update({ where: { userId: listing.sellerId }, data: { totalSales: { increment: 1 } } });
+    const { earningHoldDays } = await loadMarketSettings(tx);
+    await recordEarning(tx, {
+      sellerId: listing.sellerId,
+      amount: item.sellerAmountVnd,
+      orderItemId: item.id,
+      availableAt: new Date(now.getTime() + earningHoldDays * 86_400_000),
+    });
+  }
+}
 
 const grantKey = (subId, month) => `grant:${subId}:${month}`;
 const expireKey = (subId, month) => `expire:${subId}:${month}`;
@@ -45,6 +81,8 @@ export async function fulfillOrder(tx, orderId, { transactionId = null, now = ne
   for (const item of order.items) {
     if (item.itemType === 'plan' && item.plan) {
       await startPeriod(tx, { parentId: order.buyerId, plan: item.plan, orderItemId: item.id, now, replacedStatus: 'cancelled' });
+    } else if (item.itemType === 'listing') {
+      await deliverListing(tx, { buyerId: order.buyerId, item, now });
     }
   }
   return true;

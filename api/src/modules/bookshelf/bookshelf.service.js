@@ -98,15 +98,23 @@ const getBookshelf = async (user, query) => {
   };
 };
 
+/** Phu huynh duoc dua truyen nay len gia: truyen rieng cua minh, hoac ban dang ban da mua (entitlement). */
+async function canShelve(user, story) {
+  if (story.kind === 'private') return story.ownerId === user.id;
+  const listing = await prisma.listing.findUnique({ where: { publishedStoryId: story.id }, select: { id: true } });
+  if (!listing) return false;
+  return Boolean(await prisma.entitlement.findFirst({ where: { parentId: user.id, listingId: listing.id, revokedAt: null }, select: { id: true } }));
+}
+
 /**
- * Dua truyen len gia sach cua be (rev8). Chi truyen cua chinh phu huynh (ban rieng, hoac ban sao da
- * mua) va phai "san sang cho tre": da hoan tat + du giong doc khop chu (spec TTS §5.5) -> 422 kem
- * tien do neu chua. Da co tren gia -> tra lai muc cu (idempotent).
+ * Dua truyen len gia sach cua be (rev8). Truyen rieng cua phu huynh, hoac ban dang ban da mua (dung
+ * nguyen trang, DBML). Phai "san sang cho tre": da hoan tat + du giong doc khop chu (spec TTS §5.5)
+ * -> 422 kem tien do neu chua. Da co tren gia -> tra lai muc cu (idempotent).
  */
 const addToBookshelf = async (user, { childId, storyId }) => {
   const child = await verifyChildAccess(user, childId);
   const check = await loadReadiness(prisma, storyId);
-  if (!check || check.story.ownerId !== user.id) throw ApiError.notFound('Không tìm thấy truyện.');
+  if (!check || !(await canShelve(user, check.story))) throw ApiError.notFound('Không tìm thấy truyện.');
   if (!check.ready) {
     throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, notReadyMessage(check), [
       { path: 'storyId', message: check.reason, narration: check.narration },
