@@ -33,6 +33,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@payos/node": "2.0.5",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.56.0",

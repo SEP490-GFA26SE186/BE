@@ -4,6 +4,7 @@ import connection from './queues/connection.js';
 import { AI_QUEUE_NAME, NARRATION_QUEUE_NAME } from './queues/ai.jobs.js';
 import processAiJob from './workers/ai.processor.js';
 import processNarrationJob from './workers/narration.processor.js';
+import { runBillingCycle } from './modules/billing/billing.store.js';
 
 // Bien chi worker can. Container `api` khong duoc cap AI_SERVICE_URL, nen moi
 // yeu cau sinh noi dung buoc phai di qua queue thay vi goi truc tiep.
@@ -35,10 +36,26 @@ console.log(
     `and "${NARRATION_QUEUE_NAME}" (concurrency=1), ai=${env.ai.serviceUrl}`,
 );
 
+// Chu ky goi (rev8): cap credit thang moi, gia han goi Mien phi, het han goi tra phi, dong don qua
+// han. Chay luc khoi dong roi moi BILLING_CYCLE_MINUTES (mac dinh 15). Idempotent (key tat dinh) nen
+// hai worker cung chay khong cap trung; loi -> log, lan sau thu lai.
+const BILLING_EVERY_MS = (Number(process.env.BILLING_CYCLE_MINUTES) || 15) * 60_000;
+const billingTick = async () => {
+  try {
+    const r = await runBillingCycle(prisma);
+    if (r.granted || r.renewedFree || r.expired || r.ordersExpired) console.log('[billing]', JSON.stringify(r));
+  } catch (error) {
+    console.error('[billing] chu ky loi:', error);
+  }
+};
+billingTick();
+const billingTimer = setInterval(billingTick, BILLING_EVERY_MS);
+
 // Graceful shutdown: worker.close() cho cac job dang chay hoan tat truoc khi
 // thoat, thay vi cat giua duong roi de job treo o trang thai active.
 const gracefulShutdown = async (signal) => {
   console.log(`\n${signal} received. Draining worker...`);
+  clearInterval(billingTimer);
   await Promise.all([worker.close(), narrationWorker.close()]);
   await prisma.$disconnect();
   await connection.quit();

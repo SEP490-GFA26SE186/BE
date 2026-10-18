@@ -1,71 +1,14 @@
 import prisma from '../../config/prisma.js';
 import { ApiError } from '../../utils/index.js';
 import { formatMySubscription } from './lib/mySubscription.js';
-
-const DEFAULT_PLANS = [
-  {
-    code: 'FREE',
-    name: 'Gói Trải Nghiệm (Free Explorer)',
-    period: 'month',
-    priceVnd: 0n,
-    aiStoryQuota: 2,
-    aiImageQuota: 4,
-    maxChildren: 2,
-    maxCharacters: 5,
-    canSell: false,
-    isActive: true,
-  },
-  {
-    code: 'MONTHLY_PRO',
-    name: 'Gói Gia Đình Tiêu Chuẩn (Family Storyteller Monthly)',
-    period: 'month',
-    priceVnd: 99000n,
-    aiStoryQuota: 20,
-    aiImageQuota: 50,
-    maxChildren: 5,
-    maxCharacters: 20,
-    canSell: true,
-    isActive: true,
-  },
-  {
-    code: 'YEARLY_PRO',
-    name: 'Gói Gia Đình Cao Cấp (Family Storyteller Annual)',
-    period: 'year',
-    priceVnd: 990000n,
-    aiStoryQuota: 300,
-    aiImageQuota: 650,
-    maxChildren: 10,
-    maxCharacters: 50,
-    canSell: true,
-    isActive: true,
-  },
-];
+import { listPlans } from '../billing/billing.service.js';
 
 // ==========================================
 // 1. PLANS SERVICE
 // ==========================================
 
-const getPlans = async () => {
-  let plans = await prisma.plan.findMany({
-    orderBy: { priceVnd: 'asc' },
-  });
-
-  if (plans.length === 0) {
-    for (const planData of DEFAULT_PLANS) {
-      await prisma.plan.upsert({
-        where: { code: planData.code },
-        update: {},
-        create: planData,
-      });
-    }
-
-    plans = await prisma.plan.findMany({
-      orderBy: { priceVnd: 'asc' },
-    });
-  }
-
-  return plans;
-};
+// rev8: goi do seed (prisma/seed_plans.js) / Admin tao; khong tu chen goi mac dinh o day.
+const getPlans = () => listPlans();
 
 const getPlanById = async (id) => {
   const plan = await prisma.plan.findUnique({

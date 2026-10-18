@@ -31,6 +31,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
   tags: [
     { name: 'Health', description: 'Kiểm tra trạng thái hoạt động của hệ thống' },
     { name: 'Auth', description: 'Đăng ký, Đăng nhập, Quản lý Token và Thông tin cá nhân' },
+    { name: 'Payments', description: 'Mua gói qua payOS: tạo link, trạng thái đơn, webhook' },
     { name: 'Kid Mode', description: 'Quản lý mã PIN và phiên đọc Chế độ Trẻ em' },
     { name: 'Email Verification', description: 'Gửi và xác thực địa chỉ email qua Brevo' },
     { name: 'Children', description: 'Quản lý hồ sơ bé và kiểm soát thời gian sử dụng màn hình' },
@@ -39,6 +40,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Stories', description: 'Tạo truyện từ chủ đề và nhân vật, nhờ AI viết chữ, chỉnh sửa trang và điểm dừng cảm xúc, phụ huynh xem xét trước khi cho bé đọc' },
     { name: 'Content Library', description: 'Thư viện tài nguyên sư phạm: ảnh nền mặc định, âm thanh UI, tiêu chuẩn kiểm duyệt và cấu hình kịch bản' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
+    { name: 'Payments', description: 'Mua gói qua payOS: tạo link, trạng thái đơn, webhook' },
     { name: 'Kid Mode', description: 'Bé đọc truyện trên giá, trả lời điểm dừng, BE chấm EQ (token kid_session)' },
     { name: 'Marketplace', description: 'Chợ truyện cộng đồng: hồ sơ tác giả, đăng bán, nhận miễn phí và đánh giá sản phẩm' },
     { name: 'Moderation', description: 'Kiểm duyệt an toàn nội dung, từ khóa cấm, duyệt tác phẩm và báo cáo vi phạm' },
@@ -1617,6 +1619,36 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           200: { description: 'Xóa truyện khỏi kệ sách thành công' },
           404: { description: 'Truyện không có trên kệ sách' },
         },
+      },
+    },
+
+    // ---- PAYMENTS (payOS, rev8) ----
+    '/payments/plans/checkout': {
+      post: {
+        tags: ['Payments'],
+        summary: '[Parent] Mua / đổi gói qua payOS',
+        description: 'Gói 0đ: kích hoạt ngay (`checkoutUrl: null`). Gói trả phí: tạo đơn `pending` (hạn 15 phút) + link payOS; FE chuyển người dùng tới `checkoutUrl`. payOS trả về `<WEB_URL>/parent/billing/result?orderId=…`. Trả tiền xong: kỳ gói mới bắt đầu ngay, cấp đủ credit gói mới, credit còn lại giữ một lần.',
+        security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['planId'], properties: { planId: { type: 'string', format: 'uuid' } } } } } },
+        responses: { 201: { description: '{ order, checkoutUrl }' }, 404: { description: 'Không có gói' }, 502: { description: 'payOS lỗi' } },
+      },
+    },
+    '/payments/orders/{orderId}': {
+      get: {
+        tags: ['Payments'],
+        summary: '[Parent] Trạng thái đơn — BE tự hỏi lại payOS khi đơn chưa xong',
+        description: 'Trang kết quả thanh toán gọi endpoint này (không tin query string của returnUrl). payOS báo PAID (đủ tiền) → giao hàng; CANCELLED / EXPIRED → đóng đơn. Idempotent với webhook.',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'orderId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: '{ order: { id, status: pending|paid|failed|cancelled|expired, totalVnd, items } }' } },
+      },
+    },
+    '/payments/payos/webhook': {
+      post: {
+        tags: ['Payments'],
+        summary: '[payOS] Webhook thanh toán (không token, xác thực bằng chữ ký)',
+        description: 'Đăng ký `<API công khai>/api/v1/payments/payos/webhook` trên my.payos.vn khi API đã public. Luôn trả 200 (kể cả chữ ký sai — đã ghi webhook_logs) để payOS không gửi lại vô hạn; chỉ giao hàng khi chữ ký đúng, code 00, đủ tiền, đơn pending/expired.',
+        responses: { 200: { description: '{ ok, processed, reason }' } },
       },
     },
 

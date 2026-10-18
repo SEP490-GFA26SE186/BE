@@ -12,6 +12,7 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { pathToFileURL } from 'node:url';
 import { PrismaClient } from '@prisma/client';
+import { ensureFreeSubscription } from '../src/modules/billing/billing.store.js';
 
 export const DEMO_PASSWORD = '123456';
 export const DEMO_KID_PIN = '1234';
@@ -83,6 +84,8 @@ export async function seedDemo(prisma) {
     const user = await upsertUser(prisma, u, passwordHash, kidExitPinHash);
     if (u.role === 'parent') {
       await grantDemoCredits(prisma, user.id);
+      // Goi Mien phi (rev8: moi phu huynh co mot dong subscriptions). Can seed plans truoc (db:seed).
+      await prisma.$transaction((tx) => ensureFreeSubscription(tx, user.id), { timeout: 20000 });
       await ensureChildAndCharacters(prisma, user.id);
     }
     console.log(`✓ ${u.role.padEnd(9)} ${u.email}`);

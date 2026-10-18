@@ -26,6 +26,7 @@ plansRouter
 // ==========================================
 
 subscriptionsRouter.get('/me', auth, plansController.getMySubscription);
+// Goi Mien phi: tu co khi dang ky; doi goi qua POST /payments/plans/checkout (goi 0d kich hoat ngay).
 subscriptionsRouter.post(
   '/subscribe-free',
   auth,

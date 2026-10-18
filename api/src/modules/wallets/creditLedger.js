@@ -83,3 +83,43 @@ export async function releaseCredit(tx, { userId, amount, aiRequestId }) {
 export async function consumeCredit(tx, { userId, aiRequestId }) {
   await apply(tx, 'consume', { userId, aiRequestId });
 }
+
+// ---------------------------------------------------------------------------
+// Cap / het han credit theo goi (rev8: goi cap credit moi thang, credit du het han cuoi thang).
+// Key do nguoi goi dat (vd. `grant:<subscriptionId>:<n>`) — cung key goi lai khong ghi hai lan.
+// ---------------------------------------------------------------------------
+
+async function recorded(tx, key) {
+  return Boolean(await tx.walletLedger.findUnique({ where: { idempotencyKey: key }, select: { id: true } }));
+}
+
+/** Cong `amount` credit (vi chua co thi tao). Tra so du moi, hoac null neu key da ghi. */
+export async function grantCredit(tx, { userId, amount, key, refType = 'subscription', refId = null }) {
+  if (!Number.isInteger(amount) || amount < 0) throw ApiError.internal('Số credit cấp phải là số nguyên không âm');
+  await tx.wallet.upsert({ where: { userId }, update: {}, create: { userId } });
+  const balance = await lockWallet(tx, userId);
+  if (await recorded(tx, key)) return null;
+  const balanceAfter = balance + amount;
+  if (amount > 0) await tx.wallet.update({ where: { userId }, data: { creditBalance: balanceAfter } });
+  await tx.walletLedger.create({
+    data: {
+      userId, walletType: 'credit', entryType: 'credit_grant', amount: BigInt(amount),
+      balanceAfter: BigInt(balanceAfter), idempotencyKey: key, refType, refId,
+    },
+  });
+  return balanceAfter;
+}
+
+/** Xoa so credit con lai (credit_expire = -so du). So du 0 -> khong ghi gi. Tra so credit da xoa. */
+export async function expireCredit(tx, { userId, key, refType = 'subscription', refId = null }) {
+  const balance = await lockWallet(tx, userId);
+  if (!balance || balance <= 0 || (await recorded(tx, key))) return 0;
+  await tx.wallet.update({ where: { userId }, data: { creditBalance: 0 } });
+  await tx.walletLedger.create({
+    data: {
+      userId, walletType: 'credit', entryType: 'credit_expire', amount: BigInt(-balance),
+      balanceAfter: 0n, idempotencyKey: key, refType, refId,
+    },
+  });
+  return balance;
+}

@@ -3,6 +3,7 @@ import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import tokenService from './token.service.js';
 import emailService from '../../services/email.service.js';
+import { ensureFreeSubscription } from '../billing/billing.store.js';
 
 /**
  * Register a new user
@@ -71,8 +72,12 @@ const register = async ({ username, email, password, fullName, phone }) => {
       },
     });
 
+    // rev8: goi Mien phi cung la mot dong subscriptions (cap credit thang dau). Thieu seed plans ->
+    // bo qua, GET /subscriptions/me dung goi du phong; cron khong cap credit cho tai khoan nay.
+    await ensureFreeSubscription(tx, user.id).catch((error) => console.warn('[auth] chua tao goi Mien phi:', error.message));
+
     return user;
-  });
+  }, { timeout: 20000 });
 
   // Generate initial auth tokens
   const tokens = await tokenService.generateAuthTokens(newUser);
