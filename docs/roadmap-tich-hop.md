@@ -116,7 +116,7 @@ khác mua → truyện vào giá sách của con họ.
 |---|---|---|
 | AI + BE + Web | **Ảnh** nếu Phase 3 chốt có GPU: lớp adapter (M4a) + profile ComfyUI, chân dung nhân vật, tranh cảnh, safety checker. | |
 | BE + Web | **Moderator — nội dung:** soạn bài học (CRUD; bài đã có truyện thì khoá năng lực CASEL, xoá thành ngưng dùng), quản lý từ khoá chặn (`block` chặn hẳn cả chữ AI lẫn chữ phụ huynh tự viết / sửa, `warn` chỉ cảnh báo). *Đã xong.* | |
-| BE + Web | **Moderator — giám sát (luồng 7):** báo cáo vi phạm, tạm gỡ truyện, cảnh cáo tác giả + kháng nghị, kiểm tra ngẫu nhiên. | |
+| BE + Web | **Moderator — giám sát (luồng 7):** báo cáo vi phạm (đủ 3 người / 24 giờ → tự tạm gỡ), hậu kiểm giữ / gỡ hẳn, cảnh cáo tác giả (3 cảnh cáo → khoá bán) + kháng nghị (Admin xét), kiểm tra ngẫu nhiên hằng tuần. *Đã xong.* | |
 | BE + Web | **Admin:** cấu hình giá gói / bậc giá / chi phí AI, quản lý tài khoản, đối soát. | |
 | Chung | Deploy bản demo, kiểm NFR, sửa lỗi, tài liệu báo cáo cuối, dự phòng ~1 tuần. | |
 
