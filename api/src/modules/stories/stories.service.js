@@ -11,6 +11,7 @@ import {
   formatStorySummary,
 } from './lib/storyFormat.js';
 import { loadStoryForRead, loadOwnedStory, lockForWrite } from './stories.access.js';
+import { VOICE_KEY } from './stories.narration.store.js';
 
 export { formatStoryDetail };
 
@@ -91,8 +92,15 @@ export async function loadNameContextForStory(db, storyId) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-export const getDetail = async (db, storyId) =>
-  formatStoryDetail(await db.story.findUniqueOrThrow({ where: { id: storyId }, include: STORY_DETAIL_INCLUDE }));
+export const getDetail = async (db, storyId) => {
+  const [story, voiceRow] = await Promise.all([
+    db.story.findUniqueOrThrow({ where: { id: storyId }, include: STORY_DETAIL_INCLUDE }),
+    db.platformSetting.findUnique({ where: { key: VOICE_KEY }, select: { value: true } }),
+  ]);
+  // Thieu cau hinh giong: khong lam hong trang chi tiet; tien do bao thieu audio (khong doc duoc).
+  const voice = typeof voiceRow?.value === 'string' ? voiceRow.value.trim() : '';
+  return formatStoryDetail(story, { voice });
+};
 
 // ---------------------------------------------------------------------------
 // Service

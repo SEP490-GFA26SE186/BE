@@ -84,6 +84,12 @@ export async function startServer() {
     return { status: res.status, body: text ? JSON.parse(text) : null };
   };
 
-  const close = () => new Promise((resolve) => server.close(() => resolve()));
+  const close = async () => {
+    await new Promise((resolve) => server.close(() => resolve()));
+    // POST /review day job giong doc -> mo ket noi Redis dung chung; ioredis tu ket noi lai mai mai
+    // nen khong dong thi tien trinh test khong thoat.
+    const { default: connection } = await import('../../src/queues/connection.js');
+    connection.disconnect();
+  };
   return { request, close };
 }

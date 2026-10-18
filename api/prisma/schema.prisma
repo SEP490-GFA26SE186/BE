@@ -1,6 +1,6 @@
 // =============================================================================
 // StoryWeaver AI – Prisma Schema (PostgreSQL)
-// SEP490 / SE186 – revision 8 – 49 models, 32 enums
+// SEP490 / SE186 – revision 8 – 50 models, 32 enums
 //
 // Nguon su that: ai/StoryWeaver-docs/StoryWeaver-docs/db/schema_rev8.dbml
 // Sai khac co y so voi DBML:
@@ -602,6 +602,7 @@ model Story {
   topic       Topic  @relation(fields: [topicId], references: [id], onDelete: Restrict)
 
   // -- back-references --
+  narrationClips  NarrationClip[]
   copies          Story[]           @relation("StorySource")
   storyCharacters StoryCharacter[]
   scenes          StoryScene[]
@@ -738,6 +739,29 @@ model CheckpointOption {
 
   @@unique([checkpointId, optionOrder])
   @@map("checkpoint_options")
+}
+
+/// @note Ban ghi tung doan giong doc (spec TTS 2026-10-17 §5.2-5.3). Khong tinh credit -> khong dung ai_requests.
+/// @note "Co audio" = status ready VA fingerprint khop chu hien tai (lib/narration.js)
+model NarrationClip {
+  id              String           @id @default(uuid()) @db.Uuid
+  storyId         String           @map("story_id") @db.Uuid
+  segment         String           @db.VarChar(120)
+  fingerprint     String           @db.Char(64)
+  status          GenerationStatus @default(queued)
+  round           Int              @default(1)
+  attempts        Int              @default(0) @db.SmallInt
+  audioKey        String?          @map("audio_key") @db.VarChar(300)
+  durationSeconds Decimal?         @map("duration_seconds") @db.Decimal(7, 2)
+  errorCode       String?          @map("error_code") @db.VarChar(40)
+  errorMessage    String?          @map("error_message") @db.VarChar(500)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, segment])
+  @@map("narration_clips")
 }
 
 model BookshelfItem {

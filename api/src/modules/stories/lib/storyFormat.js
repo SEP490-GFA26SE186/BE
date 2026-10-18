@@ -3,6 +3,7 @@
 // Moi `...Key` (storage) di kem `...Url` co chu ky de client hien / phat (null = chua co file).
 
 import { assetUrl } from '../../../clients/assetUrl.js';
+import { childReadiness } from './narration.js';
 
 const tokenNumber = (token) => Number(/\d+/.exec(token)?.[0] ?? Number.MAX_SAFE_INTEGER);
 const byKey = (key) => (a, b) => a[key] - b[key];
@@ -14,6 +15,7 @@ export const STORY_DETAIL_INCLUDE = {
   scenes: true,
   pages: true,
   checkpoints: { include: { options: true } },
+  narrationClips: { select: { segment: true, fingerprint: true, status: true } },
 };
 
 /** Include Prisma du cho formatStorySummary. */
@@ -53,12 +55,20 @@ const formatHeader = (story) => ({
   characters: formatCharacters(story.storyCharacters),
 });
 
-export function formatStoryDetail(story) {
+/**
+ * `voice`: giong hien hanh (platform_settings tts.voice) — van tay cua clip tinh theo giong, nen
+ * doi giong cung lam truyen thieu audio. `narration` / `readiness`: tien do giong doc va "san sang
+ * cho tre" (spec TTS §5.4, §5.5).
+ */
+export function formatStoryDetail(story, { voice = '' } = {}) {
   const pages = [...(story.pages ?? [])].sort(byKey('pageOrder'));
   const pageOrderById = new Map(pages.map((p) => [p.id, p.pageOrder]));
 
+  const readiness = childReadiness(story, story.narrationClips ?? [], voice);
   return {
     ...formatHeader(story),
+    narration: readiness.narration,
+    readiness: { ready: readiness.ready, reason: readiness.reason },
     scenes: [...(story.scenes ?? [])].sort(byKey('sceneOrder')).map((s) => ({
       id: s.id,
       sceneOrder: s.sceneOrder,

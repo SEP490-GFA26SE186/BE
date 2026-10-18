@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import storiesService from './stories.service.js';
 import editorService from './stories.editor.service.js';
 import generationService from './stories.generation.service.js';
+import narrationService from './stories.narration.service.js';
 import { ApiError, ApiResponse, catchAsync } from '../../utils/index.js';
 
 const createStory = catchAsync(async (req, res) => {
@@ -82,6 +83,12 @@ const reviewStory = catchAsync(async (req, res) => {
   return ApiResponse.success(res, { message: 'Đã đánh dấu truyện là đã xem xong', data: { story } });
 });
 
+// Giong doc (spec TTS §5.4): chi dua lai doan loi / thieu. Tien do nam o `story.narration`.
+const retryNarration = catchAsync(async (req, res) => {
+  const story = await narrationService.retryNarration(req.user, req.params.id);
+  return ApiResponse.success(res, { statusCode: StatusCodes.ACCEPTED, message: 'Đang tạo lại giọng đọc', data: { story } });
+});
+
 // ---------------------------------------------------------------------------
 // Sinh chu (spec §4.3). Frontend goi GET /generation moi 2-3s toi khi succeeded/failed/blocked.
 // ---------------------------------------------------------------------------
@@ -125,6 +132,7 @@ export default {
   createCheckpoint,
   deleteCheckpoint,
   reviewStory,
+  retryNarration,
   generateStory,
   getGeneration,
   publishStoryVersion,

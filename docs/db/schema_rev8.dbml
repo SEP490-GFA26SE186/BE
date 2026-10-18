@@ -558,6 +558,32 @@ Table checkpoint_options {
   '''
 }
 
+Table narration_clips {
+  id uuid [pk, default: `gen_random_uuid()`]
+  story_id uuid [not null]
+  segment varchar(120) [not null, note: 'page:<id> | checkpoint:<id>:question|hint | option:<id>:text|feedback']
+  fingerprint char(64) [not null, note: 'sha256(giong + chu da thay ten that) cua lan dua di doc gan nhat']
+  status generation_status [not null, default: 'queued', note: 'queued | generating | ready | failed']
+  round int [not null, default: 1, note: 'tang moi lan dua di doc lai; nam trong jobId BullMQ']
+  attempts smallint [not null, default: 0, note: 'so lan goi ai/ cua luot hien tai']
+  audio_key varchar(300)
+  duration_seconds numeric(7,2)
+  error_code varchar(40)
+  error_message varchar(500)
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (story_id, segment) [unique]
+  }
+
+  Note: '''
+  Ban ghi tung doan giong doc (spec TTS 2026-10-17 §5.2-5.3). Khong tinh credit nen khong dung ai_requests.
+  Doan "co audio" = status ready VA fingerprint khop chu hien tai; key cung duoc ghi vao cot *_audio_key
+  cua trang / diem dung / phuong an de FE doc truc tiep.
+  '''
+}
+
 Table bookshelf_items {
   child_id uuid [not null]
   story_id uuid [not null]
@@ -1175,6 +1201,7 @@ Ref: story_pages.scene_id > story_scenes.id [delete: restrict]
 Ref: story_checkpoints.story_id > stories.id [delete: cascade]
 Ref: story_checkpoints.after_page_id - story_pages.id [delete: cascade]
 Ref: checkpoint_options.checkpoint_id > story_checkpoints.id [delete: cascade]
+Ref: narration_clips.story_id > stories.id [delete: cascade]
 Ref: checkpoint_answers.session_id > play_sessions.id [delete: cascade]
 Ref: checkpoint_answers.checkpoint_id > story_checkpoints.id [delete: restrict]
 Ref: checkpoint_answers.first_option_id > checkpoint_options.id [delete: restrict]

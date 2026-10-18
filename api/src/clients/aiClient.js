@@ -27,7 +27,10 @@ const JOB_CONFIG = {
   [AI_JOB.STORY_TEXT]: { endpoint: '/v1/story/generate', timeoutMs: 320_000 },
   [AI_JOB.CHARACTER_PORTRAIT]: { endpoint: '/v1/images/portrait', timeoutMs: 90_000 },
   [AI_JOB.SCENE_IMAGE]: { endpoint: '/v1/images/scene', timeoutMs: 90_000 },
-  [AI_JOB.NARRATION]: { endpoint: '/v1/tts/synthesize', timeoutMs: 30_000 },
+  // > TTS_TIMEOUT_SECONDS (120 s, ai/app/config.py) + overhead. Trang 51 tieng: 17 s chay thang
+  // tren 5500U, 31-38 s trong Docker Desktop (2026-10-18). Queue narration chay 1 job mot luc nen
+  // khong phai cho khoa ben ai/.
+  [AI_JOB.NARRATION]: { endpoint: '/v1/tts/synthesize', timeoutMs: 150_000 },
 };
 
 export class AiServiceError extends Error {

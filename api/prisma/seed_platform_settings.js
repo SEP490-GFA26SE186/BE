@@ -61,6 +61,9 @@ export const platformSettingsData = [
   { key: 'custom_limits.max_checkpoints', value: 6 },
   // tạm — câu hỏi mở §10.3 của spec
   { key: 'ai_cost.story_text', value: 1 },
+  // Giọng đọc kể truyện (spec TTS §5.2): preset VieNeu, Node luôn gửi tường minh. Đổi giọng làm
+  // lệch vân tay mọi đoạn -> các truyện phải hoàn tất lại để đọc bằng giọng mới.
+  { key: 'tts.voice', value: 'Kim Thanh' },
 ];
 
 export async function seedPlatformSettings(prisma) {

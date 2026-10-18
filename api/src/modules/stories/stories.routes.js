@@ -37,6 +37,7 @@ router
   .delete(validate(storiesValidation.deleteCheckpoint), storiesController.deleteCheckpoint);
 
 router.post('/:id/review', validate(storiesValidation.reviewStory), storiesController.reviewStory);
+router.post('/:id/narration/retry', validate(storiesValidation.storyOnly), storiesController.retryNarration);
 router.post('/:id/publish-version', validate(storiesValidation.storyOnly), storiesController.publishStoryVersion);
 
 // ---- Sinh chu (spec §4.3) — Task 9 ----

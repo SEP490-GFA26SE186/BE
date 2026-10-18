@@ -22,7 +22,7 @@ Client ──> api (Express)          KHÔNG gọi service ai trực tiếp
              │  POST /v1/story/generate | /v1/images/portrait | /v1/images/scene | /v1/tts/synthesize
              │  header X-Internal-Token
              ↓
-           ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh, TTS: mock tới M4b/M5)
+           ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh: mock tới M4b; TTS: VieNeu-TTS / mock)
              │             └──> Cloudinary / Supabase Storage (ảnh / audio — service upload, trả key)
              ↓
            worker ghi kết quả vào DB (persistPlan.js) + chốt / hoàn credit
@@ -299,7 +299,7 @@ tệ nhất ~300s trong service. Node phải chờ lâu hơn thế, nếu không
 | `story_text` | `/v1/story/generate` | 320 000 ms | `AI_TIMEOUT_MS_STORY_TEXT` |
 | `character_portrait` | `/v1/images/portrait` | 90 000 ms | `AI_TIMEOUT_MS_CHARACTER_PORTRAIT` |
 | `scene_image` | `/v1/images/scene` | 90 000 ms | `AI_TIMEOUT_MS_SCENE_IMAGE` |
-| `narration` | `/v1/tts/synthesize` | 30 000 ms | `AI_TIMEOUT_MS_NARRATION` |
+| `narration` | `/v1/tts/synthesize` | 150 000 ms | `AI_TIMEOUT_MS_NARRATION` |
 
 Đổi `LLM_TIMEOUT_SECONDS` (service `ai`) thì phải kiểm lại `AI_TIMEOUT_MS_STORY_TEXT` (worker), và
 ngược lại. Không còn `AI_TIMEOUT_MS` chung, không còn `PROVIDER_TIMEOUT_SECONDS`.

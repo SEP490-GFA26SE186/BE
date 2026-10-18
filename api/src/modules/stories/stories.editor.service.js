@@ -8,6 +8,7 @@ import ApiError from '../../utils/ApiError.js';
 import { lockForWrite } from './stories.access.js';
 import { TX_OPTIONS, getDetail, loadNameContextForStory, tokenizeOrReject } from './stories.service.js';
 import { loadStorySettings } from './lib/storySettings.js';
+import { dispatchNarration, prepareNarration } from './stories.narration.service.js';
 import { storyStatusFromPages } from './lib/completeness.js';
 import { assertCustomLayout } from './lib/customRules.js';
 import {
@@ -265,8 +266,12 @@ const deleteCheckpoint = async (user, storyId, checkpointId) => {
 // ---------------------------------------------------------------------------
 
 /** Dat `reviewed_at` khi moi trang co chu va moi diem dung du truong theo kieu; thieu -> 422. */
-const reviewStory = (user, storyId) =>
-  inTransaction(async (tx) => {
+/**
+ * Hoan tat: dat reviewed_at, roi (use_tts) dua cac doan thieu / lech audio di doc (spec TTS §5.2).
+ * Job day SAU commit; Redis loi thi clip thanh failed, hoan tat van thanh cong (khong co credit).
+ */
+const reviewStory = async (user, storyId, narrationOptions) => {
+  const { detail, jobs } = await inTransaction(async (tx) => {
     await lockForWrite(tx, user, storyId);
 
     const pages = await tx.storyPage.findMany({
@@ -288,8 +293,12 @@ const reviewStory = (user, storyId) =>
       where: { id: storyId },
       data: { reviewedAt: new Date(), status: storyStatusFromPages(pages) },
     });
-    return getDetail(tx, storyId);
+    const queued = await prepareNarration(tx, storyId);
+    return { detail: await getDetail(tx, storyId), jobs: queued };
   });
+  if (await dispatchNarration(jobs, narrationOptions)) return detail;
+  return getDetail(prisma, storyId); // clip vua bi danh dau failed -> tra tien do dung
+};
 
 export default {
   updatePage,
