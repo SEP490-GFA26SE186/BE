@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import ApiError from '../../utils/ApiError.js';
 import plansService from '../plans/plans.service.js';
 import storiesService from '../stories/stories.service.js';
+import payosService from '../../services/payos.service.js';
 
 // =============================================================================
 // HELPERS
@@ -15,6 +16,128 @@ const generatePayosOrderCode = () => {
   const tsPart = Date.now().toString().slice(-9);
   const randPart = Math.floor(Math.random() * 900 + 100).toString();
   return BigInt(`${tsPart}${randPart}`);
+};
+
+const DEFAULT_COMMISSION_PERCENT = 30;
+const DEFAULT_HOLDING_DAYS = 7;
+
+const ORDER_INCLUDE = {
+  items: {
+    include: {
+      listing: {
+        select: {
+          id: true,
+          title: true,
+          coverImageKey: true,
+          sellerId: true,
+          seller: { select: { displayName: true } },
+        },
+      },
+      plan: true,
+    },
+  },
+};
+
+/**
+ * Doc mot setting dang so trong platform_settings (value jsonb: 30 hoac { value: 30 })
+ * @param {Object} client - prisma hoac tx
+ * @param {string} key
+ * @param {number} fallback
+ * @returns {Promise<number>}
+ */
+const getNumericSetting = async (client, key, fallback) => {
+  const setting = await client.platformSetting.findUnique({ where: { key } });
+  const raw = setting?.value;
+  const value = typeof raw === 'object' && raw !== null ? raw.value : raw;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+/**
+ * Cap quyen loi cho mot don vua chuyen sang paid (don 0d hoac webhook payOS).
+ * Phai chay trong cung transaction voi buoc chuyen trang thai don.
+ *  - listing: entitlement; truyen tra phi cong doanh thu treo (earning_pending) cho nguoi ban
+ *  - plan: kich hoat goi + cap credit thang dau
+ * @param {Object} tx - Prisma transaction client
+ * @param {Object} order - don kem items (ORDER_INCLUDE)
+ * @returns {Promise<Object>} { skippedListings } - truyen nguoi mua da so huu tu truoc (can hoan tien tay)
+ */
+const fulfillOrder = async (tx, order) => {
+  const holdingDays = await getNumericSetting(tx, 'holding_days', DEFAULT_HOLDING_DAYS);
+  const skippedListings = [];
+
+  for (const item of order.items) {
+    if (item.itemType === 'plan' && item.planId) {
+      await plansService.activateSubscription(tx, {
+        userId: order.buyerId,
+        plan: item.plan,
+        orderItemId: item.id,
+      });
+      continue;
+    }
+
+    if (item.itemType !== 'listing' || !item.listingId) continue;
+
+    // Partial unique (parent_id, listing_id) WHERE revoked_at IS NULL: hai don song song cung mot truyen
+    const owned = await tx.entitlement.findFirst({
+      where: { parentId: order.buyerId, listingId: item.listingId, revokedAt: null },
+    });
+    if (owned) {
+      skippedListings.push(item.listingId);
+      continue;
+    }
+
+    await tx.entitlement.create({
+      data: {
+        parentId: order.buyerId,
+        listingId: item.listingId,
+        orderItemId: item.id,
+      },
+    });
+
+    const isPaid = item.unitPriceVnd > 0n;
+    await tx.listing.update({
+      where: { id: item.listingId },
+      data: isPaid ? { purchaseCount: { increment: 1 } } : { freeClaimCount: { increment: 1 } },
+    });
+
+    if (!isPaid || !item.sellerAmountVnd) continue;
+
+    const sellerId = item.listing.sellerId;
+    await tx.sellerProfile.update({
+      where: { userId: sellerId },
+      data: { totalSales: { increment: 1 } },
+    });
+
+    await tx.wallet.upsert({ where: { userId: sellerId }, update: {}, create: { userId: sellerId } });
+    const sellerWallet = await tx.wallet.update({
+      where: { userId: sellerId },
+      data: { earningPendingVnd: { increment: item.sellerAmountVnd } },
+    });
+
+    await tx.walletLedger.create({
+      data: {
+        userId: sellerId,
+        walletType: 'earning',
+        entryType: 'earning_pending',
+        amount: item.sellerAmountVnd,
+        balanceAfter: sellerWallet.earningPendingVnd,
+        // Cron chuyen sang kha dung khi qua available_at
+        availableAt: new Date(Date.now() + holdingDays * 24 * 60 * 60 * 1000),
+        idempotencyKey: `earning-pending-${item.id}`,
+        refType: 'order_item',
+        refId: item.id,
+      },
+    });
+  }
+
+  // Bo cac truyen vua mua khoi gio hang
+  const listingIds = order.items.filter((i) => i.listingId).map((i) => i.listingId);
+  if (listingIds.length > 0) {
+    await tx.cartItem.deleteMany({ where: { parentId: order.buyerId, listingId: { in: listingIds } } });
+  }
+
+  return { skippedListings };
 };
 
 // =============================================================================
@@ -163,6 +286,15 @@ const clearCart = async (userId) => {
  */
 const createOrder = async (userId, { fromCart, itemType, itemId }) => {
   let itemsToOrder = [];
+  const commissionPercent = await getNumericSetting(prisma, 'commission_rate', DEFAULT_COMMISSION_PERCENT);
+  const listingItem = (listingId, unitPriceVnd) => ({
+    itemType: 'listing',
+    listingId,
+    unitPriceVnd,
+    // SNAPSHOT ty le chia luc mua; nguoi ban nhan phan con lai sau hoa hong
+    sellerShareRate: (100 - commissionPercent) / 100,
+    sellerAmountVnd: (unitPriceVnd * BigInt(100 - commissionPercent)) / 100n,
+  });
 
   if (fromCart) {
     const cartItems = await prisma.cartItem.findMany({
@@ -197,17 +329,7 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         throw ApiError.badRequest(`Bạn đã sở hữu truyện "${item.listing.title}" rồi`);
       }
 
-      const unitPriceVnd = item.listing.priceTier.priceVnd;
-      // 70% for seller, 30% for platform
-      const sellerAmountVnd = (unitPriceVnd * 70n) / 100n;
-
-      itemsToOrder.push({
-        itemType: 'listing',
-        listingId: item.listingId,
-        unitPriceVnd,
-        sellerShareRate: 0.7,
-        sellerAmountVnd,
-      });
+      itemsToOrder.push(listingItem(item.listingId, item.listing.priceTier.priceVnd));
     }
   } else {
     // Direct buy
@@ -231,16 +353,7 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         throw ApiError.badRequest('Bạn đã sở hữu truyện này rồi');
       }
 
-      const unitPriceVnd = listing.priceTier.priceVnd;
-      const sellerAmountVnd = (unitPriceVnd * 70n) / 100n;
-
-      itemsToOrder.push({
-        itemType: 'listing',
-        listingId: itemId,
-        unitPriceVnd,
-        sellerShareRate: 0.7,
-        sellerAmountVnd,
-      });
+      itemsToOrder.push(listingItem(itemId, listing.priceTier.priceVnd));
     } else if (itemType === 'plan') {
       const plan = await prisma.plan.findUnique({
         where: { id: itemId },
@@ -264,11 +377,10 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
   const subtotalVnd = itemsToOrder.reduce((sum, item) => sum + item.unitPriceVnd, 0n);
   const totalVnd = subtotalVnd;
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+  const isFree = totalVnd === 0n;
 
-  return prisma.$transaction(async (tx) => {
-    const isFree = totalVnd === 0n;
-
-    const order = await tx.order.create({
+  const order = await prisma.$transaction(async (tx) => {
+    const created = await tx.order.create({
       data: {
         buyerId: userId,
         subtotalVnd,
@@ -278,70 +390,59 @@ const createOrder = async (userId, { fromCart, itemType, itemId }) => {
         // Don 0d khong di qua payOS
         payosOrderCode: isFree ? null : generatePayosOrderCode(),
         paidAt: isFree ? new Date() : null,
-        expiresAt,
+        expiresAt: isFree ? null : expiresAt,
         items: {
           create: itemsToOrder.map((item) => ({
             itemType: item.itemType,
             listingId: item.listingId || null,
             planId: item.planId || null,
             unitPriceVnd: item.unitPriceVnd,
-            sellerShareRate: item.sellerShareRate || null,
-            sellerAmountVnd: item.sellerAmountVnd || null,
+            sellerShareRate: item.sellerShareRate ?? null,
+            sellerAmountVnd: item.sellerAmountVnd ?? null,
             status: 'active',
           })),
         },
       },
-      include: {
-        items: {
-          include: {
-            listing: {
-              select: {
-                id: true,
-                title: true,
-                coverImageKey: true,
-                seller: { select: { displayName: true } },
-              },
-            },
-            plan: true,
-          },
-        },
-      },
+      include: ORDER_INCLUDE,
     });
 
-    // If order is free (0 VND), immediately fulfill entitlements/benefits!
+    // Don 0d: cap quyen ngay. Don tra phi: cho webhook payOS
     if (isFree) {
-      for (const item of order.items) {
-        if (item.itemType === 'listing' && item.listingId) {
-          await tx.entitlement.create({
-            data: {
-              parentId: userId,
-              listingId: item.listingId,
-              orderItemId: item.id,
-            },
-          });
-
-          await tx.listing.update({
-            where: { id: item.listingId },
-            data: {
-              freeClaimCount: { increment: 1 },
-            },
-          });
-        } else if (item.itemType === 'plan' && item.planId) {
-          await plansService.activateSubscription(tx, {
-            userId,
-            plan: item.plan,
-            orderItemId: item.id,
-          });
-        }
-      }
+      await fulfillOrder(tx, created);
     }
 
-    if (fromCart) {
-      await tx.cartItem.deleteMany({ where: { parentId: userId } });
-    }
-
-    return order;
+    return created;
   });
+
+  if (isFree) {
+    return { order, checkoutUrl: null };
+  }
+
+  if (!payosService.isConfigured()) {
+    console.warn(`payOS chua cau hinh: don ${order.id} nam o pending, khong co link thanh toan`);
+    return { order, checkoutUrl: null };
+  }
+
+  try {
+    const link = await payosService.createPaymentLink({
+      orderCode: order.payosOrderCode,
+      amount: order.totalVnd,
+      // Tai khoan ngan hang chua lien ket payOS chi nhan mo ta toi da 9 ky tu
+      description: `SW${String(order.payosOrderCode).slice(-6)}`,
+      expiresAt,
+    });
+
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { payosPaymentLinkId: link.paymentLinkId },
+      include: ORDER_INCLUDE,
+    });
+    return { order: updated, checkoutUrl: link.checkoutUrl };
+  } catch (err) {
+    console.error('Failed to create payOS payment link:', err.message);
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'failed' } });
+    throw new ApiError(502, 'Không tạo được link thanh toán, vui lòng thử lại');
+  }
 };
 
 /**
@@ -653,6 +754,7 @@ export {
   clearCart,
   // Orders
   createOrder,
+  fulfillOrder,
   getMyOrders,
   getOrderById,
   cancelOrder,

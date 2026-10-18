@@ -41,3 +41,5 @@ Thumbs.db
 
 # ---- bao cao capstone (ban .docx khong commit vao repo code) ----
 *.docx
+
+*.md

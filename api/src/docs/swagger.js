@@ -47,7 +47,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Reports & Supervision', description: 'Báo cáo EQ biểu đồ radar, tiến trình học tập và giám sát nền tảng' },
     { name: 'Platform & Audit Logs', description: 'Cài đặt tham số hệ thống và nhật ký kiểm toán quản trị' },
     { name: 'Cart', description: 'Giỏ hàng mua sắm truyện chợ cộng đồng' },
-    { name: 'Orders', description: 'Đơn hàng mua gói Subscription, nạp Credit hoặc mua truyện' },
+    { name: 'Orders', description: 'Đơn hàng mua gói Subscription hoặc mua truyện' },
+    { name: 'Payments', description: 'Cổng thanh toán payOS (webhook)' },
     { name: 'Entitlements', description: 'Quyền sở hữu truyện chợ đã mua & cá nhân hóa vào giá sách' },
   ],
   components: {
@@ -4013,7 +4014,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       post: {
         tags: ['Orders'],
         summary: '[Parent] Tạo đơn hàng mới',
-        description: 'Tạo đơn hàng từ giỏ hàng (fromCart: true) hoặc mua trực tiếp một gói/truyện (itemType + itemId). Nếu tổng tiền = 0 (miễn phí), đơn hàng tự động hoàn tất và kích hoạt quyền lợi ngay lập tức.',
+        description: 'Tạo đơn hàng từ giỏ hàng (fromCart: true) hoặc mua trực tiếp một gói/truyện (itemType + itemId). Nếu tổng tiền = 0 (miễn phí), đơn hàng tự động hoàn tất và kích hoạt quyền lợi ngay lập tức. Đơn trả phí ở trạng thái `pending` và trả về `checkoutUrl` (trang thanh toán payOS, hết hạn sau 15 phút); quyền lợi được cấp khi payOS gọi webhook. Giỏ hàng chỉ bị xoá các truyện đã thanh toán xong. `checkoutUrl = null` khi đơn 0đ hoặc server chưa cấu hình payOS.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -4031,8 +4032,9 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           },
         },
         responses: {
-          201: { description: 'Tạo đơn hàng thành công' },
+          201: { description: 'Tạo đơn hàng thành công: data = { order, checkoutUrl }' },
           400: { description: 'Dữ liệu đơn hàng không hợp lệ' },
+          502: { description: 'Không tạo được link thanh toán payOS (đơn chuyển failed)' },
         },
       },
     },
@@ -4095,6 +4097,35 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         security: [{ BearerAuth: [] }],
         responses: {
           200: { description: 'Danh sách quyền sở hữu truyện' },
+        },
+      },
+    },
+
+    '/payments/payos/webhook': {
+      post: {
+        tags: ['Payments'],
+        summary: '[payOS] Webhook kết quả thanh toán',
+        description: '**Gọi bởi payOS**, không dùng JWT: xác thực bằng chữ ký HMAC-SHA256 (`PAYOS_CHECKSUM_KEY`). Mọi lần gọi đều được ghi vào `webhook_logs`. Thanh toán thành công (`data.code = 00`), đúng số tiền và đơn đang `pending` thì đơn chuyển `paid`, rồi cấp quyền trong cùng transaction: entitlement truyện, doanh thu treo cho người bán (`earning_pending`, khả dụng sau `holding_days`), kích hoạt gói + credit. Webhook lặp lại không cấp hai lần. Luôn trả 200 khi đã ghi nhận; lý do từ chối nằm trong `webhook_logs.error_message`.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  code: { type: 'string', example: '00' },
+                  desc: { type: 'string', example: 'success' },
+                  success: { type: 'boolean', example: true },
+                  data: { type: 'object', description: 'orderCode, amount, reference, paymentLinkId, code, desc, ...' },
+                  signature: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Đã ghi nhận: { success, processed, reason? }' },
         },
       },
     },

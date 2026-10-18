@@ -39,10 +39,11 @@ const clearCart = catchAsync(async (req, res) => {
 // =============================================================================
 
 const createOrder = catchAsync(async (req, res) => {
-  const order = await ordersService.createOrder(req.user.id, req.body);
+  const { order, checkoutUrl } = await ordersService.createOrder(req.user.id, req.body);
   return ApiResponse.created(res, {
     message: order.status === 'paid' ? 'Đơn hàng đã được hoàn tất và kích hoạt' : 'Tạo đơn hàng thành công, chờ thanh toán',
-    data: { order },
+    // checkoutUrl: trang thanh toan payOS; null voi don 0d hoac khi payOS chua cau hinh
+    data: { order, checkoutUrl },
   });
 });
 

@@ -10,6 +10,7 @@ import marketplaceRoutes from '../../modules/marketplace/marketplace.routes.js';
 import moderationRoutes from '../../modules/moderation/moderation.routes.js';
 import { plansRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
 import storiesRoutes from '../../modules/stories/stories.routes.js';
+import paymentsRoutes from '../../modules/payments/payments.routes.js';
 import walletsRoutes from '../../modules/wallets/wallets.routes.js';
 
 import contentLibraryRouter, {
@@ -59,6 +60,7 @@ router.use('/wallets', walletsRoutes);
 router.use('/cart', cartRouter);
 router.use('/orders', ordersRouter);
 router.use('/entitlements', entitlementsRouter);
+router.use('/payments', paymentsRoutes);
 
 export default router;
 
