@@ -1,5 +1,6 @@
 import { env } from '../config/index.js';
 import storiesPaths from './paths/stories.paths.js';
+import moderatorPaths from './paths/moderator.paths.js';
 
 const swaggerSpec = {
   openapi: '3.0.0',
@@ -2092,59 +2093,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    '/moderation/keywords': {
-      get: {
-        tags: ['Moderation'],
-        summary: '[Moderator | Admin] Xem danh mục từ khóa cấm / nhạy cảm',
-        description: '**Quyền truy cập:** `moderator`, `admin`.\nXem toàn bộ từ khóa nằm trong danh sách đen lọc tự động.',
-        security: [{ BearerAuth: [] }],
-        responses: {
-          200: { description: 'Lấy danh sách từ khóa cấm thành công' },
-        },
-      },
-      post: {
-        tags: ['Moderation'],
-        summary: '[Moderator | Admin] Thêm từ khóa cấm mới vào hệ thống',
-        description: '**Quyền truy cập:** `moderator`, `admin`.\nThêm từ khóa cần chặn (`block`) hoặc cảnh báo (`warn`).',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['keyword'],
-                properties: {
-                  keyword: { type: 'string', example: 'tu_khoa_nhay_cam' },
-                  severity: { type: 'string', enum: ['block', 'warn'], default: 'block' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Thêm từ khóa cấm thành công' },
-          409: { description: 'Từ khóa đã tồn tại trong danh sách' },
-        },
-      },
-    },
-
-    '/moderation/keywords/{id}': {
-      delete: {
-        tags: ['Moderation'],
-        summary: '[Admin] Xóa từ khóa cấm khỏi hệ thống',
-        description: '**Quyền truy cập:** `admin` (Dành riêng cho Quản trị viên tối cao).\nXóa vĩnh viễn từ khóa khỏi danh mục cấm.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Xóa từ khóa thành công' },
-          404: { description: 'Không tìm thấy từ khóa' },
-        },
-      },
-    },
-
     '/moderation/reviews/queue': {
       get: {
         tags: ['Moderation'],
@@ -2609,6 +2557,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     // Stories Paths (src/docs/paths/stories.paths.js)
     // ==========================================
     ...storiesPaths,
+    ...moderatorPaths,
 
     // =========================================================================
     // Content Library: Backgrounds

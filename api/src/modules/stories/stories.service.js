@@ -12,6 +12,7 @@ import {
 } from './lib/storyFormat.js';
 import { loadStoryForRead, loadOwnedStory, lockForWrite } from './stories.access.js';
 import { VOICE_KEY } from './stories.narration.store.js';
+import { blockedErrors, keywordIssues, storyTextTargets } from './lib/keywords.js';
 
 export { formatStoryDetail };
 
@@ -92,14 +93,36 @@ export async function loadNameContextForStory(db, storyId) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Tu khoa bi chan dang dung (Moderator quan ly). */
+export const loadActiveKeywords = (db) =>
+  db.blockedKeyword.findMany({ where: { isActive: true }, select: { keyword: true, severity: true } });
+
+/**
+ * Chu phu huynh viet (editor) chua tu `block` -> 422, transaction cua nguoi goi rollback (khong luu).
+ * `paths`: chi kiem cac doan vua sua (vd. ['pages.<id>']); bo trong = ca truyen (luc hoan tat).
+ */
+export async function assertNoBlockedKeywords(db, storyId, paths) {
+  const keywords = await loadActiveKeywords(db);
+  if (!keywords.length) return;
+  const story = await db.story.findUniqueOrThrow({ where: { id: storyId }, include: { pages: true, checkpoints: { include: { options: true } } } });
+  const targets = storyTextTargets(story).filter((t) => !paths || paths.includes(t.path));
+  const errors = blockedErrors(keywordIssues(targets, keywords));
+  if (errors.length) {
+    throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'Truyện có từ không phù hợp cho bé. Hãy sửa lại chỗ được đánh dấu.', errors);
+  }
+}
+
 export const getDetail = async (db, storyId) => {
-  const [story, voiceRow] = await Promise.all([
+  const [story, voiceRow, keywords] = await Promise.all([
     db.story.findUniqueOrThrow({ where: { id: storyId }, include: STORY_DETAIL_INCLUDE }),
     db.platformSetting.findUnique({ where: { key: VOICE_KEY }, select: { value: true } }),
+    loadActiveKeywords(db),
   ]);
   // Thieu cau hinh giong: khong lam hong trang chi tiet; tien do bao thieu audio (khong doc duoc).
   const voice = typeof voiceRow?.value === 'string' ? voiceRow.value.trim() : '';
-  return formatStoryDetail(story, { voice });
+  // Tu khoa trong chu hien tai (ca `warn` lan `block`) de editor hien canh bao ngay o doan do.
+  const keywordWarnings = keywordIssues(storyTextTargets(story), keywords);
+  return { ...formatStoryDetail(story, { voice }), keywordWarnings };
 };
 
 // ---------------------------------------------------------------------------

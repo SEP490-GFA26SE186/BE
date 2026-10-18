@@ -6,7 +6,7 @@ import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { lockForWrite } from './stories.access.js';
-import { TX_OPTIONS, getDetail, loadNameContextForStory, tokenizeOrReject } from './stories.service.js';
+import { TX_OPTIONS, assertNoBlockedKeywords, getDetail, loadNameContextForStory, tokenizeOrReject } from './stories.service.js';
 import { loadStorySettings } from './lib/storySettings.js';
 import { dispatchNarration, prepareNarration } from './stories.narration.service.js';
 import { storyStatusFromPages } from './lib/completeness.js';
@@ -107,6 +107,7 @@ const updatePage = (user, storyId, pageId, { contentText }) =>
         audioStatus: 'none',
       },
     });
+    await assertNoBlockedKeywords(tx, storyId, [`pages.${page.id}`]);
 
     await syncStatus(tx, storyId);
     return getDetail(tx, storyId);
@@ -155,6 +156,7 @@ const updateCheckpoint = (user, storyId, checkpointId, body) =>
         data: { textAudioKey: null, feedbackAudioKey: null },
       });
     }
+    await assertNoBlockedKeywords(tx, storyId, [`checkpoints.${checkpoint.id}`]);
 
     await syncStatus(tx, storyId);
     return getDetail(tx, storyId);
@@ -183,7 +185,7 @@ const addPage = async (user, storyId, { contentText } = {}) => {
       ? null
       : tokenizeText(contentText, await loadNameContextForStory(tx, storyId), 'contentText');
 
-    await tx.storyPage.create({
+    const created = await tx.storyPage.create({
       data: {
         storyId,
         pageOrder: (last?.pageOrder ?? 0) + 1,
@@ -192,6 +194,7 @@ const addPage = async (user, storyId, { contentText } = {}) => {
         origin: 'human',
       },
     });
+    if (text) await assertNoBlockedKeywords(tx, storyId, [`pages.${created.id}`]);
 
     assertCustomLayout(await loadLayout(tx, storyId), customLimits);
     await syncStatus(tx, storyId);
@@ -281,6 +284,8 @@ const reviewStory = async (user, storyId, narrationOptions) => {
     const checkpoints = await tx.storyCheckpoint.findMany({ where: { storyId }, include: { options: true } });
 
     const gaps = findReviewGaps({ pages, checkpoints });
+    // Ca truyen (chu AI + chu phu huynh): danh sach tu khoa co the da doi tu luc viet.
+    if (!gaps.length) await assertNoBlockedKeywords(tx, storyId);
     if (gaps.length > 0) {
       throw new ApiError(
         StatusCodes.UNPROCESSABLE_ENTITY,
