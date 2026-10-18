@@ -4,7 +4,7 @@ import {
   EQ_MIN_ITEMS,
   eqSkillsFromStats,
   formatChild,
-  summarizeUsage,
+  summarizeReading,
   vnDate,
 } from '../../src/modules/children/lib/childFormat.js';
 
@@ -15,7 +15,6 @@ const row = (over = {}) => ({
   parentId: 'p1',
   name: 'Bin',
   birthDate: new Date('2020-05-01T00:00:00Z'),
-  dailyScreenTimeMinutes: 30,
   preferredVoice: null,
   createdAt: new Date('2026-10-01T00:00:00Z'),
   updatedAt: new Date('2026-10-02T00:00:00Z'),
@@ -32,7 +31,6 @@ test('formatChild: dung hinh dang Web (character, khong bedtime, tuoi)', () => {
     name: 'Bin',
     birthDate: '2020-05-01',
     age: 6,
-    dailyScreenTimeMinutes: 30,
     preferredVoice: null,
     character: { id: 'ch1', name: 'Bin', appearance: 'tóc ngắn', portraitImageKey: null, portraitImageUrl: null, portraitStatus: 'none' },
     booksCount: 3,
@@ -53,21 +51,21 @@ test('vnDate: ngay theo gio Viet Nam, khong theo UTC', () => {
   assert.equal(vnDate(new Date('2026-10-17T16:59:00Z')), '2026-10-17'); // 23:59 VN
 });
 
-test('summarizeUsage: cong giay, lam tron phut, con lai khong am', () => {
-  const sessions = [{ durationSeconds: 11 * 60 }, { durationSeconds: 7 * 60 + 40 }, { durationSeconds: null }];
-  assert.deepEqual(summarizeUsage({ id: 'c1', dailyScreenTimeMinutes: 20 }, sessions, '2026-10-17'), {
+test('summarizeReading: cong thoi gian cac luot doc, luot bo do toi da 60 phut, dem luot xong', () => {
+  const t = (m) => new Date(Date.UTC(2026, 9, 17, 1, m));
+  const sessions = [
+    { startedAt: t(0), lastActivityAt: t(9), completedAt: t(11), status: 'completed' },
+    { startedAt: t(20), lastActivityAt: t(27), completedAt: null, status: 'in_progress' },
+    { startedAt: t(30), lastActivityAt: new Date(Date.UTC(2026, 9, 17, 5, 0)), completedAt: null, status: 'in_progress' },
+  ];
+  assert.deepEqual(summarizeReading({ id: 'c1' }, sessions, '2026-10-17'), {
     childId: 'c1',
     date: '2026-10-17',
-    dailyLimitMinutes: 20,
-    usedMinutes: 19,
-    usedSeconds: 1120,
-    remainingMinutes: 1,
-    isLimitReached: false,
+    usedMinutes: 78,
+    usedSeconds: (11 + 7 + 60) * 60,
     sessionsCount: 3,
+    completedCount: 1,
   });
-  const over = summarizeUsage({ id: 'c1', dailyScreenTimeMinutes: 5 }, [{ durationSeconds: 600 }], 'd');
-  assert.equal(over.remainingMinutes, 0);
-  assert.equal(over.isLimitReached, true);
 });
 
 test('eqSkillsFromStats: du 5 nang luc theo thu tu, diem chi khi du so cau', () => {

@@ -11,13 +11,6 @@ const createChild = z.object({
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be formatted as YYYY-MM-DD')
       .optional(),
-    dailyScreenTimeMinutes: z
-      .number({ invalid_type_error: 'Screen time must be a number of minutes' })
-      .int('Screen time must be an integer')
-      .min(5, 'Minimum screen time is 5 minutes')
-      .max(300, 'Maximum screen time is 300 minutes')
-      .optional()
-      .default(30),
     preferredVoice: z
       .string()
       .trim()
@@ -50,12 +43,6 @@ const updateChild = z.object({
     birthDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birth date must be formatted as YYYY-MM-DD')
-      .optional(),
-    dailyScreenTimeMinutes: z
-      .number({ invalid_type_error: 'Screen time must be a number of minutes' })
-      .int('Screen time must be an integer')
-      .min(5, 'Minimum screen time is 5 minutes')
-      .max(300, 'Maximum screen time is 300 minutes')
       .optional(),
     preferredVoice: z
       .string()
@@ -103,21 +90,6 @@ const getUsage = z.object({
 });
 
 // Phien dung may: duration_seconds va usage_date la cot DB tu sinh tu started_at / ended_at (rev8).
-const logUsageSession = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid child ID format'),
-  }),
-  body: z
-    .object({
-      startedAt: z.string({ required_error: 'startedAt is required' }).datetime(),
-      endedAt: z.string({ required_error: 'endedAt is required' }).datetime(),
-    })
-    .refine((b) => new Date(b.endedAt) > new Date(b.startedAt), {
-      message: 'endedAt must be after startedAt',
-      path: ['endedAt'],
-    }),
-});
-
 const updateAvatar = z.object({
   params: z.object({
     id: z.string().uuid('Invalid child ID format'),
@@ -156,7 +128,6 @@ export default {
   getChild,
   deleteChild,
   getUsage,
-  logUsageSession,
   updateAvatar,
   getEqReport,
   getChildBookshelf,

@@ -14,13 +14,26 @@ const REMOVED = [
   ['GET', '/api/v1/credit-packs'],
   ['POST', '/api/v1/reading-sessions/start'],
   ['POST', '/api/v1/content-library/templates/00000000-0000-0000-0000-000000000000/stages'],
+  // Module cu rev6/7 da go 2026-10-18 (ghi sai cot rev8, Web khong goi)
+  ['POST', '/api/v1/content-library/keywords/bulk'],
+  ['GET', '/api/v1/cart'],
+  ['POST', '/api/v1/orders'],
+  ['GET', '/api/v1/entitlements'],
+  ['GET', '/api/v1/marketplace/listings'],
+  ['GET', '/api/v1/wallets/me'],
+  ['GET', '/api/v1/reports/platform/overview'],
+  ['GET', '/api/v1/moderation/reviews/queue'],
+  ['GET', '/api/v1/moderation/checklist-items'],
+  ['POST', '/api/v1/subscriptions/subscribe-free'],
+  ['POST', '/api/v1/subscriptions/cancel'],
+  ['GET', '/api/v1/child-profiles'],
 ];
 const KEPT = [
   ['GET', '/api/v1/content-library/stats'],
   ['GET', '/api/v1/subscriptions/me'],
   ['GET', '/api/v1/topics'],
   ['GET', '/api/v1/characters'],
-  ['POST', '/api/v1/content-library/keywords/bulk'],
+  ['POST', '/api/v1/moderation/keywords/bulk'],
   ['GET', '/api/v1/kid/bookshelf'],
   ['POST', '/api/v1/kid/sessions'],
 ];

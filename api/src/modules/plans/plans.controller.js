@@ -22,26 +22,8 @@ const getMySubscription = catchAsync(async (req, res) => {
   });
 });
 
-const subscribeFreePlan = catchAsync(async (req, res) => {
-  const subscription = await plansService.subscribeFreePlan(req.user.id, req.body.planId);
-  return ApiResponse.success(res, {
-    message: 'Subscribed to free plan successfully',
-    data: { subscription },
-  });
-});
-
-const cancelMySubscription = catchAsync(async (req, res) => {
-  const subscription = await plansService.cancelMySubscription(req.user.id);
-  return ApiResponse.success(res, {
-    message: 'Subscription cancelled successfully',
-    data: { subscription },
-  });
-});
-
 export default {
   getPlans,
   getPlanById,
   getMySubscription,
-  subscribeFreePlan,
-  cancelMySubscription,
 };

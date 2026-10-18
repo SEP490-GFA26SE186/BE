@@ -36,7 +36,6 @@ export function formatChild(child, now = new Date()) {
     name: child.name,
     birthDate: child.birthDate ? new Date(child.birthDate).toISOString().slice(0, 10) : null,
     age: ageOf(child.birthDate, now),
-    dailyScreenTimeMinutes: child.dailyScreenTimeMinutes,
     preferredVoice: child.preferredVoice,
     character: formatCharacter(child.character),
     booksCount: child._count?.bookshelfItems ?? 0,
@@ -47,18 +46,27 @@ export function formatChild(child, now = new Date()) {
 }
 
 /** Tong hop cac phien child_usage_sessions cua mot ngay. `durationSeconds` null = phien chua ket thuc. */
-export function summarizeUsage(child, sessions, date) {
-  const usedSeconds = sessions.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0);
-  const usedMinutes = Math.round(usedSeconds / 60);
+/** Mot luot doc tinh toi da 60 phut (be bo do tablet van mo -> last_activity_at troi xa). */
+export const SESSION_CAP_SECONDS = 60 * 60;
+
+/**
+ * Thoi gian doc trong ngay tu play_sessions (luot bat dau trong ngay theo gio VN).
+ * sessions: [{ startedAt, lastActivityAt, completedAt, status }]. Rev8 bo gioi han phut / gio ngu (2026-10-18).
+ */
+export function summarizeReading(child, sessions, date) {
+  let usedSeconds = 0;
+  for (const s of sessions) {
+    const end = s.completedAt ?? s.lastActivityAt;
+    const seconds = Math.max(0, Math.round((new Date(end) - new Date(s.startedAt)) / 1000));
+    usedSeconds += Math.min(seconds, SESSION_CAP_SECONDS);
+  }
   return {
     childId: child.id,
     date,
-    dailyLimitMinutes: child.dailyScreenTimeMinutes,
-    usedMinutes,
+    usedMinutes: Math.round(usedSeconds / 60),
     usedSeconds,
-    remainingMinutes: Math.max(0, child.dailyScreenTimeMinutes - usedMinutes),
-    isLimitReached: usedMinutes >= child.dailyScreenTimeMinutes,
     sessionsCount: sessions.length,
+    completedCount: sessions.filter((s) => s.status === 'completed').length,
   };
 }
 

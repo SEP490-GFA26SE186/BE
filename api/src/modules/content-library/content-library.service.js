@@ -500,87 +500,6 @@ const deleteChecklistItem = async (id) => {
 // 4. BLOCKED KEYWORDS BULK & UPDATE SERVICE
 // =============================================================================
 
-/**
- * Bulk import or upsert blocked keywords
- * @param {Object} user
- * @param {Array<{ keyword: string, severity?: string }>} keywords
- * @returns {Promise<Object>}
- */
-const bulkImportKeywords = async (user, keywords) => {
-  let createdCount = 0;
-  let updatedCount = 0;
-
-  await prisma.$transaction(async (tx) => {
-    for (const item of keywords) {
-      const normalized = item.keyword.trim().toLowerCase();
-      const severity = item.severity || 'block';
-
-      const existing = await tx.blockedKeyword.findUnique({
-        where: { keyword: normalized },
-      });
-
-      if (existing) {
-        await tx.blockedKeyword.update({
-          where: { id: existing.id },
-          data: {
-            severity,
-            isActive: true,
-          },
-        });
-        updatedCount++;
-      } else {
-        await tx.blockedKeyword.create({
-          data: {
-            keyword: normalized,
-            severity,
-            isActive: true,
-            createdById: user.id,
-          },
-        });
-        createdCount++;
-      }
-    }
-  });
-
-  return {
-    totalProcessed: keywords.length,
-    createdCount,
-    updatedCount,
-    message: `Đã xử lý ${keywords.length} từ khóa (${createdCount} thêm mới, ${updatedCount} cập nhật)`,
-  };
-};
-
-/**
- * Update single keyword
- * @param {string} id
- * @param {Object} data
- * @returns {Promise<Object>}
- */
-const updateKeyword = async (id, data) => {
-  const existing = await prisma.blockedKeyword.findUnique({ where: { id } });
-  if (!existing) {
-    throw ApiError.notFound('Blocked keyword not found');
-  }
-
-  if (data.keyword && data.keyword.trim().toLowerCase() !== existing.keyword) {
-    const normalized = data.keyword.trim().toLowerCase();
-    const duplicate = await prisma.blockedKeyword.findUnique({ where: { keyword: normalized } });
-    if (duplicate && duplicate.id !== id) {
-      throw ApiError.conflict(`Keyword '${normalized}' already exists`);
-    }
-    data.keyword = normalized;
-  }
-
-  return prisma.blockedKeyword.update({
-    where: { id },
-    data: {
-      ...(data.keyword !== undefined && { keyword: data.keyword }),
-      ...(data.severity !== undefined && { severity: data.severity }),
-      ...(data.isActive !== undefined && { isActive: data.isActive }),
-    },
-  });
-};
-
 // =============================================================================
 // 6. CONTENT LIBRARY STATS SERVICE
 // =============================================================================
@@ -654,8 +573,6 @@ export default {
   deleteChecklistItem,
 
   // Blocked Keywords
-  bulkImportKeywords,
-  updateKeyword,
 
 
   // Stats

@@ -100,16 +100,6 @@ const deleteChecklistItem = catchAsync(async (req, res) => {
 // Blocked Keywords Controllers
 // =============================================================================
 
-const bulkImportKeywords = catchAsync(async (req, res) => {
-  const result = await contentLibraryService.bulkImportKeywords(req.user, req.body.keywords);
-  ApiResponse.success(res, result, result.message);
-});
-
-const updateKeyword = catchAsync(async (req, res) => {
-  const updated = await contentLibraryService.updateKeyword(req.params.id, req.body);
-  ApiResponse.success(res, updated, 'Cập nhật từ khóa cấm thành công');
-});
-
 // =============================================================================
 // Stats Controller
 // =============================================================================
@@ -136,7 +126,5 @@ export default {
   createChecklistItem,
   updateChecklistItem,
   deleteChecklistItem,
-  bulkImportKeywords,
-  updateKeyword,
   getContentLibraryStats,
 };

@@ -4,7 +4,7 @@
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import bookshelfService from '../bookshelf/bookshelf.service.js';
-import { eqSkillsFromStats, formatChild, summarizeUsage, vnDate } from './lib/childFormat.js';
+import { eqSkillsFromStats, formatChild, summarizeReading, vnDate } from './lib/childFormat.js';
 
 // Supabase o xa: moi truy van vai tram ms, mac dinh 5 s cua Prisma khong du cho 4-5 truy van
 // (giong TX_OPTIONS cua module stories).
@@ -87,7 +87,6 @@ const createChild = async (parentId, data) => {
         parentId,
         name,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        dailyScreenTimeMinutes: data.dailyScreenTimeMinutes ?? 30,
         preferredVoice: data.preferredVoice?.trim() || null,
       },
     });
@@ -120,7 +119,6 @@ const updateChild = async (parentId, childId, data) => {
   const payload = {};
   if (data.name !== undefined) payload.name = data.name.trim();
   if (data.birthDate !== undefined) payload.birthDate = data.birthDate ? new Date(data.birthDate) : null;
-  if (data.dailyScreenTimeMinutes !== undefined) payload.dailyScreenTimeMinutes = data.dailyScreenTimeMinutes;
   if (data.preferredVoice !== undefined) payload.preferredVoice = data.preferredVoice?.trim() || null;
 
   return prisma.$transaction(async (tx) => {
@@ -158,22 +156,16 @@ const updateChildAvatar = async (parentId, childId, { appearance, portraitImageK
   }, TX_OPTIONS);
 };
 
+/** Thoi gian doc trong ngay (gio VN), tinh tu cac luot doc that cua be. */
 const getChildUsage = async (parentId, childId, dateStr) => {
   const child = await findOwnChild(prisma, parentId, childId);
   const date = dateStr || vnDate();
-  const sessions = await prisma.childUsageSession.findMany({
-    where: { childId, usageDate: new Date(`${date}T00:00:00Z`) },
-    select: { durationSeconds: true },
+  const from = new Date(`${date}T00:00:00+07:00`);
+  const sessions = await prisma.playSession.findMany({
+    where: { childId, startedAt: { gte: from, lt: new Date(from.getTime() + 86_400_000) } },
+    select: { startedAt: true, lastActivityAt: true, completedAt: true, status: true },
   });
-  return summarizeUsage(child, sessions, date);
-};
-
-/** Ghi mot phien dung may. duration_seconds / usage_date do DB tu sinh, khong ghi. */
-const logUsageSession = async (parentId, childId, { startedAt, endedAt }) => {
-  await findOwnChild(prisma, parentId, childId);
-  return prisma.childUsageSession.create({
-    data: { childId, startedAt: new Date(startedAt), endedAt: new Date(endedAt) },
-  });
+  return summarizeReading(child, sessions, date);
 };
 
 const getChildEqReport = async (parentId, childId) => {
@@ -219,7 +211,6 @@ export default {
   deleteChild,
   updateChildAvatar,
   getChildUsage,
-  logUsageSession,
   getChildEqReport,
   getChildOverview,
   getChildBookshelf,

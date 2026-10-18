@@ -37,7 +37,6 @@ router
 
 router
   .route('/:id/usage')
-  .get(validate(childrenValidation.getUsage), childrenController.getChildUsage)
-  .post(validate(childrenValidation.logUsageSession), childrenController.logUsageSession);
+  .get(validate(childrenValidation.getUsage), childrenController.getChildUsage);
 
 export default router;

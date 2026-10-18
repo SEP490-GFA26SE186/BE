@@ -201,35 +201,6 @@ const deleteChecklistItem = z.object({
 // Blocked Keywords Enhancements (Bulk & Update)
 // =============================================================================
 
-const bulkImportKeywords = z.object({
-  body: z.object({
-    keywords: z
-      .array(
-        z.object({
-          keyword: z
-            .string({ required_error: 'Keyword cannot be empty' })
-            .trim()
-            .min(1)
-            .max(100),
-          severity: z.enum(KEYWORD_SEVERITIES).default('block'),
-        })
-      )
-      .min(1, 'Must provide at least one keyword')
-      .max(500, 'Cannot import more than 500 keywords in a single request'),
-  }),
-});
-
-const updateKeyword = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid keyword ID format'),
-  }),
-  body: z.object({
-    keyword: z.string().trim().min(1).max(100).optional(),
-    severity: z.enum(KEYWORD_SEVERITIES).optional(),
-    isActive: z.boolean().optional(),
-  }),
-});
-
 export default {
   getBackgrounds,
   getBackgroundById,
@@ -247,6 +218,4 @@ export default {
   createChecklistItem,
   updateChecklistItem,
   deleteChecklistItem,
-  bulkImportKeywords,
-  updateKeyword,
 };

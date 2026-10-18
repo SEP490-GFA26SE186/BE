@@ -316,7 +316,6 @@ const enterKidMode = async (parentId, childId) => {
       id: true,
       name: true,
       birthDate: true,
-      dailyScreenTimeMinutes: true,
       preferredVoice: true,
     },
   });

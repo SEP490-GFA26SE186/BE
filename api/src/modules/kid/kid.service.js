@@ -66,7 +66,7 @@ async function sessionPayload(session) {
 const getMe = async (kid) => {
   const child = await prisma.childProfile.findUniqueOrThrow({
     where: { id: kid.childId },
-    select: { id: true, name: true, birthDate: true, dailyScreenTimeMinutes: true, preferredVoice: true },
+    select: { id: true, name: true, birthDate: true, preferredVoice: true },
   });
   return { child };
 };
