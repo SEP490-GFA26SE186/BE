@@ -12,6 +12,7 @@ const REMOVED = [
   ['GET', '/api/v1/templates'],
   ['GET', '/api/v1/notifications'],
   ['GET', '/api/v1/credit-packs'],
+  ['POST', '/api/v1/reading-sessions/start'],
   ['POST', '/api/v1/content-library/templates/00000000-0000-0000-0000-000000000000/stages'],
 ];
 const KEPT = [
@@ -20,6 +21,8 @@ const KEPT = [
   ['GET', '/api/v1/topics'],
   ['GET', '/api/v1/characters'],
   ['POST', '/api/v1/content-library/keywords/bulk'],
+  ['GET', '/api/v1/kid/bookshelf'],
+  ['POST', '/api/v1/kid/sessions'],
 ];
 
 test('route rev8: da bo -> 404, giu lai -> 401 khi khong co token', async (t) => {

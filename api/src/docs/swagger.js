@@ -39,7 +39,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Stories', description: 'Tạo truyện từ chủ đề và nhân vật, nhờ AI viết chữ, chỉnh sửa trang và điểm dừng cảm xúc, phụ huynh xem xét trước khi cho bé đọc' },
     { name: 'Content Library', description: 'Thư viện tài nguyên sư phạm: ảnh nền mặc định, âm thanh UI, tiêu chuẩn kiểm duyệt và cấu hình kịch bản' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
-    { name: 'Reading Sessions', description: 'Phiên đọc truyện tương tác, lựa chọn nhánh rẽ cảm xúc và đánh giá chỉ số EQ' },
+    { name: 'Kid Mode', description: 'Bé đọc truyện trên giá, trả lời điểm dừng, BE chấm EQ (token kid_session)' },
     { name: 'Marketplace', description: 'Chợ truyện cộng đồng: hồ sơ tác giả, đăng bán, nhận miễn phí và đánh giá sản phẩm' },
     { name: 'Moderation', description: 'Kiểm duyệt an toàn nội dung, từ khóa cấm, duyệt tác phẩm và báo cáo vi phạm' },
     { name: 'Plans & Subscriptions', description: 'Gói thành viên, định mức tạo truyện/chân dung AI và quyền lợi tài khoản' },
@@ -1620,175 +1620,35 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
     },
 
-    // ---- READING SESSIONS ----
-    '/reading-sessions/start': {
+    // ---- KID MODE (rev8) — token `kid_session` tu POST /auth/kid-mode/enter ----
+    '/kid/me': { get: { tags: ['Kid Mode'], summary: '[Kid Session] Hồ sơ bé đang dùng máy', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ child }' }, 403: { description: 'Không phải token Kid Mode' } } } },
+    '/kid/bookshelf': { get: { tags: ['Kid Mode'], summary: '[Kid Session] Giá sách của bé (chỉ truyện đã sẵn sàng: hoàn tất + đủ giọng đọc)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ items: [{ storyId, title, totalPages, readingProgress }] }' } } } },
+    '/kid/ui-audio': { get: { tags: ['Kid Mode'], summary: '[Kid Session] Câu đọc dùng chung (tên cảm xúc, câu nhắc)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ assets: { <key>: { text, audioUrl } } }' } } } },
+    '/kid/sessions': {
       post: {
-        tags: ['Reading Sessions'],
-        summary: '[Parent | Kid Session] Bắt đầu hoặc tiếp tục phiên đọc truyện tương tác',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nKhởi động phiên đọc truyện cho bé. Nếu đã có phiên dở dang (`in_progress`) sẽ tự động tiếp tục trang đang đọc; nếu chọn `isReplay: true` sẽ bắt đầu lại từ trang đầu tiên.',
+        tags: ['Kid Mode'],
+        summary: '[Kid Session] Bắt đầu / tiếp tục lượt đọc',
+        description: 'Truyện phải nằm trên giá của bé và **sẵn sàng cho trẻ** (422 kèm tiến độ giọng đọc nếu chưa). Có lượt `in_progress` thì tiếp tục; không thì tạo lượt mới, `isFirstPlay` = bé chưa từng đọc truyện này (chỉ lượt đầu được chấm EQ). Nội dung trả về **không có đáp án** (answerEmotion, isCorrect, role, feedback); chữ đã thay tên thật.',
         security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['childId', 'storyId'],
-                properties: {
-                  childId: { type: 'string', format: 'uuid' },
-                  storyId: { type: 'string', format: 'uuid' },
-                  isReplay: { type: 'boolean', default: false, description: 'Đọc lại từ đầu' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Khởi động phiên đọc truyện thành công' },
-          400: { description: 'Truyện chưa có nội dung trang' },
-          404: { description: 'Không tìm thấy hồ sơ bé hoặc câu chuyện' },
-        },
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['storyId'], properties: { storyId: { type: 'string', format: 'uuid' } } } } } },
+        responses: { 201: { description: '{ session, story: { pages[{ id, pageOrder, text, audioUrl, imageUrl }], checkpoints[{ id, afterPageId, type, question, questionAudioUrl, options[{ id, text, textAudioUrl }], result }] } }' }, 404: { description: 'Truyện không có trên giá của bé' }, 422: { description: 'Truyện chưa sẵn sàng' } },
       },
     },
-
-    '/reading-sessions/{sessionId}': {
-      get: {
-        tags: ['Reading Sessions'],
-        summary: '[Parent | Kid Session] Lấy trạng thái chi tiết phiên đọc truyện',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thông tin trang hiện tại, các lựa chọn rẽ nhánh, tiến độ và lịch sử các quyết định đã chọn trong phiên.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          {
-            name: 'sessionId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'ID phiên đọc truyện',
-          },
-        ],
-        responses: {
-          200: { description: 'Lấy trạng thái phiên đọc thành công' },
-          404: { description: 'Không tìm thấy phiên đọc' },
-        },
-      },
-    },
-
-    '/reading-sessions/{sessionId}/choice': {
+    '/kid/sessions/{sessionId}': { get: { tags: ['Kid Mode'], summary: '[Kid Session] Nội dung + câu đã trả lời của lượt đọc', security: [{ BearerAuth: [] }], parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ session, story }' } } } },
+    '/kid/sessions/{sessionId}/progress': { put: { tags: ['Kid Mode'], summary: '[Kid Session] Lưu trang đang đọc', security: [{ BearerAuth: [] }], parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['pageId'], properties: { pageId: { type: 'string', format: 'uuid' } } } } } }, responses: { 200: { description: '{ session }' } } } },
+    '/kid/sessions/{sessionId}/answers': {
       post: {
-        tags: ['Reading Sessions'],
-        summary: '[Kid Session | Parent] Bé chọn phương án xử lý tình huống cảm xúc',
-        description: '**Quyền truy cập:** `kid_session` hoặc `parent`.\nGhi nhận lựa chọn của bé tại nhánh rẽ tình huống. Hệ thống sẽ điều hướng đến trang hệ quả tương ứng, hoặc hoàn thành truyện và tự động tính toán chỉ số EQ.',
+        tags: ['Kid Mode'],
+        summary: '[Kid Session] Bé trả lời điểm dừng — BE chấm',
+        description: 'Cảm xúc: `emotion`; vị trí người khác / giải quyết tình huống: `optionId`; liên hệ bản thân: chỉ `checkpointId`. Sai lần đầu (cảm xúc / vị trí) → `done: false` + `hint`; gửi lần nữa → `done: true`, sai thì kèm `answer`. Giải quyết tình huống trả `feedback`. Chỉ lần chọn đầu được chấm (1 / 0,5 / 0) và chỉ cộng vào eq_competency_stats ở lượt đọc đầu. Gửi lại câu đã xong → trả kết quả cũ.',
         security: [{ BearerAuth: [] }],
-        parameters: [
-          {
-            name: 'sessionId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'ID phiên đọc truyện',
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['pageId', 'choiceId'],
-                properties: {
-                  pageId: { type: 'string', format: 'uuid', description: 'ID trang hiện tại' },
-                  choiceId: { type: 'string', format: 'uuid', description: 'ID nhánh rẽ bé lựa chọn' },
-                  timeToDecideMs: { type: 'integer', example: 3500, description: 'Thời gian bé suy nghĩ (mili-giây)' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Ghi nhận lựa chọn thành công và trả về trang tiếp theo hoặc kết quả EQ' },
-          400: { description: 'Phiên đọc đã kết thúc hoặc sai ID trang' },
-          404: { description: 'Không tìm thấy lựa chọn tương ứng' },
-        },
+        parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['checkpointId'], properties: { checkpointId: { type: 'string', format: 'uuid' }, emotion: { type: 'string', enum: ['happy', 'sad', 'angry', 'scared', 'neutral'] }, optionId: { type: 'string', format: 'uuid' }, skipped: { type: 'boolean' }, timeToFirstMs: { type: 'integer' }, questionReplays: { type: 'integer' } } } } } },
+        responses: { 200: { description: '{ result: { checkpointId, done, correct, attempts, hint?, hintAudioUrl?, answer?, feedback?, feedbackAudioUrl? } }' }, 400: { description: 'Lựa chọn sai kiểu điểm dừng' }, 409: { description: 'Lượt đọc đã kết thúc' } },
       },
     },
+    '/kid/sessions/{sessionId}/complete': { post: { tags: ['Kid Mode'], summary: '[Kid Session] Đọc xong (idempotent)', security: [{ BearerAuth: [] }], parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ session }' } } } },
 
-    '/reading-sessions/{sessionId}/complete': {
-      post: {
-        tags: ['Reading Sessions'],
-        summary: '[Parent | Kid Session] Hoàn thành phiên đọc và nhận báo cáo đánh giá EQ',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nĐánh dấu kết thúc phiên đọc truyện, tổng hợp điểm số 5 năng lực EQ chuẩn CASEL và tự động tích lũy thời gian sử dụng màn hình của bé.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          {
-            name: 'sessionId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'ID phiên đọc truyện',
-          },
-        ],
-        requestBody: {
-          required: false,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  durationSeconds: { type: 'integer', example: 120, description: 'Thời lượng phiên đọc (giây)' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Hoàn thành phiên đọc và tạo báo cáo EQ thành công' },
-          404: { description: 'Không tìm thấy phiên đọc' },
-        },
-      },
-    },
-
-    '/reading-sessions/child/{childId}/history': {
-      get: {
-        tags: ['Reading Sessions'],
-        summary: '[Parent | Kid Session] Xem lịch sử các phiên đọc truyện của bé',
-        description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nLấy danh sách các câu chuyện bé đã đọc, số lượng lựa chọn cảm xúc đã đưa ra và điểm số EQ đạt được qua từng phiên.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          {
-            name: 'childId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'ID hồ sơ bé',
-          },
-          {
-            name: 'status',
-            in: 'query',
-            required: false,
-            schema: { type: 'string', enum: ['in_progress', 'completed', 'abandoned'] },
-            description: 'Lọc theo trạng thái phiên đọc',
-          },
-          {
-            name: 'page',
-            in: 'query',
-            required: false,
-            schema: { type: 'integer', default: 1 },
-          },
-          {
-            name: 'limit',
-            in: 'query',
-            required: false,
-            schema: { type: 'integer', default: 10 },
-          },
-        ],
-        responses: {
-          200: { description: 'Lấy lịch sử đọc truyện của bé thành công' },
-          404: { description: 'Không tìm thấy hồ sơ bé' },
-        },
-      },
-    },
-
-    // ---- MARKETPLACE ----
     '/marketplace/price-tiers': {
       get: {
         tags: ['Marketplace'],
