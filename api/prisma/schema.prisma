@@ -225,6 +225,7 @@ enum RequestStatus {
 
 enum WithdrawalStatus {
   requested
+  processing
   paid
   rejected
   cancelled
@@ -938,6 +939,7 @@ model SellerProfile {
   reviewedBy        String?      @map("reviewed_by") @db.Uuid
   reviewedAt        DateTime?    @map("reviewed_at") @db.Timestamptz()
   bankName          String?      @map("bank_name") @db.VarChar(100)
+  bankBin           String?      @map("bank_bin") @db.VarChar(20)
   bankAccountNumber String?      @map("bank_account_number") @db.VarChar(255)
   bankAccountHolder String?      @map("bank_account_holder") @db.VarChar(150)
   bankUpdatedAt     DateTime?    @map("bank_updated_at") @db.Timestamptz()

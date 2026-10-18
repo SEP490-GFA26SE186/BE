@@ -30,3 +30,6 @@ export const payosPayout = () =>
 export const setPayosClient = (client) => {
   collect = client;
 };
+export const setPayosPayoutClient = (client) => {
+  payout = client;
+};

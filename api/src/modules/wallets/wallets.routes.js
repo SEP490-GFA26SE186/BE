@@ -24,41 +24,7 @@ router.post(
   walletsController.adminGrantCredits
 );
 
-// ==========================================
-// Seller Payout Withdrawals
-// ==========================================
-
-router.post(
-  '/withdrawals',
-  auth,
-  validate(walletsValidation.requestWithdrawalSchema),
-  walletsController.requestWithdrawal
-);
-router.get(
-  '/withdrawals/me',
-  auth,
-  validate(walletsValidation.getWithdrawalsQuerySchema),
-  walletsController.getMyWithdrawals
-);
-router.delete('/withdrawals/:id/cancel', auth, walletsController.cancelMyWithdrawal);
-
-// ==========================================
-// Admin Withdrawal Review & Processing
-// ==========================================
-
-router.get(
-  '/admin/withdrawals',
-  auth,
-  authorize('admin'),
-  validate(walletsValidation.getWithdrawalsQuerySchema),
-  walletsController.getAdminWithdrawals
-);
-router.post(
-  '/admin/withdrawals/:id/process',
-  auth,
-  authorize('admin'),
-  validate(walletsValidation.processWithdrawalSchema),
-  walletsController.processWithdrawal
-);
+// Rut tien nguoi ban: da chuyen sang /sellers/me/withdrawals + /admin/withdrawals (chi ho payOS,
+// src/modules/market/withdrawals.*). Route cu o day bo de chi con mot duong rut tien.
 
 export default router;
