@@ -74,7 +74,8 @@ export function answerOutcome(checkpoint, row, storyCharacters, { useTts }) {
     attempts: row.attempts,
     skipped: row.skipped,
     done: !awaitingRetry,
-    correct: row.skipped ? null : finalChoice ? isCorrect(checkpoint, finalChoice) : firstRight,
+    // null = khong co dung / sai: bo qua, hoac lien he ban than (khong cham).
+    correct: row.skipped || checkpoint.type === 'reflection' ? null : finalChoice ? isCorrect(checkpoint, finalChoice) : firstRight,
   };
   if (awaitingRetry) {
     out.hint = real(checkpoint.hint);

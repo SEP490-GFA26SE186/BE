@@ -73,7 +73,8 @@ test('answerOutcome: giai quyet tinh huong tra phan hoi cua lua chon; reflection
   const ps = answerOutcome(psCp, row({ firstOptionId: 'p1', finalOptionId: 'p1' }), chars, opts);
   assert.equal(ps.done, true);
   assert.equal(ps.feedback, 'Bin dịu lại.');
-  assert.equal(answerOutcome(reflectionCp, row({}), chars, opts).done, true);
+  const reflection = answerOutcome(reflectionCp, row({}), chars, opts);
+  assert.deepEqual({ done: reflection.done, correct: reflection.correct }, { done: true, correct: null }, 'khong cham -> khong "dung roi"');
   const skipped = answerOutcome(emotionCp, row({ skipped: true }), chars, opts);
   assert.deepEqual({ done: skipped.done, correct: skipped.correct }, { done: true, correct: null });
 });
