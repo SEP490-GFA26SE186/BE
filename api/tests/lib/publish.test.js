@@ -23,6 +23,13 @@ test('leftoverNameErrors: quet trang, diem dung, phuong an va ten moi; khong que
   assert.ok(leftoverNameErrors({ pages: [], checkpoints: [] }, ['Bin'], 'Truyện của Bin').some((e) => e.path === 'listing.title'));
 });
 
+test('tu xung ho ("Bà", "Mẹ") khong bi coi la ten that; ten rieng van bi chan', () => {
+  const story = { pages: [{ id: 'p1', contentText: 'Bà xin lỗi con. Mẹ ôm {NV1}.' }], checkpoints: [] };
+  assert.deepEqual(leftoverNameErrors(story, ['Bà', 'Mẹ'], 'Bé và bà'), []);
+  assert.equal(leftoverNameErrors(story, ['Bà', 'Mẹ', 'Bin'], 'Bin và bà').length, 1);
+  assert.deepEqual(aliasErrors([{ token: '{NV2}' }], [{ token: '{NV2}', aliasName: 'Bà' }], ['Bà']), [], 'giu "Bà" lam ten chung duoc');
+});
+
 test('reviewProgress: chi duyet khi xem du trang VA dat du checklist', () => {
   const p = reviewProgress(['a', 'b'], ['a'], ['c1', 'c2'], [{ checklistItemId: 'c1', passed: true }, { checklistItemId: 'c2', passed: true }]);
   assert.equal(p.canApprove, false);

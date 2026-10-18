@@ -12,6 +12,19 @@
 import { findLeftoverNames } from '../../stories/lib/names.js';
 
 export const CLAIM_MINUTES = 30;
+
+/**
+ * Tu xung ho trong gia dinh: dat lam ten nhan vat ("Bà", "Mẹ") khong lam lo danh tinh, va trong chu
+ * no la dai tu thuong gap ("Bà xin lỗi con"). Khong coi la ten that khi quet ban dang ban.
+ */
+const KINSHIP = new Set([
+  'ông', 'bà', 'bố', 'ba', 'cha', 'mẹ', 'má', 'u', 'anh', 'chị', 'em', 'cô', 'chú', 'dì', 'cậu', 'mợ',
+  'thím', 'bác', 'dượng', 'ông nội', 'bà nội', 'ông ngoại', 'bà ngoại', 'anh trai', 'chị gái', 'em gái', 'em trai',
+]);
+
+/** Ten that co the lo danh tinh (bo tu xung ho). */
+export const identifyingNames = (names) =>
+  [...new Set(names.map((n) => String(n ?? '').normalize('NFC').trim()).filter((n) => n && !KINSHIP.has(n.toLocaleLowerCase('vi'))))];
 const ALIAS_MAX = 100;
 const nfc = (s) => String(s ?? '').normalize('NFC').trim();
 
@@ -24,7 +37,7 @@ const nfc = (s) => String(s ?? '').normalize('NFC').trim();
  */
 export function aliasErrors(storyCharacters, aliases, forbiddenNames) {
   const byToken = new Map((aliases ?? []).map((a) => [a.token, nfc(a.aliasName)]));
-  const forbidden = new Set(forbiddenNames.map((n) => nfc(n).toLocaleLowerCase('vi')));
+  const forbidden = new Set(identifyingNames(forbiddenNames).map((n) => n.toLocaleLowerCase('vi')));
   const seen = new Set();
   const errors = [];
   for (const { token } of storyCharacters) {
@@ -59,6 +72,8 @@ export function storyTexts(story) {
 /** Ten that con sot trong chu (chu da luu dang token, nen thuong rong). */
 export function leftoverNameErrors(story, forbiddenNames, listingTitle) {
   const errors = [];
+  forbiddenNames = identifyingNames(forbiddenNames);
+  if (!forbiddenNames.length) return errors;
   for (const { path, text } of [...storyTexts(story), { path: 'listing.title', text: listingTitle }]) {
     const found = findLeftoverNames(text, forbiddenNames);
     if (found.length) errors.push({ path, message: `Còn tên thật: ${found.join(', ')}. Sửa lại trước khi đăng bán.` });
