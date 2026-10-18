@@ -34,7 +34,7 @@ test('DB: CHECK bao cao dung mot doi tuong, quyet dinh di cung thoi diem, tong d
   if (listing) {
     await rejects(prisma.moderationReview.create({ data: { listingId: listing.id, reviewType: 'submission', decision: 'approved' } }), /decision_check|23514/);
   }
-  await rejects(prisma.order.create({ data: { buyerId: u.user.id, subtotalVnd: 10000n, discountVnd: 0n, totalVnd: 9000n, payosOrderCode: BigInt(Date.now()) } }), /orders_total_check|23514/);
+  await rejects(prisma.order.create({ data: { buyerId: u.user.id, subtotalVnd: 10000n, totalVnd: 9000n, payosOrderCode: BigInt(Date.now()) } }), /orders_total_check|23514/);
 });
 
 test('DB: xoa don da co muc thanh toan bi chan (RESTRICT, khong mat lich su tien)', { skip }, async () => {

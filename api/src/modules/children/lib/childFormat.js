@@ -45,7 +45,7 @@ export function formatChild(child, now = new Date()) {
   };
 }
 
-/** Tong hop cac phien child_usage_sessions cua mot ngay. `durationSeconds` null = phien chua ket thuc. */
+
 /** Mot luot doc tinh toi da 60 phut (be bo do tablet van mo -> last_activity_at troi xa). */
 export const SESSION_CAP_SECONDS = 60 * 60;
 

@@ -1,19 +1,19 @@
 # Hướng dẫn đọc schema — rev 8
 
-49 bảng, chia 8 khối. Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
+45 bảng, chia 8 khối (dọn 2026-10-18: bỏ voucher, giỏ hàng, `prompt_templates`, `child_usage_sessions`; thêm `narration_clips`). Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
 và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để xem ERD.
 
 ## 1. Tám khối
 
 | Khối | Trả lời câu hỏi | Bảng chính | Bảng phụ |
 |---|---|---|---|
-| **Tài khoản** (5) | Ai dùng app, con là ai, nhà có nhân vật nào? | `users`, `child_profiles`, `characters` | `auth_tokens`, `child_usage_sessions` |
+| **Tài khoản** (4) | Ai dùng app, con là ai, nhà có nhân vật nào? | `users`, `child_profiles`, `characters` | `auth_tokens` |
 | **Thư viện nội dung** (6) | Moderator/Admin chuẩn bị sẵn gì? | `topics` | `eq_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
-| **Truyện** (7) | Một truyện gồm những gì? | `stories`, `story_pages`, `story_checkpoints` | `story_characters`, `story_scenes`, `checkpoint_options`, `bookshelf_items` |
+| **Truyện** (8) | Một truyện gồm những gì? | `stories`, `story_pages`, `story_checkpoints` | `story_characters`, `story_scenes`, `checkpoint_options`, `narration_clips`, `bookshelf_items` |
 | **Học** (3) | Trẻ đã trả lời gì, điểm EQ ra sao? | `play_sessions`, `checkpoint_answers` | `eq_competency_stats` |
-| **AI** (2) | Đã gọi AI bao nhiêu, tốn bao nhiêu? | `ai_requests` | `prompt_templates` |
-| **Chợ truyện** (7) | Truyện nào đang bán, ai đã mua, đánh giá ra sao? | `listings`, `entitlements`, `product_reviews` | `seller_profiles`, `price_tiers`, `cart_items`, `product_review_tags` |
-| **Tiền** (12) | Ai trả bao nhiêu, ví còn bao nhiêu? | `orders`, `order_items`, `subscriptions`, `wallets`, `wallet_ledger` | `plans`, `vouchers`, `voucher_usages`, `refund_requests`, `webhook_logs`, `withdrawal_requests`, `platform_settings` |
+| **AI** (1) | Đã gọi AI bao nhiêu, tốn bao nhiêu? | `ai_requests` | (prompt nằm trong dịch vụ ai/) |
+| **Chợ truyện** (6) | Truyện nào đang bán, ai đã mua, đánh giá ra sao? | `listings`, `entitlements`, `product_reviews` | `seller_profiles`, `price_tiers`, `product_review_tags` |
+| **Tiền** (10) | Ai trả bao nhiêu, ví còn bao nhiêu? | `orders`, `order_items`, `subscriptions`, `wallets`, `wallet_ledger` | `plans`, `refund_requests`, `webhook_logs`, `withdrawal_requests`, `platform_settings` |
 | **Kiểm duyệt** (7) | Ai duyệt, ai bị báo cáo, ai làm gì? | `moderation_reviews`, `content_reports` | `review_checklist_results`, `review_page_views`, `creator_strikes`, `strike_appeals`, `admin_audit_logs` |
 
 ## 2. Đi theo một hành trình
@@ -22,8 +22,8 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 1. Đăng ký → `users`; đăng nhập → `auth_tokens`; ví rỗng → `wallets`; gói Miễn phí → `subscriptions`,
    cấp credit tháng đầu → `wallet_ledger` (`credit_grant`).
 2. Tạo hồ sơ bé An → `child_profiles`.
-3. Tạo nhân vật An, Bin, Mẹ → `characters`; AI vẽ chân dung → `ai_requests` (`character_portrait`),
-   trừ credit → `wallet_ledger`.
+3. Tạo nhân vật An, Bin, Mẹ → `characters` (mô tả bằng chữ). *Chân dung AI (`character_portrait`) đang
+   nghiên cứu, chưa bật — schema giữ sẵn.*
 
 **Tạo truyện**
 4. Chọn bài học "Con hay nổi giận" → đọc `topics`.
@@ -31,14 +31,14 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
    `story_characters`, dựng 8 trang → `story_pages`, 4 điểm dừng → `story_checkpoints`.
 6. "Viết giúp tôi" → một `ai_requests` (`story_text`) → điền chữ trang, cảnh (`story_scenes`),
    câu hỏi và phương án (`checkpoint_options`).
-7. Xem lại xong → `stories.reviewed_at`; hệ thống vẽ tranh (`scene_image`) và đọc giọng
-   (`narration`) nếu bật cờ.
+7. Xem lại xong → `stories.reviewed_at`; đọc giọng từng đoạn → `narration_clips` (nếu `use_tts`).
+   *Tranh cảnh (`scene_image`) đang nghiên cứu, chưa bật.*
 8. Đưa cho con → `bookshelf_items`.
 
 **Bé An chơi**
 9. Mở truyện → `play_sessions` (`is_first_play = true` nếu là lần đầu).
 10. Trả lời điểm dừng → `checkpoint_answers` (lần chọn đầu, lần chọn cuối, điểm, năng lực).
-11. Cập nhật cache điểm → `eq_competency_stats`; thời gian chơi → `child_usage_sessions`.
+11. Cập nhật cache điểm → `eq_competency_stats`; thời gian đọc tính từ `play_sessions` (không giới hạn phút).
 
 **Đăng bán**
 12. Nộp đơn người bán → `seller_profiles`.
@@ -89,8 +89,8 @@ DBML không diễn tả được; đã ghi trong `Note` của từng bảng, t�
 - `play_sessions (child_id, story_id)` WHERE `is_first_play`
 - `entitlements (parent_id, listing_id)` WHERE `revoked_at IS NULL`
 - `subscriptions (parent_id)` WHERE `status = active`
-- `withdrawal_requests (seller_id)` WHERE `status = requested`
-- `prompt_templates (request_type)` WHERE `is_active`
+- `withdrawal_requests (seller_id)` WHERE `status IN (requested, processing)`
+- `moderation_reviews (listing_id)` WHERE `decided_at IS NULL`
 - `content_reports (reporter_id, listing_id)` WHERE `listing_id IS NOT NULL`
 
 **CHECK**
@@ -115,7 +115,7 @@ DBML không diễn tả được; đã ghi trong `Note` của từng bảng, t�
 |---|---|
 | Cấp credit tháng mới, hết hạn credit tháng cũ (`next_credit_grant_at`) | Hằng ngày |
 | Hết hạn gói (`period_end`) | Hằng ngày |
-| Chuyển doanh thu treo quá 7 ngày sang khả dụng | Hằng ngày |
+| Chuyển doanh thu treo quá 3 ngày (`market.earning_hold_days`) sang khả dụng, trừ khoản đang chờ hoàn tiền | Mỗi 15 phút |
 | Hết hạn đơn chưa thanh toán | Mỗi vài phút |
-| Tính lại bộ đếm `listings` và `eq_competency_stats` | Hằng đêm |
+| Tính lại bộ đếm `listings` | Admin bấm ở trang Đối soát (chưa có cron) |
 | Chọn truyện kiểm tra ngẫu nhiên cho Moderator | Hằng tuần |
