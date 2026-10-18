@@ -75,9 +75,18 @@ def get_llm_provider(request: Request, settings: SettingsDep) -> LLMProvider:
     return provider
 
 
-def get_tts_provider() -> TTSProvider:
-    # Only the mock exists until M5.
-    return MockTTSProvider()
+def get_tts_provider(request: Request, settings: SettingsDep) -> TTSProvider:
+    """Mock, or the VieNeu provider `lifespan` loaded once (model load ~15 s, kept on app.state)."""
+    if settings.tts_provider == "mock":
+        return MockTTSProvider()
+    state = request.app.state
+    provider = getattr(state, "tts_provider", None)
+    if provider is None:
+        from app.providers.tts.vieneu import VieNeuTTSProvider
+
+        provider = VieNeuTTSProvider(settings)
+        state.tts_provider = provider
+    return provider
 
 
 def reject_force_unless_mock(force: ForceCode | None, provider_name: str) -> None:

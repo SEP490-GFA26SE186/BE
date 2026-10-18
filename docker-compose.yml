@@ -69,7 +69,7 @@ services:
       AI_SERVICE_URL: http://ai:8000
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
       # Timeout goi ai/ theo job (ms). De trong = mac dinh JOB_CONFIG trong api/src/clients/aiClient.js
-      # (120s story_text, 90s anh, 30s narration). Xem docs/contracts/ai-service.md §6.
+      # (320s story_text, 90s anh, 150s narration). Xem docs/contracts/ai-service.md §6.
       AI_TIMEOUT_MS_STORY_TEXT: ${AI_TIMEOUT_MS_STORY_TEXT:-}
       AI_TIMEOUT_MS_CHARACTER_PORTRAIT: ${AI_TIMEOUT_MS_CHARACTER_PORTRAIT:-}
       AI_TIMEOUT_MS_SCENE_IMAGE: ${AI_TIMEOUT_MS_SCENE_IMAGE:-}
@@ -97,11 +97,19 @@ services:
   ai:
     build:
       context: ./ai
+      args:
+        # tts = cai VieNeu-TTS vao image (can khi TTS_PROVIDER=vieneu). Doi xong phai `up --build ai`.
+        AI_EXTRAS: ${AI_EXTRAS:-}
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
       # Chu (mock | gemini | claude; claude_code chi chay ngoai Docker) va giong doc (mock; vieneu o M5) chon rieng. Anh chi co mock toi M4b.
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       TTS_PROVIDER: ${TTS_PROVIDER:-mock}
+      # Chi khi TTS_PROVIDER=vieneu. De trong = mac dinh ai/app/config.py (Kim Thanh, fp32, 120 s, mp3).
+      TTS_DEFAULT_VOICE: ${TTS_DEFAULT_VOICE:-}
+      TTS_VIENEU_PRECISION: ${TTS_VIENEU_PRECISION:-}
+      TTS_TIMEOUT_SECONDS: ${TTS_TIMEOUT_SECONDS:-}
+      TTS_AUDIO_FORMAT: ${TTS_AUDIO_FORMAT:-}
       # Chi can khi LLM_PROVIDER=gemini; model phai ton tai (kiem luc khoi dong).
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-}
@@ -135,6 +143,9 @@ services:
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-story-assets}
       # CO Y khong co DATABASE_URL / REDIS_URL / JWT_SECRET: service nay khong duoc doc DB.
+    volumes:
+      # Model VieNeu (~580 MB) tai lan dau, giu qua cac lan tao lai container.
+      - hf-cache:/home/appuser/.cache/huggingface
     expose:
       # Chi service trong network cua compose goi duoc. Khong ai tu host hay LAN
       # choc truc tiep vao endpoint sinh noi dung duoc.
@@ -143,3 +154,4 @@ services:
 
 volumes:
   redis-data:
+  hf-cache:

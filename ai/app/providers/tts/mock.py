@@ -23,6 +23,8 @@ def _fake_duration_seconds(text: str) -> float:
 class MockTTSProvider:
     name = "mock"
     model = "mock-tts-v1"
+    audio_format = "wav"
+    content_type = "audio/wav"
 
     async def synthesize(self, req: TtsRequest) -> tuple[bytes, float]:
         raise_forced(req.force_)

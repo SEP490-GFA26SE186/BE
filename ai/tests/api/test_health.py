@@ -5,6 +5,7 @@ KEYS = {
     "image_profile_portrait",
     "image_profile_scene",
     "tts_provider",
+    "tts_default_voice",
     "storage_backend",
 }
 

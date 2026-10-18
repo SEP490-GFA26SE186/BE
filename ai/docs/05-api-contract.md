@@ -83,9 +83,17 @@ là mock.
 ## `POST /v1/tts/synthesize`
 
 - Request: `{request_id, storage_prefix, text, voice_id}`. `text` đã có tên thật (TTS được miễn
-  chốt chặn tên thật). Chuẩn hoá chữ trước khi đọc: số → chữ, bỏ ký tự lạ, rút khoảng trắng.
-  **Không log `text`.**
-- Response: `{request_id, audio_key, duration_seconds, usage}`.
+  chốt chặn tên thật). **Không log `text`.**
+- `voice_id`: tên giọng preset của VieNeu (vd. `Kim Thanh`) hoặc bí danh của nó. **Rỗng** → giọng
+  mặc định `TTS_DEFAULT_VOICE` (chỉ để gọi tay / script — Node luôn gửi tường minh). Không có trong
+  danh sách → `INVALID_INPUT` (422, không đoán giọng gần đúng). Mock nhận mọi `voice_id`.
+- Chuẩn hoá chữ: bỏ ký tự điều khiển / định dạng vô hình, rút khoảng trắng, giữ dấu câu và đoạn.
+  **Số → chữ do VieNeu tự làm** (khác bản cũ của tài liệu này, xem README "TTS"). Không còn chữ nào
+  đọc được → `INVALID_INPUT`.
+- Response: `{request_id, audio_key, duration_seconds, usage}`. `usage.units` = số giây audio làm
+  tròn lên; `estimated_cost_micros = 0` (tự host).
+- Lỗi: model lỗi → `PROVIDER_ERROR` (retryable); quá `TTS_TIMEOUT_SECONDS` → `TIMEOUT`. Service đọc
+  **một đoạn mỗi lúc**: request đến khi đang đọc thì chờ — Node không được gửi song song.
 
 Ví dụ: `docs/samples/tts_synthesize_request.json`, `docs/samples/tts_synthesize_response.json`.
 
@@ -115,16 +123,16 @@ côi:
 |---|---|
 | `/v1/images/portrait` | `<prefix>/<request_id>-1.png`, `<prefix>/<request_id>-2.png` |
 | `/v1/images/scene` | `<prefix>/<request_id>-1.png` |
-| `/v1/tts/synthesize` | `<prefix>/<request_id>-1.wav` |
+| `/v1/tts/synthesize` | `<prefix>/<request_id>-1.mp3` (vieneu) · `-1.wav` (mock) |
 
-**Định dạng hiện tại là của mock:** ảnh **PNG**, audio **WAV** (WAV rỗng 44 byte) — không phải WebP /
-AAC như dự kiến cho model thật (WebP cần Pillow ở M4a, AAC cần ffmpeg ở M5). Backend đọc định dạng
-từ đuôi key, đừng giả định.
+Ảnh hiện là **PNG** (mock; WebP cần Pillow ở M4a). Audio của VieNeu là **MP3 mono 48 kHz** (qua
+`soundfile`, không ffmpeg; `TTS_AUDIO_FORMAT=wav` để lấy WAV); mock trả WAV rỗng 44 byte. Backend đọc
+định dạng từ đuôi key, đừng giả định.
 
 ## `GET /health`
 
 Không cần token, không gọi provider. Trả các khoá: `status`, `llm_provider`, `llm_model`,
-`image_profile_portrait`, `image_profile_scene`, `tts_provider`, `storage_backend`. (`/ready` là
+`image_profile_portrait`, `image_profile_scene`, `tts_provider`, `tts_default_voice`, `storage_backend`. (`/ready` là
 bí danh, không có trong OpenAPI.)
 
 ## `__force` (chỉ cho mock)

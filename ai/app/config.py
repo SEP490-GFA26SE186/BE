@@ -18,7 +18,17 @@ class Settings(BaseSettings):
     # claude = Anthropic API (key or `ant auth login` profile); claude_code = the logged-in
     # `claude` CLI driven by claude-agent-sdk, DEV ONLY (README "Claude").
     llm_provider: Literal["mock", "gemini", "claude", "claude_code"] = "mock"
-    tts_provider: Literal["mock"] = "mock"
+    tts_provider: Literal["mock", "vieneu"] = "mock"
+    # vieneu (spec 4.4). Node always sends voice_id (platform_settings tts.voice); the default
+    # only serves manual calls and scripts. Must be a preset name or alias - checked at startup.
+    tts_default_voice: str = "Kim Thanh"
+    # int8 is ~3x faster but the library warns of distortion on CPUs without VNNI (5500U).
+    tts_vieneu_precision: Literal["fp32", "int8"] = "fp32"
+    # 51-word page: 17.4 s on the 5500U natively (spike), 31-38 s inside Docker Desktop (WSL2 VM,
+    # measured 2026-10-18; thread count and onnxruntime 1.30 vs 1.31 made no difference). A 70-word
+    # page ~45 s in Docker -> 120 s. Node's AI_TIMEOUT_MS_NARRATION must stay above this.
+    tts_timeout_seconds: float = Field(default=120, gt=0)
+    tts_audio_format: Literal["mp3", "wav"] = "mp3"
 
     gemini_api_key: SecretStr | None = None
     gemini_text_model: str | None = None

@@ -23,6 +23,10 @@ dependencies = [
 # (`uv sync --no-dev`, no extras) never installs it. Pinned: the SDK is coupled to a CLI
 # version (claude_agent_sdk._cli_version).
 claude-code = ["claude-agent-sdk==0.2.163"]
+# TTS_PROVIDER=vieneu: VieNeu-TTS v3 Turbo on CPU via ONNX (no torch), ~580 MB of model weights
+# downloaded to the Hugging Face cache on first start. Brings numpy + soundfile (MP3 encoding).
+# Docker installs it with build arg AI_EXTRAS=tts. Upstream supports Python 3.10-3.13.
+tts = ["vieneu==3.8.3"]
 
 [dependency-groups]
 dev = [

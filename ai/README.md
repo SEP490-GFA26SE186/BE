@@ -91,6 +91,42 @@ phía (và `BE/docs/contracts/ai-service.md` §6).
 lặng. Cả hai mock vẫn đi qua đường upload Storage thật rồi trả key, nên luồng queue -> worker -> HTTP
 -> có file trên Storage chạy được đầy đủ trước khi có model thật.
 
+## TTS: VieNeu-TTS v3 Turbo (`TTS_PROVIDER=vieneu`)
+
+Spec: `docs/superpowers/specs/2026-10-17-tts-narration-design.md`. Mock vẫn là mặc định; test không
+bao giờ nạp model thật (provider nhận `engine` + `encode` tiêm vào).
+
+```bash
+# BE/.env (cá nhân):  AI_EXTRAS=tts   TTS_PROVIDER=vieneu
+docker compose up -d --build ai      # lần đầu tải ~580 MB model vào volume hf-cache
+.venv/Scripts/python scripts/try_tts.py --confirm      # đo đọc nguyên một truyện mẫu qua service
+```
+
+**Khác tài liệu cũ (`docs/09`, `docs/05`) — theo tài liệu chính thức VieNeu:**
+- Bản 0.3B GGUF đã deprecated → dùng **v3 Turbo** (ONNX trên CPU, không torch, 48 kHz, 25 giọng
+  preset). **fp32**: int8 nhanh hơn nhưng thư viện cảnh báo méo tiếng trên CPU không VNNI (5500U).
+- **Số → chữ do VieNeu tự làm** (`vieneu_utils.phonemize_text`: "3 quả táo, ngày 5/10" → "ba quả táo,
+  ngày năm tháng mười"), kể cả bỏ emoji. `app/core/tts_text.py` chỉ bỏ ký tự điều khiển / vô hình và
+  rút khoảng trắng; làm lại việc đổi số sẽ đánh nhau với thư viện.
+- Audio **MP3 mono** qua `soundfile` (libsndfile), không AAC / ffmpeg: máy dev không có ffmpeg, MP3
+  nhỏ ~10 lần WAV.
+
+**Docker:** `HF_HUB_DISABLE_SYMLINKS=1` là bắt buộc. Mặc định cache Hugging Face trên Linux là symlink
+(`snapshots/` → `blobs/`), và onnxruntime (cả 1.30 lẫn 1.31) từ chối file trọng số "External data path
+escapes model directory" → không nạp được model. Đổi biến này phải xoá volume `hf-cache` cũ.
+
+**Tốc độ (đo 2026-10-18, Ryzen 5 5500U, giọng Kim Thanh, trang 51 tiếng ra 19 s audio):**
+
+| Chạy ở đâu | Một trang |
+|---|---|
+| Thẳng trên Windows (spike, venv Python 3.12) | 17,4 s |
+| Trong Docker Desktop (WSL2), máy rảnh | 31–38 s |
+
+Số luồng ONNX (0 / 4 / 6) và onnxruntime 1.30 vs 1.31 không đổi kết quả — chậm là do máy ảo. Truyện
+mẫu 8 trang (23 đoạn) trong Docker, có chạy song song việc khác: 11,6 phút; ước khi máy rảnh ~5–6 phút.
+Vì vậy `TTS_TIMEOUT_SECONDS = 120` và Node `AI_TIMEOUT_MS_NARRATION = 150 000`. Service đọc **một đoạn
+mỗi lúc** (khoá giữ tới khi thread model thật sự xong, kể cả khi request đã timeout).
+
 ## Gemini: trạng thái spike và cấu hình
 
 Gemini **chỉ dùng cho chữ**; sinh ảnh dùng model mã nguồn mở (`docs/06`). Spike gọi Gemini thật đang

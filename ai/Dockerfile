@@ -25,17 +25,24 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Cai deps truoc khi copy source: layer nay duoc cache lai khi chi sua code
+# AI_EXTRAS=tts -> cai them VieNeu-TTS (TTS_PROVIDER=vieneu). Mac dinh rong: image nho, chi mock.
+ARG AI_EXTRAS=""
 COPY pyproject.toml uv.lock* ./
-RUN uv sync --no-dev --no-install-project
+RUN uv sync --no-dev --no-install-project ${AI_EXTRAS:+--extra ${AI_EXTRAS}}
 
 COPY app ./app
 
-RUN useradd --create-home --uid 10001 appuser
+RUN useradd --create-home --uid 10001 appuser  && mkdir -p /home/appuser/.cache/huggingface && chown -R appuser /home/appuser/.cache
 USER appuser
+# Model VieNeu tai ve day lan dau; compose mount volume vao de khong tai lai moi lan tao container.
+# HF_HUB_DISABLE_SYMLINKS: cache luu file THAT. Mac dinh tren Linux snapshot la symlink sang blobs/,
+# va onnxruntime tu choi file trong so (external data) "nam ngoai thu muc model" -> khong nap duoc.
+ENV HF_HOME=/home/appuser/.cache/huggingface     HF_HUB_DISABLE_SYMLINKS=1
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+# start-period 180s: TTS_PROVIDER=vieneu nap model ~15 s (lan dau con tai ~580 MB) truoc khi phuc vu.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=180s --retries=3 \
   CMD curl -fsS http://localhost:8000/health || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

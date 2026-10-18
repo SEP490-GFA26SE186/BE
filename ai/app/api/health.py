@@ -17,5 +17,6 @@ async def health(settings: SettingsDep) -> dict[str, str]:
         "image_profile_portrait": settings.image_profile_portrait,
         "image_profile_scene": settings.image_profile_scene,
         "tts_provider": settings.tts_provider,
+        "tts_default_voice": settings.tts_default_voice,
         "storage_backend": storage_backend_name(settings),
     }

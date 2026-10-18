@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -96,6 +97,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await provider.verify_model()
         app.state.llm_provider = provider
         logger.info("%s model check ok: %s", settings.llm_provider, settings.llm_model)
+    if settings.tts_provider == "vieneu":
+        from app.providers.tts.vieneu import VieNeuTTSProvider
+
+        # Load the model before serving: a bad voice / missing extra fails the container start.
+        app.state.tts_provider = await asyncio.to_thread(VieNeuTTSProvider, settings)
+        logger.info("vieneu loaded: default voice %s", app.state.tts_provider.default_voice)
     yield
 
 

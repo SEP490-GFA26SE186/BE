@@ -24,7 +24,9 @@ async def synthesize(
     reject_force_unless_mock(req.force_, provider.name)
     audio, duration = await provider.synthesize(req)
     key = await storage.upload(
-        build_key(req.storage_prefix, req.request_id, 1, "wav"), audio, "audio/wav"
+        build_key(req.storage_prefix, req.request_id, 1, provider.audio_format),
+        audio,
+        provider.content_type,
     )
     return TtsResponse(
         request_id=req.request_id,
@@ -33,7 +35,7 @@ async def synthesize(
         usage=Usage(
             provider=provider.name,
             model=provider.model,
-            units=math.ceil(duration),
+            units=math.ceil(duration),  # seconds of audio; self-hosted -> cost stays 0
             latency_ms=int((time.monotonic() - started) * 1000),
         ),
     )
