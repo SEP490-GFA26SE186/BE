@@ -18,7 +18,7 @@
 //
 // PowerShell: `$env:DATABASE_URL=$env:TEST_DATABASE_URL; $env:DIRECT_URL=$env:TEST_DIRECT_URL` roi chay
 // hai lenh tren trong CUNG phien. Seed can co topic dang hoat dong va `platform_settings` voi
-// `ai_cost.story_text > 0` (test generation kiem trong `before`). Sau do chay test:
+// `ai_cost.story_text.<length> > 0` (test generation kiem trong `before`). Sau do chay test:
 //
 //   TEST_DATABASE_URL=... TEST_DIRECT_URL=... npm test
 

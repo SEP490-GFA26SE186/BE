@@ -448,7 +448,7 @@ const storiesPaths = {
       tags: ['Stories'],
       summary: '[Parent] Nhờ AI viết chữ cho truyện',
       description:
-        `${OWNER}\nGiữ credit (\`ai_cost.story_text\`), đặt truyện \`generating\`, đẩy job vào queue và trả ngay \`202\`. ` +
+        `${OWNER}\nGiữ credit theo độ dài (\`ai_cost.story_text.<length>\`), đặt truyện \`generating\`, đẩy job vào queue và trả ngay \`202\`. ` +
         'Frontend gọi `GET /stories/{id}/generation` mỗi 2–3 giây tới khi `succeeded` / `failed` / `blocked`. ' +
         'Thành công: credit được tính, truyện `ready`, chữ, điểm dừng và phương án được ghi vào DB. Thất bại: credit được hoàn, truyện về trạng thái tính lại từ các trang.\n\n' +
         'Mã lỗi: `402` không đủ credit · `409` truyện đang sinh, hoặc đã có bé đọc (không viết lại được) · `422` truyện `custom` · ' +
@@ -472,6 +472,30 @@ const storiesPaths = {
     },
   },
 
+  '/stories/ai-pricing': {
+    get: {
+      tags: ['Stories'],
+      summary: '[Parent] Bảng giá AI viết truyện theo độ dài',
+      description:
+        'Mỗi độ dài truyện AI (`short` / `medium` / `long`): số trang, số điểm dừng (`story_layout.<length>`) và ' +
+        'số credit bị trừ khi bắt đầu viết (`ai_cost.story_text.<length>`, Admin chỉnh ở Cấu hình AI). ' +
+        'Trang tạo truyện dùng để báo giá trước cho ba mẹ.',
+      security: bearer,
+      responses: {
+        200: resp('Bảng giá', {
+          success: true,
+          data: {
+            lengths: [
+              { length: 'short', pages: 6, checkpoints: 3, credits: 1 },
+              { length: 'medium', pages: 8, checkpoints: 4, credits: 2 },
+              { length: 'long', pages: 10, checkpoints: 5, credits: 3 },
+            ],
+          },
+        }),
+        401: err('Chưa đăng nhập'),
+      },
+    },
+  },
   '/stories/{id}/generation': {
     get: {
       tags: ['Stories'],

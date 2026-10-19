@@ -27,8 +27,8 @@ before(async () => {
   if (skip) return;
   api = await startServer();
   topic = await getSeededTopic();
-  cost = (await loadStorySettings(prisma)).storyTextCost;
-  assert.ok(cost > 0, 'ai_cost.story_text tren DB test phai > 0 de kiem giu credit');
+  cost = (await loadStorySettings(prisma)).storyTextCost.medium; // truyen trong test mac dinh 'medium'
+  assert.ok(cost > 0, 'ai_cost.story_text.medium tren DB test phai > 0 de kiem giu credit');
 });
 
 after(async () => {
@@ -132,6 +132,18 @@ test('startGeneration: thanh cong -> generating, ai_request queued, mot credit_h
   assert.equal(await balanceOf(f.user.id), 5);
 
   assert.deepEqual(calls, [['story_text', { ai_request_id: aiRequestId }, { jobId: aiRequestId }]]);
+});
+
+test('startGeneration: credit theo do dai truyen (ngan / dai tru dung gia cua do dai do)', { skip }, async () => {
+  const { storyTextCost } = await loadStorySettings(prisma);
+  for (const length of ['short', 'long']) {
+    const price = storyTextCost[length];
+    const f = await family(price + 1);
+    const story = await createStory(f, length);
+    const { aiRequestId } = await startGeneration(f.user, story.id, { enqueue: recorder().enqueue });
+    assert.equal((await prisma.aiRequest.findUnique({ where: { id: aiRequestId } })).creditsCharged, price, length);
+    assert.equal(await balanceOf(f.user.id), 1, length);
+  }
 });
 
 test('POST /:id/generate -> 202 { aiRequestId }', { skip }, async () => {

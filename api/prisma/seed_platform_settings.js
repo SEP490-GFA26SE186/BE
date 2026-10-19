@@ -59,8 +59,10 @@ export const platformSettingsData = [
   { key: 'custom_limits.min_pages', value: 4 },
   { key: 'custom_limits.max_pages', value: 20 },
   { key: 'custom_limits.max_checkpoints', value: 6 },
-  // tạm — câu hỏi mở §10.3 của spec
-  { key: 'ai_cost.story_text', value: 1 },
+  // Credit cho một lần AI viết truyện, theo độ dài (người dùng chốt 2026-10-19: giá khác nhau theo số trang).
+  { key: 'ai_cost.story_text.short', value: 1 },
+  { key: 'ai_cost.story_text.medium', value: 2 },
+  { key: 'ai_cost.story_text.long', value: 3 },
   // Giọng đọc kể truyện (spec TTS §5.2): preset VieNeu, Node luôn gửi tường minh. Đổi giọng làm
   // lệch vân tay mọi đoạn -> các truyện phải hoàn tất lại để đọc bằng giọng mới.
   { key: 'tts.voice', value: 'Kim Thanh' },

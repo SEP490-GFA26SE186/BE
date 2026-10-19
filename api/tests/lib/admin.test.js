@@ -12,10 +12,10 @@ test('cau hinh: chi khoa trong danh sach; kieu, khoang, rang buoc hoan tien <= g
   assert.match(settingError('market.refund_window_days', 5, { 'market.earning_hold_days': 3 }), /không được dài hơn/);
   assert.match(settingError('market.earning_hold_days', 2, { 'market.refund_window_days': 3 }), /không được dài hơn/);
   assert.equal(settingError('market.earning_hold_days', 7, { 'market.refund_window_days': 3 }), null);
-  const list = describeSettings([{ key: 'ai_cost.story_text', value: 2, updatedAt: new Date(), updater: { fullName: 'Admin' } }]);
+  const list = describeSettings([{ key: 'ai_cost.story_text.medium', value: 4, updatedAt: new Date(), updater: { fullName: 'Admin' } }]);
   assert.deepEqual(
-    [list.find((s) => s.key === 'ai_cost.story_text').value, list.find((s) => s.key === 'moderation.strike_limit').isDefault],
-    [2, true],
+    [list.find((s) => s.key === 'ai_cost.story_text.medium').value, list.find((s) => s.key === 'moderation.strike_limit').isDefault],
+    [4, true],
   );
 });
 

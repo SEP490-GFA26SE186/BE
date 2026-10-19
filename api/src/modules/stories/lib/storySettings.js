@@ -15,7 +15,8 @@ const LIMIT_KEYS = [
   'max_scenes',
 ];
 const CUSTOM_LIMIT_KEYS = { min_pages: 'minPages', max_pages: 'maxPages', max_checkpoints: 'maxCheckpoints' };
-const COST_KEY = 'ai_cost.story_text';
+// Credit cho mot lan AI viet truyen, theo do dai (ai_cost.story_text.<length>).
+export const COST_KEYS = Object.fromEntries(LAYOUT_SIZES.map((size) => [size, `ai_cost.story_text.${size}`]));
 
 const isPosInt = (v) => Number.isInteger(v) && v > 0;
 
@@ -83,11 +84,12 @@ export function parseStorySettings(rows) {
     else customLimits[camel] = v;
   }
 
-  const cost = need(COST_KEY);
-  let storyTextCost;
-  if (cost !== undefined) {
-    if (!Number.isInteger(cost) || cost < 0) invalid.push(`${COST_KEY} (cần số nguyên không âm)`);
-    else storyTextCost = cost;
+  const storyTextCost = {};
+  for (const [size, key] of Object.entries(COST_KEYS)) {
+    const cost = need(key);
+    if (cost === undefined) continue;
+    if (!Number.isInteger(cost) || cost < 0) invalid.push(`${key} (cần số nguyên không âm)`);
+    else storyTextCost[size] = cost;
   }
 
   const problems = [];
@@ -108,7 +110,7 @@ export async function loadStorySettings(db) {
         { key: { startsWith: 'story_layout.' } },
         { key: { startsWith: 'limits.' } },
         { key: { startsWith: 'custom_limits.' } },
-        { key: COST_KEY },
+        { key: { startsWith: 'ai_cost.story_text.' } },
       ],
     },
     select: { key: true, value: true },

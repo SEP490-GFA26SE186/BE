@@ -29,7 +29,9 @@ const fullRows = () => [
   { key: 'custom_limits.min_pages', value: 4 },
   { key: 'custom_limits.max_pages', value: 20 },
   { key: 'custom_limits.max_checkpoints', value: 6 },
-  { key: 'ai_cost.story_text', value: 1 },
+  { key: 'ai_cost.story_text.short', value: 1 },
+  { key: 'ai_cost.story_text.medium', value: 2 },
+  { key: 'ai_cost.story_text.long', value: 3 },
 ];
 
 test('parseStorySettings: bo dong day du -> dung cau truc, limits giu snake_case', () => {
@@ -44,18 +46,18 @@ test('parseStorySettings: bo dong day du -> dung cau truc, limits giu snake_case
     feedback_max_words: 25, max_scenes: 4,
   });
   assert.deepEqual(s.customLimits, { minPages: 4, maxPages: 20, maxCheckpoints: 6 });
-  assert.equal(s.storyTextCost, 1);
+  assert.deepEqual(s.storyTextCost, { short: 1, medium: 2, long: 3 });
 });
 
 test('parseStorySettings: thieu khoa -> loi liet ke du moi khoa thieu', () => {
   const rows = fullRows().filter(
-    (r) => !['limits.max_scenes', 'story_layout.long', 'ai_cost.story_text'].includes(r.key),
+    (r) => !['limits.max_scenes', 'story_layout.long', 'ai_cost.story_text.medium'].includes(r.key),
   );
   assert.throws(
     () => parseStorySettings(rows),
     (e) => {
       assert.equal(e.statusCode, 500);
-      for (const k of ['limits.max_scenes', 'story_layout.long', 'ai_cost.story_text']) {
+      for (const k of ['limits.max_scenes', 'story_layout.long', 'ai_cost.story_text.medium']) {
         assert.ok(e.message.includes(k), `thieu ${k} trong: ${e.message}`);
       }
       assert.ok(!e.message.includes('limits.page_min_words'));
@@ -70,9 +72,9 @@ test('parseStorySettings: layout co after vuot pages -> loi', () => {
   assert.throws(() => parseStorySettings(rows), /story_layout\.short/);
 });
 
-test('parseStorySettings: ai_cost.story_text am -> loi', () => {
-  const rows = fullRows().map((r) => (r.key === 'ai_cost.story_text' ? { ...r, value: -1 } : r));
-  assert.throws(() => parseStorySettings(rows), /ai_cost\.story_text/);
+test('parseStorySettings: ai_cost.story_text.<length> am -> loi', () => {
+  const rows = fullRows().map((r) => (r.key === 'ai_cost.story_text.long' ? { ...r, value: -1 } : r));
+  assert.throws(() => parseStorySettings(rows), /ai_cost\.story_text\.long/);
 });
 
 test('loadStorySettings: doc dung cac tien to roi parse', async () => {
@@ -83,10 +85,9 @@ test('loadStorySettings: doc dung cac tien to roi parse', async () => {
     },
   };
   const s = await loadStorySettings(db);
-  assert.equal(s.storyTextCost, 1);
+  assert.deepEqual(s.storyTextCost, { short: 1, medium: 2, long: 3 });
   const prefixes = where.OR.filter((c) => typeof c.key === 'object').map((c) => c.key.startsWith);
-  assert.deepEqual(prefixes, ['story_layout.', 'limits.', 'custom_limits.']);
-  assert.ok(where.OR.some((c) => c.key === 'ai_cost.story_text'));
+  assert.deepEqual(prefixes, ['story_layout.', 'limits.', 'custom_limits.', 'ai_cost.story_text.']);
 });
 
 test('parseStorySettings: muc tieu tieng/trang phai nam trong [min, max] -> loi cau hinh', () => {

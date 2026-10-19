@@ -34,8 +34,8 @@ before(async () => {
   if (skip) return;
   api = await startServer();
   topic = await getSeededTopic();
-  cost = (await loadStorySettings(prisma)).storyTextCost;
-  assert.ok(cost > 0, 'ai_cost.story_text tren DB test phai > 0 de kiem giu credit');
+  cost = (await loadStorySettings(prisma)).storyTextCost.medium; // truyen trong test mac dinh 'medium'
+  assert.ok(cost > 0, 'ai_cost.story_text.medium tren DB test phai > 0 de kiem giu credit');
 });
 
 after(async () => {

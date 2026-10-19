@@ -9,6 +9,9 @@ const router = Router();
 // stories.access.js.
 router.use(auth);
 
+// Bang gia AI viet truyen theo do dai (khai bao truoc '/:id' de khong bi hieu la id).
+router.get('/ai-pricing', storiesController.getAiPricing);
+
 // ---- Truyen (spec §4.1) ----
 router
   .route('/')

@@ -112,7 +112,8 @@ export async function startGeneration(
     );
   }
   await assertNoLeftoverNames(storyId);
-  const { storyTextCost: cost } = await loadStorySettings(prisma);
+  const { storyTextCost } = await loadStorySettings(prisma);
+  const cost = storyTextCost[story.length];
   const aiRequestId = randomUUID();
 
   await prisma.$transaction(async (tx) => {
@@ -220,4 +221,17 @@ export async function getGeneration(user, storyId, { now = new Date() } = {}) {
   return toGeneration(request);
 }
 
-export default { startGeneration, getGeneration };
+/** Bang gia AI viet truyen cho trang tao truyen: moi do dai -> so trang, so diem dung, credit. */
+export async function getAiPricing() {
+  const { layouts, storyTextCost } = await loadStorySettings(prisma);
+  return {
+    lengths: Object.entries(layouts).map(([length, layout]) => ({
+      length,
+      pages: layout.pages,
+      checkpoints: layout.checkpoints.length,
+      credits: storyTextCost[length],
+    })),
+  };
+}
+
+export default { startGeneration, getGeneration, getAiPricing };

@@ -1214,7 +1214,7 @@ model WithdrawalRequest {
 }
 
 /// @note key: commission_rate | holding_days | min_withdrawal | report_threshold |
-///       ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*
+///       ai_cost.<type>[.<length>] (credit; ai_cost.story_text.short|medium|long) | limits.* | story_layout.<length> | custom_limits.*
 model PlatformSetting {
   key       String   @id @db.VarChar(60)
   value     Json     @db.JsonB

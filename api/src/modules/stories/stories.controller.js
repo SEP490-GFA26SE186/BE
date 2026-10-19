@@ -107,6 +107,11 @@ const getGeneration = catchAsync(async (req, res) => {
   return ApiResponse.success(res, { data: { generation } });
 });
 
+const getAiPricing = catchAsync(async (req, res) => {
+  const pricing = await generationService.getAiPricing();
+  return ApiResponse.success(res, { data: pricing });
+});
+
 // ---------------------------------------------------------------------------
 // publish-version tra 501 lau dai (cho spec cho truyen).
 // ---------------------------------------------------------------------------
@@ -135,5 +140,6 @@ export default {
   retryNarration,
   generateStory,
   getGeneration,
+  getAiPricing,
   publishStoryVersion,
 };
