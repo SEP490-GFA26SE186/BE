@@ -175,9 +175,22 @@ số mục trong ngoặc là số mục của spec đó)*
   `public_id` = `CLOUDINARY_FOLDER` + key, bỏ đuôi với ảnh / audio. Audio vào `resource_type=video`.
 - DB dev chuyển sang Postgres local (`docker-compose.localdb.yml`), Supabase vẫn là DB dùng chung.
 
-**Ảnh — bỏ qua** *(2026-10-17, người dùng chốt: "bỏ qua luồng sinh ảnh đi")*
-- Không làm M4a / M4b. Truyện dùng `use_ai_image = false` + ảnh giữ chỗ. Endpoint ảnh mock và
-  `docs/06` giữ lại làm tài liệu, không phát triển thêm. Các mục "Đang mở" về ảnh dưới đây đóng băng.
+**Ảnh — làm lại trên Cloudflare Workers AI** *(2026-10-19, người dùng chốt sau khi xem thử; thay mục
+"Ảnh — bỏ qua" 2026-10-17)*
+- Runtime: **Cloudflare Workers AI qua REST** (adapter `cloudflare`, gọi từ máy chạy service, không
+  deploy gì lên Cloudflare). Model: profile `cf-flux-2-klein-4b` (FLUX.2 [klein] 4B, Apache-2.0, nhận tối đa
+  4 ảnh tham chiếu `input_image_0..3`, mỗi ảnh dưới 512x512) cho **cả chân dung lẫn cảnh**. Chọn sau một lượt
+  thử thật (`scripts/compare_images.py`, `out/compare/20261019-204922`): giữ nhân vật nhất quán qua 4 cảnh.
+- **Chân dung: 1 ảnh** (không còn "sinh 2 chọn 1"), vẽ ở **496x496 trên nền trắng trơn**: dùng thẳng làm ảnh
+  tham chiếu (dưới giới hạn 512) và tránh lỗi model chép cả căn phòng sau lưng chân dung vào mọi cảnh.
+  Phụ huynh bấm tạo ở trang Nhân vật; truyện bật tranh tự tạo chân dung còn thiếu.
+- **Cảnh: tối đa 4 mỗi truyện**, tự xếp hàng sau khi AI viết xong chữ (Node làm), mỗi cảnh gửi chân dung các
+  nhân vật làm tham chiếu.
+- **Giá:** chân dung 1 credit, mỗi cảnh 1 credit (Node: `ai_cost.character_portrait`, `ai_cost.scene_image`).
+- **An toàn ảnh: dựa vào người duyệt** — **không** có bộ phân loại. Profile không có bộ lọc sẵn chỉ chạy khi
+  `IMAGE_SAFETY=human_review` (đặt tường minh, mặc định là `classifier` và sẽ từ chối khởi động). Lý do người
+  dùng chấp nhận: ảnh chỉ tới tay trẻ sau khi phụ huynh bấm hoàn tất truyện, và kiểm duyệt viên xem từng trang
+  trước khi bản đăng bán lên chợ. Thay quy tắc "SafetyCheck bắt buộc" của `docs/06` cho chế độ này.
 
 **Chi phí** *(backend làm)*
 - Chỉ bán gói; mỗi gói cấp credit theo tháng. Mỗi loại `ai_request_type` có đơn giá credit.

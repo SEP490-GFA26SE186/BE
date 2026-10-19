@@ -58,9 +58,19 @@ class Settings(BaseSettings):
     tokens_per_word: float = Field(default=2.8, gt=0)
     scene_description_max_words: int = 30
 
-    # Reported by /health only; the real profile is chosen in M4b.
+    # "mock" or a profile name in app/image_models.yaml (docs/06). Both mock, or both real.
     image_profile_portrait: str = "mock"
     image_profile_scene: str = "mock"
+    # Workers AI (adapter `cloudflare`): REST, no deploy on Cloudflare needed.
+    cloudflare_account_id: str | None = None
+    cloudflare_api_token: SecretStr | None = None
+    # Models without a built-in filter need a check before an image leaves the service (docs/06).
+    # No classifier is implemented: such profiles start only with human_review (user decision
+    # 2026-10-19, docs/01) - images reach a child only after the parent finishes the story, and a
+    # moderator views every page before a listing goes public.
+    image_safety: Literal["classifier", "human_review"] = "classifier"
+    image_scene_width: int = Field(default=1024, ge=256, le=1920)
+    image_scene_height: int = Field(default=768, ge=256, le=1920)
 
     # Storage backend by credentials (app/storage/__init__.py): Cloudinary if all three
     # CLOUDINARY_* are set, else Supabase, else LocalStorage.
@@ -82,6 +92,29 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", extra="ignore", env_ignore_empty=True, hide_input_in_errors=True
     )
+
+    @model_validator(mode="after")
+    def _image_profiles_usable(self) -> Self:
+        names = {self.image_profile_portrait, self.image_profile_scene}
+        if names == {"mock"}:
+            return self
+        if "mock" in names:
+            raise ValueError("IMAGE_PROFILE_PORTRAIT and IMAGE_PROFILE_SCENE must both be mock or both real")
+        from app.providers.image.cloudflare import load_profiles
+
+        profiles = load_profiles()
+        unknown = [n for n in names if n not in profiles]
+        if unknown:
+            raise ValueError(f"unknown image profile(s) {unknown}; known: {sorted(profiles)}")
+        if not (self.cloudflare_account_id and self.cloudflare_api_token):
+            raise ValueError("real image profiles require CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN")
+        for n in names:
+            p = profiles[n]
+            if not p.commercial_use:
+                raise ValueError(f"image profile {n} has a non-commercial license (scripts only)")
+            if not p.capabilities.get("has_builtin_safety_filter") and self.image_safety != "human_review":
+                raise ValueError(f"image profile {n} has no safety filter: set IMAGE_SAFETY=human_review")
+        return self
 
     @model_validator(mode="after")
     def _gemini_needs_key_and_model(self) -> Self:

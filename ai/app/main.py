@@ -103,7 +103,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Load the model before serving: a bad voice / missing extra fails the container start.
         app.state.tts_provider = await asyncio.to_thread(VieNeuTTSProvider, settings)
         logger.info("vieneu loaded: default voice %s", app.state.tts_provider.default_voice)
+    if settings.image_profile_scene != "mock":
+        from app.deps import build_image_provider
+
+        app.state.image_provider = build_image_provider(settings)
+        logger.info("images: %s / %s on Workers AI (safety: %s)", settings.image_profile_portrait,
+                    settings.image_profile_scene, settings.image_safety)
     yield
+    image_provider = getattr(app.state, "image_provider", None)
+    if image_provider is not None and hasattr(image_provider, "aclose"):
+        await image_provider.aclose()
 
 
 app = FastAPI(

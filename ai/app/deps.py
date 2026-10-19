@@ -43,9 +43,34 @@ def get_storage_dep(settings: SettingsDep) -> Storage:
     return get_storage(settings)
 
 
-def get_image_provider() -> ImageProvider:
-    # Only the mock exists until M4.
-    return MockImageProvider()
+def build_image_provider(settings: Settings) -> ImageProvider:
+    """Workers AI provider for the two configured profiles (validated in Settings)."""
+    from app.providers.image.cloudflare import CloudflareImageProvider, CloudflareWorkersAI, load_profiles
+
+    profiles = load_profiles()
+    client = CloudflareWorkersAI(
+        settings.cloudflare_account_id or "",
+        settings.cloudflare_api_token.get_secret_value() if settings.cloudflare_api_token else "",
+    )
+    return CloudflareImageProvider(
+        client,
+        profiles[settings.image_profile_portrait],
+        profiles[settings.image_profile_scene],
+        scene_width=settings.image_scene_width,
+        scene_height=settings.image_scene_height,
+    )
+
+
+def get_image_provider(request: Request, settings: SettingsDep) -> ImageProvider:
+    """Mock, or one shared Workers AI provider per app (kept on `app.state`)."""
+    if settings.image_profile_scene == "mock":
+        return MockImageProvider()
+    state = request.app.state
+    provider = getattr(state, "image_provider", None)
+    if provider is None:
+        provider = build_image_provider(settings)
+        state.image_provider = provider
+    return provider
 
 
 def build_llm_provider(settings: Settings) -> LLMProvider:

@@ -104,7 +104,8 @@ bị chuyển chỗ, launcher trỏ sai đường dẫn).
 - **Không viết cứng** tên model, giá, phong cách vẽ, giới hạn độ dài — lấy từ cấu hình hoặc từ
   request.
 - **Không log** tên thật, chữ gửi vào TTS, dữ liệu ảnh, API key.
-- **Không để ảnh từ model không có bộ lọc an toàn sẵn đi ra ngoài** mà chưa qua `SafetyCheck`.
+- **Không để ảnh từ model không có bộ lọc an toàn sẵn đi ra ngoài** mà chưa qua `SafetyCheck` — ngoại lệ duy
+  nhất: `IMAGE_SAFETY=human_review` do người dùng chốt 2026-10-19 (`docs/01`), phải đặt tường minh.
 - **Không thêm database, hàng đợi hay logic tiền** vào service này.
 - Tài liệu chính thức (Anthropic / Gemini SDK, VieNeu-TTS, ComfyUI) khác với docs → **tin tài liệu chính
   thức**, ghi chú khác biệt vào README.

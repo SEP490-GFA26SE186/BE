@@ -1,0 +1,22 @@
+{
+  "_note": "One reference character (the boy), 4 scenes for story 'Bin và bạn bè' (local DB 9e547721, 8 pages grouped 2 per scene). The grandmother is described in the scene text, not referenced. No real names.",
+  "characters": [
+    {
+      "id": "boy",
+      "description": "a 6-year-old Vietnamese boy with short black hair, wearing a blue T-shirt and dark shorts"
+    }
+  ],
+  "stories": [
+    {
+      "id": "friends4",
+      "title": "Bin và bạn bè",
+      "scenes": [
+        {"description": "Rainy afternoon inside a cozy Vietnamese home. The boy sits on a woven mat playing with a shiny red toy train on a long track around a chair. A kind grandmother with silver hair in a bun, round glasses and a brown ao ba ba walks over holding a small wooden train carriage. The boy hugs his red train tightly to his tummy, lips pressed, looking down.", "characters": ["boy"]},
+        {"description": "Same room, rain outside the porch. The boy turns away and hides the red train behind his back, looking worried. The grandmother in a brown ao ba ba sits quietly in a corner of the mat, hands on her knees, shoulders slumped; the small wooden carriage lies alone on the mat.", "characters": ["boy"]},
+        {"description": "Same room. The boy walks back to the grandmother holding the small wooden carriage and offers it to her with a shy smile. The grandmother in a brown ao ba ba and glasses looks up, eyes bright and happy.", "characters": ["boy"]},
+        {"description": "Same room, the rain is fading outside. The boy and the grandmother laugh together as the red train with the wooden carriage goes through a tunnel made of a pillow; they sit close together on the mat, warm cheerful light.", "characters": ["boy"]}
+      ]
+    }
+  ],
+  "expressions": []
+}

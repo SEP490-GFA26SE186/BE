@@ -1,0 +1,1 @@
+Children's picture book illustration for ages 5-8, soft watercolor and colored pencil, warm gentle light, rounded friendly shapes, pastel palette, expressive but simple faces, consistent character design across pages, no text, no letters, no words, no logos, no watermark.
