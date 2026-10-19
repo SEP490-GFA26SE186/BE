@@ -146,6 +146,7 @@ const reviewStory = z.object({ params: storyParams });
 
 // Route sinh chu / publish-version: Task 9 bo sung body khi cai handler that.
 const storyOnly = z.object({ params: storyParams });
+const sceneOnly = z.object({ params: storyParams.extend({ sceneId: z.string().uuid('Mã cảnh không hợp lệ') }) });
 
 export default {
   createStory,
@@ -162,4 +163,5 @@ export default {
   deleteCheckpoint,
   reviewStory,
   storyOnly,
+  sceneOnly,
 };

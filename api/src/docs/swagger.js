@@ -1384,8 +1384,10 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/characters/{id}/portrait': {
       post: {
         tags: ['Characters'],
-        summary: '[Parent] Đưa yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi',
-        description: '**Quyền truy cập:** `parent` | `admin`.\nGửi yêu cầu sinh ảnh chân dung AI cho nhân vật vào hàng đợi AI Request Queue (`character_portrait`).',
+        summary: '[Parent] Vẽ chân dung AI cho nhân vật (1 ảnh, làm ảnh tham chiếu cho tranh)',
+        description:
+          '**Quyền truy cập:** chủ nhân vật.\nGiữ `ai_cost.character_portrait` credit, xếp job `character_portrait` (Cloudflare Workers AI), trả **202**; `portraitStatus` đi `queued` → `generating` → `ready` / `failed` (lỗi thì hoàn credit). Chỉ gửi mô tả ngoại hình đã bỏ mọi tên trong gia đình; phong cách vẽ cố định ở ai/. Không nhận body.\n\n' +
+          'Lỗi: 404 không phải nhân vật của bạn · 409 đang vẽ · 402 không đủ credit · 422 chưa có mô tả ngoại hình · 503 hàng đợi lỗi (đã hoàn credit).',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -1396,29 +1398,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
             description: 'ID nhân vật',
           },
         ],
-        requestBody: {
-          required: false,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  style: {
-                    type: 'string',
-                    enum: ['pixar_3d', 'watercolor', 'anime', 'storybook_illustration', 'claymation'],
-                    default: 'pixar_3d',
-                    description: 'Phong cách nghệ thuật sinh ảnh',
-                  },
-                  customPrompt: {
-                    type: 'string',
-                    example: 'wearing a superhero cape, holding a small teddy bear',
-                    description: 'Chi tiết bổ sung cho ảnh',
-                  },
-                },
-              },
-            },
-          },
-        },
         responses: {
           200: {
             description: 'Đã đưa yêu cầu tạo chân dung vào hàng đợi',

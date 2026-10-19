@@ -112,7 +112,8 @@ export function kidStoryContent(story, answered = new Map()) {
       pageOrder: p.pageOrder,
       text: real(p.contentText),
       audioUrl: audio(p.audioKey),
-      imageUrl: null, // luong sinh anh da bo (2026-10-17): FE dung anh giu cho
+      // Tranh cua canh chua trang (tranh AI 2026-10-19); chua co / tat tranh -> FE dung anh giu cho.
+      imageUrl: story.useAiImage && p.scene?.imageStatus === 'ready' ? assetUrl(p.scene.imageKey) : null,
     })),
     checkpoints: story.checkpoints
       .map((c) => ({

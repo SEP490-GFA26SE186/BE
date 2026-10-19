@@ -45,6 +45,9 @@ router.post('/:id/publish-version', validate(storiesValidation.storyOnly), stori
 
 // ---- Sinh chu (spec §4.3) — Task 9 ----
 router.post('/:id/generate', validate(storiesValidation.storyOnly), storiesController.generateStory);
+// Tranh AI: bat tranh + ve moi canh con thieu / ve lai mot canh (giu credit tung canh).
+router.post('/:id/images', validate(storiesValidation.storyOnly), storiesController.drawImages);
+router.post('/:id/scenes/:sceneId/image', validate(storiesValidation.sceneOnly), storiesController.redrawScene);
 router.get('/:id/generation', validate(storiesValidation.storyOnly), storiesController.getGeneration);
 
 export default router;

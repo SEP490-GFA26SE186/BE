@@ -7,6 +7,7 @@ import ApiError from '../../utils/ApiError.js';
 import { AI_JOB } from '../../queues/ai.jobs.js';
 import { holdCredit } from '../wallets/creditLedger.js';
 import { loadStorySettings } from './lib/storySettings.js';
+import { loadImageCosts } from './stories.images.store.js';
 import { STALE_AFTER_MS, isStaleRequest, parseErrorMessage, withTimeout } from './lib/generationStatus.js';
 import { findGenerationNameIssues } from './lib/preflight.js';
 import { loadOwnedStory, loadStoryForRead } from './stories.access.js';
@@ -223,8 +224,10 @@ export async function getGeneration(user, storyId, { now = new Date() } = {}) {
 
 /** Bang gia AI viet truyen cho trang tao truyen: moi do dai -> so trang, so diem dung, credit. */
 export async function getAiPricing() {
-  const { layouts, storyTextCost } = await loadStorySettings(prisma);
+  const [{ layouts, storyTextCost }, imageCosts] = await Promise.all([loadStorySettings(prisma), loadImageCosts(prisma)]);
   return {
+    // Tranh AI: moi canh (toi da 4) + chan dung con thieu cua nhan vat trong truyen.
+    images: { characterPortrait: imageCosts[AI_JOB.CHARACTER_PORTRAIT], scene: imageCosts[AI_JOB.SCENE_IMAGE], maxScenes: 4 },
     lengths: Object.entries(layouts).map(([length, layout]) => ({
       length,
       pages: layout.pages,

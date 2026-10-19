@@ -13,7 +13,7 @@ const TX = { timeout: 20000 };
 const PLAY_STORY_INCLUDE = {
   topic: { select: { title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { name: true } } } },
-  pages: { select: { id: true, pageOrder: true, contentText: true, audioKey: true } },
+  pages: { select: { id: true, pageOrder: true, contentText: true, audioKey: true, scene: { select: { imageKey: true, imageStatus: true } } } },
   checkpoints: { include: { options: true } },
 };
 

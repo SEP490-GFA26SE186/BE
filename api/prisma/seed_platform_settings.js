@@ -63,6 +63,9 @@ export const platformSettingsData = [
   { key: 'ai_cost.story_text.short', value: 1 },
   { key: 'ai_cost.story_text.medium', value: 2 },
   { key: 'ai_cost.story_text.long', value: 3 },
+  // Tranh AI (2026-10-19): chân dung nhân vật 1 credit (dùng lại mãi), mỗi tranh cảnh 1 credit.
+  { key: 'ai_cost.character_portrait', value: 1 },
+  { key: 'ai_cost.scene_image', value: 1 },
   // Giọng đọc kể truyện (spec TTS §5.2): preset VieNeu, Node luôn gửi tường minh. Đổi giọng làm
   // lệch vân tay mọi đoạn -> các truyện phải hoàn tất lại để đọc bằng giọng mới.
   { key: 'tts.voice', value: 'Kim Thanh' },

@@ -150,7 +150,7 @@ export async function createListing(user, body, narrationOptions) {
         length: story.length,
         title: body.title.trim(),
         situation: null, // chuyen that cua gia dinh khong theo ban dang ban
-        useAiImage: false,
+        useAiImage: story.useAiImage, // tranh ve tu mo ta ngoai hinh, khong co ten -> theo sang ban dang ban
         useTts: story.useTts, // theo lua chon cua tac gia; audio sinh lai bang ten chung ben duoi
         status: 'ready',
         reviewedAt: new Date(),
@@ -159,7 +159,8 @@ export async function createListing(user, body, narrationOptions) {
     });
     const sceneId = new Map();
     for (const s of story.scenes) {
-      const created = await tx.storyScene.create({ data: { storyId: copy.id, sceneOrder: s.sceneOrder, description: s.description } });
+      const ready = s.imageStatus === 'ready' && s.imageKey;
+      const created = await tx.storyScene.create({ data: { storyId: copy.id, sceneOrder: s.sceneOrder, description: s.description, imageKey: ready ? s.imageKey : null, imageStatus: ready ? 'ready' : 'none' } });
       sceneId.set(s.id, created.id);
     }
     const pageId = new Map();

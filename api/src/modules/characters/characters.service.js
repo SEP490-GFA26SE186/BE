@@ -311,76 +311,6 @@ const deleteCharacter = async (parentId, characterId) => {
   return { message: 'Xóa nhân vật thành công' };
 };
 
-/**
- * Request AI portrait generation for character
- * @param {string} parentId
- * @param {string} characterId
- * @param {Object} options
- * @returns {Promise<Object>}
- */
-const requestPortraitGeneration = async (parentId, characterId, options = {}) => {
-  const character = await prisma.character.findFirst({
-    where: {
-      id: characterId,
-      parentId,
-      deletedAt: null,
-    },
-    include: {
-      child: {
-        select: {
-          id: true,
-          name: true,
-          birthDate: true,
-        },
-      },
-    },
-  });
-
-  if (!character) {
-    throw ApiError.notFound('Không tìm thấy nhân vật.');
-  }
-
-  const styleDescriptions = {
-    pixar_3d: '3D animated movie character style, warm vibrant lighting, soft rendering, high detail, adorable Disney Pixar feel',
-    watercolor: 'Gentle watercolor children book illustration, soft pastel tones, dreamy aesthetic',
-    anime: 'Cute Studio Ghibli inspired anime art style, nostalgic colors, warm cheerful atmosphere',
-    storybook_illustration: 'Classic fairytale picture book illustration, rich colors, storybook warmth',
-    claymation: 'Cute stop-motion clay style, charming tactile clay textures',
-  };
-
-  const selectedStyle = styleDescriptions[options.style] || styleDescriptions.pixar_3d;
-  const promptParts = [
-    `Portrait of a character named ${character.name}`,
-    `Appearance: ${character.appearance}`,
-    `Style: ${selectedStyle}`,
-  ];
-
-  if (options.customPrompt) {
-    promptParts.push(`Extra details: ${options.customPrompt}`);
-  }
-
-  promptParts.push('child friendly, safe for all ages, high resolution, centered portrait');
-  const synthesizedPrompt = promptParts.join('. ');
-
-  const updatedCharacter = await prisma.character.update({
-    where: { id: characterId },
-    data: {
-      genPrompt: synthesizedPrompt,
-      portraitStatus: 'queued',
-    },
-    include: {
-      child: {
-        select: {
-          id: true,
-          name: true,
-          birthDate: true,
-        },
-      },
-    },
-  });
-
-  return formatCharacterResponse(updatedCharacter);
-};
 
 export default {
   createCharacter,
@@ -388,6 +318,5 @@ export default {
   getCharacterById,
   updateCharacter,
   deleteCharacter,
-  requestPortraitGeneration,
   getMaxCharactersQuota,
 };

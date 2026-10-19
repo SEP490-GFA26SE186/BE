@@ -17,6 +17,14 @@ export const SETTINGS_REGISTRY = {
     group: 'ai', label: 'Credit cho truyện AI dài', unit: 'credit', ...int(0, 100), default: 3,
     hint: 'Theo độ dài truyện (số trang ở story_layout.long). Chỉ áp dụng cho lần viết mới.',
   },
+  'ai_cost.character_portrait': {
+    group: 'ai', label: 'Credit cho một chân dung nhân vật AI', unit: 'credit', ...int(0, 100), default: 1,
+    hint: 'Chân dung dùng làm ảnh tham chiếu cho tranh của mọi truyện. Hoàn lại nếu vẽ lỗi.',
+  },
+  'ai_cost.scene_image': {
+    group: 'ai', label: 'Credit cho một tranh cảnh AI', unit: 'credit', ...int(0, 100), default: 1,
+    hint: 'Mỗi truyện tối đa 4 cảnh. Trừ khi bắt đầu vẽ, hoàn lại nếu lỗi.',
+  },
   'finance.usd_vnd': {
     group: 'ai', label: 'Tỉ giá quy đổi chi phí AI', unit: 'đ / 1 USD', ...int(15_000, 40_000), default: 26_000,
     hint: 'Chi phí nhà cung cấp AI ghi bằng USD; chỉ dùng cho báo cáo.',
