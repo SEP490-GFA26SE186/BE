@@ -83,7 +83,8 @@ const getBookshelf = async (user, query) => {
       totalPages,
       useTts: story.useTts,
       useAiImage: story.useAiImage,
-      topic: { title: story.topic.title, competency: story.topic.skill.caselCode },
+      // topic_id tuy chon voi truyen tu viet (custom)
+      topic: story.topic ? { title: story.topic.title, competency: story.topic.skill.caselCode } : null,
       addedAt,
       readingProgress: readingProgress(
         session && { ...session, currentPageOrder: session.currentPage?.pageOrder ?? null },
