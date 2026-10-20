@@ -45,6 +45,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Characters', description: 'Quản lý nhân vật gia đình đưa vào truyện và chân dung AI' },
     { name: 'EQ Skills', description: 'Danh mục 5 nhóm năng lực trí tuệ cảm xúc chuẩn CASEL' },
     { name: 'Sub-skills', description: 'Kỹ năng con do Specialist soạn, mỗi kỹ năng trỏ về một mục CASEL cùng năng lực' },
+    { name: 'Question Templates', description: 'Mẫu câu hỏi có phiên bản do Specialist soạn: nháp, ban hành, bản ban hành bất biến' },
     { name: 'Stories', description: 'Tạo truyện từ chủ đề và nhân vật, nhờ AI viết chữ, chỉnh sửa trang và điểm dừng cảm xúc, phụ huynh xem xét trước khi cho bé đọc' },
     { name: 'Content Library', description: 'Thư viện tài nguyên sư phạm: ảnh nền mặc định, âm thanh UI, tiêu chuẩn kiểm duyệt và cấu hình kịch bản' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },

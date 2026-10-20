@@ -99,6 +99,85 @@ export default {
       responses: { 200: { description: '`{ deleted, message }`' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Đã có mẫu / bài học / điểm dừng dùng' } },
     },
   },
+  '/question-templates': {
+    get: {
+      tags: ['Question Templates'],
+      summary: '[Specialist | Admin] Danh sách mẫu câu hỏi',
+      description: 'Mỗi mẫu kèm `subSkill { id, nameVi, skillId }`, `answerFormat`, `latestPublished` (bản ban hành cao nhất hoặc null) và `draft` (bản nháp hoặc null).',
+      security: bearer,
+      parameters: [
+        { name: 'subSkillId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+        { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+        { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
+      ],
+      responses: { 200: { description: 'Mảng mẫu trong `data`' }, 403: { description: 'Không phải Specialist / Admin' } },
+    },
+    post: {
+      tags: ['Question Templates'],
+      summary: '[Specialist | Admin] Tạo mẫu + phiên bản 1 nháp rỗng',
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['subSkillId', 'title', 'answerFormat'],
+              properties: {
+                subSkillId: { type: 'string', format: 'uuid' },
+                title: { type: 'string' },
+                answerFormat: { type: 'string', enum: ['emotion_pick', 'single_correct', 'role_choice'] },
+              },
+            },
+          },
+        },
+      },
+      responses: { 201: { description: 'Đã tạo' }, 400: { description: 'Dữ liệu / kỹ năng con sai' }, 403: { description: 'Không phải Specialist / Admin' } },
+    },
+  },
+  '/question-templates/{id}': {
+    put: {
+      tags: ['Question Templates'],
+      summary: '[Specialist | Admin] Đổi tên / bật tắt mẫu',
+      security: bearer,
+      parameters: [idParam],
+      requestBody: {
+        required: true,
+        content: { 'application/json': { schema: { type: 'object', properties: { title: { type: 'string' }, isActive: { type: 'boolean' } } } } },
+      },
+      responses: { 200: { description: 'Đã sửa' }, 404: { description: 'Không tìm thấy' } },
+    },
+    delete: {
+      tags: ['Question Templates'],
+      summary: '[Specialist | Admin] Xoá mẫu',
+      description: 'Chưa có điểm dừng (checkpoint) nào dùng phiên bản nào của mẫu thì xoá hẳn (cả các phiên bản); ngược lại 409 (dùng `isActive: false`).',
+      security: bearer,
+      parameters: [idParam],
+      responses: { 200: { description: '`{ deleted, message }`' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Đã có điểm dừng dùng' } },
+    },
+  },
+  '/question-templates/{id}/draft': {
+    put: {
+      tags: ['Question Templates'],
+      summary: '[Specialist | Admin] Lưu bản nháp',
+      description:
+        'Bản ban hành bất biến: chưa có nháp thì tạo phiên bản mới (= số lớn nhất + 1) sao nội dung từ bản ban hành gần nhất rồi áp body. Mọi trường tuỳ chọn: `questionFrame`, `pageSetup`, `needsTarget`, `allowedEmotions`, `correctDesc`, `distractorDesc`, `constructiveDesc`, `avoidantDesc`, `impulsiveDesc`, `constructiveScore`, `avoidantScore`, `impulsiveScore` (0-1), `hintGuidance`, `parentPrompts`, `rationale`, `referenceUrl`.',
+      security: bearer,
+      parameters: [idParam],
+      requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' } } } },
+      responses: { 200: { description: 'Mẫu với `draft` đã cập nhật' }, 400: { description: 'Dữ liệu sai' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Đua nhau tạo nháp' } },
+    },
+  },
+  '/question-templates/{id}/publish': {
+    post: {
+      tags: ['Question Templates'],
+      summary: '[Specialist | Admin] Ban hành bản nháp',
+      description: 'Kiểm đủ trường theo dạng trả lời (422 liệt kê trường thiếu), rồi chuyển nháp thành `published`, ghi `publishedBy/At`.',
+      security: bearer,
+      parameters: [idParam],
+      responses: { 200: { description: 'Mẫu với `latestPublished` mới' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Không có bản nháp' }, 422: { description: 'Thiếu / sai trường' } },
+    },
+  },
   '/topics': {
     get: {
       tags: ['Topics'],

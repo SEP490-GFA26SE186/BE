@@ -33,6 +33,7 @@ const KEPT = [
   ['GET', '/api/v1/subscriptions/me'],
   ['GET', '/api/v1/topics'],
   ['GET', '/api/v1/sub-skills'],
+  ['GET', '/api/v1/question-templates'],
   ['GET', '/api/v1/eq-skills/casel-references'],
   ['GET', '/api/v1/characters'],
   ['POST', '/api/v1/moderation/keywords/bulk'],
