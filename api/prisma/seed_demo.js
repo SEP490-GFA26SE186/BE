@@ -125,8 +125,8 @@ async function createStoryBody(tx, { storyData, spec, ownerId, child, own, secon
   const story = await tx.story.create({
     data: { ...storyData, ownerId, useAiImage: false, useTts: false, status: 'ready', createdAt, updatedAt: createdAt, reviewedAt: createdAt },
   });
-  await tx.storyCharacter.create({ data: { storyId: story.id, token: 'NV1', characterId: own.id, isMain: true } });
-  if (second) await tx.storyCharacter.create({ data: { storyId: story.id, token: 'NV2', ...second } });
+  await tx.storyCharacter.create({ data: { storyId: story.id, token: '{NV1}', characterId: own.id, isMain: true } });
+  if (second) await tx.storyCharacter.create({ data: { storyId: story.id, token: '{NV2}', ...second } });
 
   const scenes = [];
   for (const [i, description] of spec.scenes.entries()) {
@@ -236,6 +236,13 @@ export async function ensureDemoStories(prisma, parent) {
       where: { ownerId: parent.id, title: { startsWith: DEMO_TITLE_PREFIX }, deletedAt: null }, select: { title: true },
     })).map((s) => s.title),
   );
+  // Sua hang cu tao voi token khong ngoac ("NV1") -> "{NV1}" (chi truyen demo cua phu huynh nay).
+  for (const n of [1, 2]) {
+    await prisma.storyCharacter.updateMany({
+      where: { token: `NV${n}`, story: { ownerId: parent.id, title: { startsWith: DEMO_TITLE_PREFIX } } },
+      data: { token: `{NV${n}}` },
+    });
+  }
   const background = await prisma.background.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } });
   const backgroundId = background?.id ?? null;
 
