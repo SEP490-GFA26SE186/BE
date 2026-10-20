@@ -239,14 +239,34 @@ chạy trên DB local trước (nhớ ghi đè cả `DATABASE_URL` lẫn `DIRECT
 - **Đáp án `emotion_pick`:** mẫu có thể giới hạn tập cảm xúc được phép (tuỳ chọn); AI chọn cảm xúc
   trong tập đó và dựng trang trước theo `page_setup`; backend kiểm cảm xúc thuộc tập; Specialist bắt
   lỗi qua soát mẫu (mục 8).
-- **Radar bỏ**: thay bằng 5 thẻ năng lực, mỗi thẻ hiện mức độ (hoặc "chưa có dữ liệu") và các kỹ
-  năng con bên trong. Không hiện số % cho phụ huynh. Mức năng lực = mức thấp nhất trong các kỹ năng
-  con đủ dữ liệu *(builder có thể đề xuất cách gộp khác nếu có lý do)*.
+- **Giữ radar 5 năng lực** (phiếu đăng ký ghi rõ "View the EQ radar chart per CASEL competency and its
+  progress over time"), nhưng trục **theo mức độ, không theo %**: 3 vòng = Đang làm quen / Đang phát
+  triển / Vững; năng lực chưa có dữ liệu để trống trục và ghi "chưa có dữ liệu" (không vẽ 0). Bên
+  dưới radar là 5 thẻ năng lực với các kỹ năng con. Không hiện số % cho phụ huynh. Mức năng lực = mức
+  thấp nhất trong các kỹ năng con đủ dữ liệu *(builder có thể đề xuất cách gộp khác nếu có lý do)*.
 - **Độ tuổi:** tuổi của kỹ năng con dùng để kiểm khi lưu topic (khoảng tuổi topic phải giao với của
   từng kỹ năng con, sai → 422). Mẫu không có tuổi. Lúc sinh truyện dùng tuổi của topic, không lọc
   thêm → không có ô thiếu mẫu.
 - **Lịch sử theo tuần:** giữ biểu đồ theo tuần ở dạng mới — số câu chấm mỗi tuần theo năng lực và
   mức độ cuối mỗi tuần. Câu trả lời cũ không có `sub_skill_id` không hiện.
+
+## 9c. Đối chiếu phiếu đăng ký (Report7, bản đã nộp)
+
+Thiết kế này **kéo code về gần phiếu** ở các điểm:
+- "Stories are built on pedagogical templates designed by specialists around the five CASEL
+  competencies" · "the LLM fills the template's slots" → mẫu câu hỏi + khung ô theo topic.
+- Specialist: "Create, update, and retire pedagogical templates (stages, learning objectives, choice
+  types with skill signals)" → CRUD kỹ năng con, mẫu (dạng trả lời + điểm), topic có mục tiêu.
+- "AI can never … assign skill signals" · "EQ report from human-verified skill signals" → điểm lấy từ
+  mẫu do Specialist ban hành; AI không chọn vai/điểm.
+- Specialist "complete weekly random audits" → soát mẫu checkpoint (mục 8).
+- "EQ radar chart per CASEL competency and its progress over time" → giữ radar + biểu đồ theo tuần.
+
+**Lệch phiếu, cần ghi Record of Changes ở Review 2:**
+- Phiếu: Parent "Freely edit text, choices, and pages". Thiết kế: truyện AI **khoá checkpoint**, chỉ
+  sửa nội dung trang. Lý do: checkpoint là "skill signal" do mẫu của Specialist quyết định; cho sửa thì
+  phá vỡ "AI/không ai ngoài Specialist gán skill signal" và mất truy vết. Truyện tự viết vẫn sửa tự do.
+- Truyện tự viết không chấm điểm (phiếu không nói rõ; nên ghi để minh bạch).
 
 ## 10. Phần để builder tự quyết
 
