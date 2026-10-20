@@ -766,26 +766,6 @@ Table checkpoint_answers {
   '''
 }
 
-Table eq_competency_stats {
-  child_id uuid [not null]
-  skill_id uuid [not null]
-  items int [not null, default: 0]
-  score_sum numeric(8,2) [not null, default: 0]
-  updated_at timestamptz [not null, default: `now()`]
-
-  indexes {
-    (child_id, skill_id) [pk]
-  }
-
-  Note: '''
-  CACHE toan bo lich su, chi tinh tu checkpoint_answers cua lan choi dau, khong skipped.
-  Diem = score_sum / items * 100; hien "chua du du lieu" khi items < 5.
-  Bieu do theo thang: truy van truc tiep checkpoint_answers theo answered_at.
-  Cron doi soat hang dem tinh lai tu du lieu goc.
-  '''
-}
-
-
 // ---------------------------------------------------------------------------
 // 5. AI
 // ---------------------------------------------------------------------------
@@ -1295,8 +1275,6 @@ Ref: checkpoint_answers.final_option_id > checkpoint_options.id [delete: restric
 Ref: checkpoint_answers.skill_id > eq_skills.id [delete: restrict]
 Ref: checkpoint_answers.sub_skill_id > eq_sub_skills.id [delete: restrict]
 Ref: checkpoint_answers.template_version_id > question_template_versions.id [delete: restrict]
-Ref: eq_competency_stats.child_id > child_profiles.id [delete: cascade]
-Ref: eq_competency_stats.skill_id > eq_skills.id [delete: restrict]
 Ref: ai_requests.checkpoint_id > story_checkpoints.id [delete: set null]
 Ref: ai_requests.scene_id > story_scenes.id [delete: set null]
 Ref: bookshelf_items.child_id > child_profiles.id [delete: cascade]
@@ -1397,7 +1375,6 @@ TableGroup stories_group {
 TableGroup learning {
   play_sessions
   checkpoint_answers
-  eq_competency_stats
 }
 
 TableGroup ai {

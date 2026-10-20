@@ -5,6 +5,7 @@ import monitoringPaths from './paths/monitoring.paths.js';
 import adminPaths from './paths/admin.paths.js';
 import reviewsPaths from './paths/reviews.paths.js';
 import checkpointReviewPaths from './paths/checkpointReview.paths.js';
+import eqReportPaths from './paths/eqReport.paths.js';
 
 const swaggerSpec = {
   openapi: '3.0.0',
@@ -36,6 +37,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
   tags: [
     { name: 'Health', description: 'Kiểm tra trạng thái hoạt động của hệ thống' },
     { name: 'Checkpoint Review', description: 'Specialist soát mẫu điểm dừng chấm điểm (ẩn tên thật)' },
+    { name: 'Pedagogy', description: 'Tham số sư phạm do Specialist đặt (báo cáo EQ theo mức độ)' },
     { name: 'Auth', description: 'Đăng ký, Đăng nhập, Quản lý Token và Thông tin cá nhân' },
     { name: 'Publishing', description: 'Người bán và đăng bán truyện (bản sao gỡ cá nhân hoá)' },
     { name: 'Market', description: 'Chợ truyện: xem, mua (payOS), truyện đã mua' },
@@ -1101,7 +1103,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       get: {
         tags: ['Children'],
         summary: '[Parent] Xem tổng quan bảng điều khiển của bé (Dashboard Overview)',
-        description: 'Tổng hợp toàn diện thông tin bé: hồ sơ, tuổi tính theo ngày sinh, nhân vật đại diện (self character), thời lượng màn hình hôm nay, trạng thái giờ đi ngủ, thống kê kệ sách, truyện đang đọc dở và biểu đồ radar 5 năng lực EQ.',
+        description: 'Tổng hợp toàn diện thông tin bé: hồ sơ, tuổi tính theo ngày sinh, nhân vật đại diện (self character), thời lượng màn hình hôm nay, trạng thái giờ đi ngủ, thống kê kệ sách, truyện đang đọc dở và `eqReport` = nội dung của `/children/{id}/eq-report` (mức độ 5 năng lực + kỹ năng con + topic gợi ý; không còn điểm 0–100).',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID hồ sơ bé' },
@@ -1138,24 +1140,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           200: { description: 'Cập nhật avatar thành công' },
-          404: { description: 'Không tìm thấy hồ sơ bé' },
-        },
-      },
-    },
-
-    '/children/{id}/eq-report': {
-      get: {
-        tags: ['Children'],
-        summary: '[Parent] Báo cáo 5 nhóm năng lực cảm xúc EQ của bé (Radar Chart)',
-        description: 'Tổng hợp điểm số tích lũy từ các lựa chọn rẽ nhánh trong các câu chuyện bé đã đọc, phân bổ theo 5 năng lực CASEL: Tự nhận thức, Tự quản lý, Nhận thức xã hội, Kỹ năng quan hệ, Ra quyết định có trách nhiệm.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'ID hồ sơ bé' },
-          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Ngày bắt đầu (YYYY-MM-DD)' },
-          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Ngày kết thúc (YYYY-MM-DD)' },
-        ],
-        responses: {
-          200: { description: 'Báo cáo điểm số EQ và tỷ lệ phần trăm theo năng lực' },
           404: { description: 'Không tìm thấy hồ sơ bé' },
         },
       },
@@ -1748,6 +1732,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     ...adminPaths,
     ...reviewsPaths,
     ...checkpointReviewPaths,
+    ...eqReportPaths,
 
     // =========================================================================
     // Content Library: Backgrounds

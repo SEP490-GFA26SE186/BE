@@ -100,7 +100,7 @@ const updateAvatar = z.object({
   }),
 });
 
-// Bao cao EQ cong don toan bo lich su (eq_competency_stats, docs/01) — khong loc theo ngay.
+// Bao cao EQ theo muc do ky nang con (spec su pham CASEL §7): `weeks` chi cho bieu do xu huong theo tuan.
 const getEqJourney = z.object({
   params: z.object({ id: z.string().uuid('Invalid child ID format') }),
   query: z.object({ weeks: z.coerce.number().int().min(4).max(26).default(8) }),

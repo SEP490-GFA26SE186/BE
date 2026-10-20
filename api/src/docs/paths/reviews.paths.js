@@ -33,14 +33,4 @@ export default {
   '/moderation/product-reviews/{reviewId}/hide': {
     post: { tags: ['Moderation'], summary: '[Specialist] Ẩn đánh giá vi phạm', description: 'Đóng các báo cáo đang mở của đánh giá, tính lại điểm truyện và người bán.', security: bearer, parameters: [path('reviewId')], responses: { 200: { description: '{ reviewId, hidden, reportsResolved }' } } },
   },
-  '/children/{id}/eq-journey': {
-    get: {
-      tags: ['Children'],
-      summary: '[Parent] Báo cáo EQ chi tiết của bé',
-      description: 'Chỉ câu trả lời ở lượt đọc đầu. Điểm 0–100; mỗi năng lực cần ≥ 5 câu mới có điểm cộng dồn.',
-      security: bearer,
-      parameters: [path('id'), { name: 'weeks', in: 'query', schema: { type: 'integer', minimum: 4, maximum: 26, default: 8 } }],
-      responses: { 200: { description: '{ skills, strongest, focus, totals, trend: [{ weekStart, skills }], byType, recent }' } },
-    },
-  },
 };

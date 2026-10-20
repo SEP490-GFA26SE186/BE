@@ -425,11 +425,10 @@ model ChildProfile {
   parent User @relation(fields: [parentId], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  authTokens        AuthToken[]
-  character         Character?
-  bookshelfItems    BookshelfItem[]
-  playSessions      PlaySession[]
-  eqCompetencyStats EqCompetencyStat[]
+  authTokens     AuthToken[]
+  character      Character?
+  bookshelfItems BookshelfItem[]
+  playSessions   PlaySession[]
 
   @@index([parentId])
   @@map("child_profiles")
@@ -479,7 +478,6 @@ model EqSkill {
   caselReferences   CaselReference[]
   subSkills         EqSubSkill[]
   checkpointAnswers CheckpointAnswer[]
-  eqCompetencyStats EqCompetencyStat[]
 
   @@map("eq_skills")
 }
@@ -981,24 +979,6 @@ model CheckpointAnswer {
   @@unique([sessionId, checkpointId])
   @@index([subSkillId])
   @@map("checkpoint_answers")
-}
-
-/// @note CACHE toan bo lich su, chi tinh tu checkpoint_answers cua lan choi dau, khong skipped
-/// @note Diem = score_sum / items * 100; hien "chua du du lieu" khi items < 5
-/// @note Bieu do theo thang: truy van truc tiep checkpoint_answers theo answered_at
-/// @note Cron doi soat hang dem tinh lai tu du lieu goc
-model EqCompetencyStat {
-  childId   String   @map("child_id") @db.Uuid
-  skillId   String   @map("skill_id") @db.Uuid
-  items     Int      @default(0)
-  scoreSum  Decimal  @default(0) @map("score_sum") @db.Decimal(8, 2)
-  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz()
-
-  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
-  skill EqSkill      @relation(fields: [skillId], references: [id], onDelete: Restrict)
-
-  @@id([childId, skillId])
-  @@map("eq_competency_stats")
 }
 
 // =============================================================================

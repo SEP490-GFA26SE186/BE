@@ -228,29 +228,93 @@ test('truyen khong co tren gia cua be -> 404; sai kieu lua chon -> 400', { skip 
   assert.equal(bad.status, 400);
 });
 
-test('bao cao EQ: luot doc dau vao xu huong + theo loai + gan day (ten that hien cho phu huynh); luot doc lai khong tinh', { skip: skip || 'Task 14: bao cao doc tu checkpoint_answers' }, async () => {
+test('bao cao EQ: muc theo ky nang con tu luot doc dau (luot doc lai khong tinh), bang chung ten that, goi y tro chuyen; cau bi co -> thieu cau -> null', { skip }, async () => {
   const f = await setup();
+  // Truyen AI (khong phai tu viet) de goi y tro chuyen lay parent_prompts cua mau.
+  await prisma.story.update({ where: { id: f.story.id }, data: { length: 'short' } });
+  await prisma.questionTemplateVersion.update({
+    where: { id: f.sc.emoVersion.id },
+    data: { parentPrompts: ['Hỏi {NV1} xem lúc giận con thấy trong người thế nào?'] },
+  });
+  // Diem dung thu 3 cung ky nang con: goc nhin (single_correct).
+  const tpl = await prisma.questionTemplate.create({
+    data: { subSkillId: f.sc.sub.id, title: 'Mẫu góc nhìn', answerFormat: 'single_correct', createdBy: f.user.id },
+  });
+  const pv = await prisma.questionTemplateVersion.create({
+    data: {
+      templateId: tpl.id, version: 1, status: 'published', questionFrame: 'Khung', createdBy: f.user.id,
+      parentPrompts: ['Theo con Bà nghĩ gì?', 'Hỏi {NV1} xem lúc giận con thấy trong người thế nào?'],
+    },
+  });
+  const pp = await prisma.storyCheckpoint.create({
+    data: {
+      storyId: f.story.id, afterPageId: f.pages[0].id, type: 'perspective', question: 'Bà nghĩ gì về {NV1}?',
+      scored: true, subSkillId: f.sc.sub.id, templateVersionId: pv.id,
+      options: { create: [{ optionOrder: 1, text: 'Bà thương', isCorrect: true }, { optionOrder: 2, text: 'Bà giận', isCorrect: false }] },
+    },
+    include: { options: true },
+  });
   await addToShelf(f);
   const kid = await enterKid(f);
-  const play = async () => {
+  const play = async ({ firstEmotion }) => {
     const { session } = (await api.request('POST', '/kid/sessions', { token: kid, body: { storyId: f.story.id } })).body.data;
-    await api.request('POST', `/kid/sessions/${session.id}/answers`, { token: kid, body: { checkpointId: f.emo.id, emotion: 'angry' } });
-    await api.request('POST', `/kid/sessions/${session.id}/answers`, { token: kid, body: { checkpointId: f.ps.id, optionId: f.ps.options.find((o) => o.role === 'constructive').id } });
+    const answer = (body) => api.request('POST', `/kid/sessions/${session.id}/answers`, { token: kid, body });
+    await answer({ checkpointId: pp.id, optionId: pp.options.find((o) => o.isCorrect).id });
+    await answer({ checkpointId: f.emo.id, emotion: firstEmotion });
+    if (firstEmotion !== 'angry') await answer({ checkpointId: f.emo.id, emotion: 'angry' });
+    await answer({ checkpointId: f.ps.id, optionId: f.ps.options.find((o) => o.role === 'constructive').id });
     await api.request('POST', `/kid/sessions/${session.id}/complete`, { token: kid });
   };
-  await play();
-  await play(); // doc lai: khong cong diem, khong vao bao cao
+  await play({ firstEmotion: 'sad' }); // 1 (goc nhin) + 0 (cam xuc sai lan dau) + 1 (xay dung) -> 0.67
+  await play({ firstEmotion: 'angry' }); // doc lai: dung het nhung khong tinh
+
+  const skill = await prisma.eqSkill.findUnique({ where: { id: f.sc.skillId } });
+  const report = async () => {
+    const res = await api.request('GET', `/children/${f.child.id}/eq-report`, { token: f.token });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const comp = res.body.data.competencies.find((c) => c.caselCode === skill.caselCode);
+    return { data: res.body.data, comp, sub: comp.subSkills.find((s) => s.id === f.sc.sub.id) };
+  };
+  const r1 = await report();
+  assert.deepEqual(Object.keys(r1.data).sort(), ['childId', 'childName', 'competencies', 'recommendations', 'settings']);
+  assert.equal(r1.data.competencies.length, 5);
+  assert.deepEqual({ level: r1.sub.level, items: r1.sub.items }, { level: 'developing', items: 3 });
+  assert.equal(r1.comp.level, 'developing', 'cac ky nang con khac chua co muc -> muc nang luc = muc ky nang con nay');
+  assert.ok(typeof r1.sub.caselTextEn === 'string' && r1.sub.caselTextEn.length > 0);
+  assert.ok(!JSON.stringify(r1.data.competencies).includes('score'), 'khong tra diem / % cho phu huynh');
+  assert.ok(r1.data.recommendations.length >= 1 && r1.data.recommendations.length <= 3);
+  assert.ok(!r1.data.recommendations.some((t) => t.id === topic.id), 'topic vua doc khong duoc goi y lai');
 
   const res = await api.request('GET', `/children/${f.child.id}/eq-journey?weeks=4`, { token: f.token });
   assert.equal(res.status, 200, JSON.stringify(res.body));
-  const r = res.body.data;
-  assert.equal(r.trend.length, 4);
-  const thisWeek = r.trend.at(-1).skills;
-  assert.equal(thisWeek.self_awareness.items, 1);
-  assert.equal(thisWeek.self_awareness.score, 100);
-  assert.deepEqual(r.byType.map((t) => t.type).sort(), ['emotion_self', 'problem_solving']);
-  assert.equal(r.recent.length, 2);
-  assert.ok(r.recent.some((x) => x.question === 'Bin thấy sao?'), 'phu huynh thay ten that cua be');
-  assert.equal(r.totals.completed, 2);
+  const j = res.body.data;
+  assert.equal(j.trend.length, 4);
+  assert.deepEqual(j.trend.at(-1).competencies[skill.caselCode], { items: 3, level: 'developing' });
+  const ev = j.evidence.filter((e) => e.subSkillId === f.sc.sub.id);
+  assert.equal(ev.length, 3, 'luot doc lai khong vao bang chung');
+  const emo = ev.find((e) => e.question === 'Bin thấy sao?');
+  assert.ok(emo, 'phu huynh thay ten that cua be');
+  assert.deepEqual(
+    { first: emo.firstChoiceText, correct: emo.correctFirstTry, hint: emo.usedHint, source: emo.source, story: emo.storyTitle },
+    { first: 'Buồn', correct: false, hint: true, source: 'ai_template', story: 'Bin đọc truyện' },
+  );
+  assert.deepEqual(
+    [ev.find((e) => e.question === 'Bin làm gì?').firstChoiceText, ev.find((e) => e.question === 'Bin làm gì?').correctFirstTry],
+    ['Hít thở', true],
+  );
+  assert.equal(j.conversation.length, 1);
+  assert.deepEqual(j.conversation[0], {
+    storyId: f.story.id, storyTitle: 'Bin đọc truyện', subSkillId: f.sc.sub.id,
+    prompts: ['Theo con Bà nghĩ gì?', 'Hỏi Bin xem lúc giận con thấy trong người thế nào?'],
+  });
+
+  // Specialist gan co cau tinh huong -> con 2 cau -> chua du du lieu.
+  await prisma.storyCheckpoint.update({ where: { id: f.ps.id }, data: { excluded: true } });
+  const r2 = await report();
+  assert.deepEqual({ level: r2.sub.level, items: r2.sub.items }, { level: null, items: 2 });
+
+  const overview = await api.request('GET', `/children/${f.child.id}/overview`, { token: f.token });
+  assert.equal(overview.status, 200, JSON.stringify(overview.body));
+  assert.equal(overview.body.data.eqReport.competencies.length, 5);
   assert.equal((await api.request('GET', `/children/${f.child.id}/eq-journey`, { token: (await createParent()).token })).status, 404);
 });

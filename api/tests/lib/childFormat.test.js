@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  EQ_MIN_ITEMS,
-  eqSkillsFromStats,
   formatChild,
   summarizeReading,
   vnDate,
@@ -66,21 +64,4 @@ test('summarizeReading: cong thoi gian cac luot doc, luot bo do toi da 60 phut, 
     sessionsCount: 3,
     completedCount: 1,
   });
-});
-
-test('eqSkillsFromStats: du 5 nang luc theo thu tu, diem chi khi du so cau', () => {
-  const skills = [
-    { id: 's1', caselCode: 'self_awareness', nameVi: 'Tự nhận thức', displayOrder: 1 },
-    { id: 's2', caselCode: 'self_management', nameVi: 'Tự quản lý', displayOrder: 2 },
-  ];
-  const stats = [
-    { skillId: 's1', items: 12, scoreSum: '10.5' }, // Decimal tu Prisma den dang chuoi / Decimal
-    { skillId: 's2', items: EQ_MIN_ITEMS - 1, scoreSum: '3' },
-  ];
-  assert.deepEqual(eqSkillsFromStats(skills, stats), [
-    { skillId: 's1', caselCode: 'self_awareness', nameVi: 'Tự nhận thức', items: 12, scoreSum: 10.5, score: 88 },
-    { skillId: 's2', caselCode: 'self_management', nameVi: 'Tự quản lý', items: 4, scoreSum: 3, score: null },
-  ]);
-  assert.equal(eqSkillsFromStats(skills, [])[0].items, 0);
-  assert.equal(EQ_MIN_ITEMS, 5);
 });

@@ -10,7 +10,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 | **Tài khoản** (4) | Ai dùng app, con là ai, nhà có nhân vật nào? | `users`, `child_profiles`, `characters` | `auth_tokens` |
 | **Thư viện nội dung** (11) | Specialist/Admin chuẩn bị sẵn gì? | `topics`, `eq_sub_skills`, `question_templates` | `eq_skills`, `casel_references`, `question_template_versions`, `topic_sub_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
 | **Truyện** (8) | Một truyện gồm những gì? | `stories`, `story_pages`, `story_checkpoints` | `story_characters`, `story_scenes`, `checkpoint_options`, `narration_clips`, `bookshelf_items` |
-| **Học** (3) | Trẻ đã trả lời gì, điểm EQ ra sao? | `play_sessions`, `checkpoint_answers` | `eq_competency_stats` |
+| **Học** (2) | Trẻ đã trả lời gì, mức EQ ra sao? | `play_sessions`, `checkpoint_answers` | (mức độ tính trực tiếp từ `checkpoint_answers`) |
 | **AI** (1) | Đã gọi AI bao nhiêu, tốn bao nhiêu? | `ai_requests` | (prompt nằm trong dịch vụ ai/) |
 | **Chợ truyện** (6) | Truyện nào đang bán, ai đã mua, đánh giá ra sao? | `listings`, `entitlements`, `product_reviews` | `seller_profiles`, `price_tiers`, `product_review_tags` |
 | **Tiền** (10) | Ai trả bao nhiêu, ví còn bao nhiêu? | `orders`, `order_items`, `subscriptions`, `wallets`, `wallet_ledger` | `plans`, `refund_requests`, `webhook_logs`, `withdrawal_requests`, `platform_settings` |
@@ -39,7 +39,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 **Bé An chơi**
 9. Mở truyện → `play_sessions` (`is_first_play = true` nếu là lần đầu).
 10. Trả lời điểm dừng → `checkpoint_answers` (lần chọn đầu, lần chọn cuối, điểm, năng lực).
-11. Cập nhật cache điểm → `eq_competency_stats`; thời gian đọc tính từ `play_sessions` (không giới hạn phút).
+11. Báo cáo EQ tính mức theo kỹ năng con trực tiếp từ `checkpoint_answers` (lượt đọc đầu, điểm dừng không bị cờ); thời gian đọc tính từ `play_sessions` (không giới hạn phút).
 
 **Đăng bán**
 12. Nộp đơn người bán → `seller_profiles`.
@@ -66,7 +66,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 - **Chữ truyện lưu kèm token** `{NVx}`; tên thật thay vào lúc hiển thị và lúc gửi giọng đọc.
 - **Sổ cái chỉ ghi thêm** (`wallet_ledger`): không UPDATE, không DELETE. Mỗi thay đổi số dư ghi
   đúng một dòng, có `idempotency_key` duy nhất.
-- **Cache + đối soát:** bộ đếm trên `listings` và `eq_competency_stats` là cache; cron hằng đêm tính
+- **Cache + đối soát:** bộ đếm trên `listings` là cache; cron hằng đêm tính
   lại từ dữ liệu gốc.
 
 ## 4. Máy trạng thái
