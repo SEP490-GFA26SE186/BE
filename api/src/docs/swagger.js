@@ -4,6 +4,7 @@ import specialistPaths from './paths/specialist.paths.js';
 import monitoringPaths from './paths/monitoring.paths.js';
 import adminPaths from './paths/admin.paths.js';
 import reviewsPaths from './paths/reviews.paths.js';
+import checkpointReviewPaths from './paths/checkpointReview.paths.js';
 
 const swaggerSpec = {
   openapi: '3.0.0',
@@ -34,6 +35,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
   ],
   tags: [
     { name: 'Health', description: 'Kiểm tra trạng thái hoạt động của hệ thống' },
+    { name: 'Checkpoint Review', description: 'Specialist soát mẫu điểm dừng chấm điểm (ẩn tên thật)' },
     { name: 'Auth', description: 'Đăng ký, Đăng nhập, Quản lý Token và Thông tin cá nhân' },
     { name: 'Publishing', description: 'Người bán và đăng bán truyện (bản sao gỡ cá nhân hoá)' },
     { name: 'Market', description: 'Chợ truyện: xem, mua (payOS), truyện đã mua' },
@@ -1745,6 +1747,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     ...monitoringPaths,
     ...adminPaths,
     ...reviewsPaths,
+    ...checkpointReviewPaths,
 
     // =========================================================================
     // Content Library: Backgrounds
