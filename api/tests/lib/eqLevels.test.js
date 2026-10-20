@@ -62,3 +62,13 @@ test('buildEqLevels: items la so cau trong cua so (toi da window)', () => {
   assert.equal(r.competencies[0].subSkills[0].items, 5);
   assert.deepEqual(LEVEL_ORDER, ['emerging', 'developing', 'secure']);
 });
+
+test('levelFor: lam tron, khong mat nguong 0.8 / 0.5 do sai so dau phay dong', () => {
+  // Trung binh that = 0.8 nhung (0.6 + 1 + 0.8) / 3 = 0.8000000000000002 (va (0.7+0.8+0.9)/3 = 0.7999999999999999)
+  assert.equal(levelFor([0.6, 1, 0.8], S), 'secure');
+  assert.equal(levelFor([0.7, 0.8, 0.9], S), 'secure'); // truoc day rot xuong developing
+  assert.equal(levelFor([0.5, 0.5, 0.5], S), 'developing');
+  assert.equal(levelFor([0.3, 0.7, 0.5], S), 'developing');
+  assert.equal(levelFor([0.75, 0.8, 0.85], S), 'secure'); // 0.8 dung nguong
+  assert.equal(levelFor([0.75, 0.8, 0.84], S), 'developing'); // 0.7967
+});

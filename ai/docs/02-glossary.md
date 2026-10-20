@@ -14,7 +14,12 @@
 | Bộ 5 cảm xúc | `happy` `sad` `angry` `scared` `neutral` | Vui, buồn, giận, sợ, bình thường |
 | Gợi ý | `hint` | Câu nói khi trẻ chọn sai lần đầu |
 | Phản hồi | `feedback` | Câu hệ quả ngắn sau khi chọn phương án giải quyết tình huống |
-| Bài học | `topic` | Chủ đề do Moderator quản lý, gắn 1 năng lực CASEL |
+| Bài học | `topic` | Chủ đề do Specialist quản lý, gắn 1 năng lực CASEL và 1–3 kỹ năng con cùng năng lực |
+| Kỹ năng con | `sub_skill` (`eq_sub_skills`) | Một kỹ năng cụ thể trong 1 năng lực CASEL, trỏ về đúng 1 mục khung CASEL (`casel_references`); đơn vị tính mức độ |
+| Mẫu câu hỏi | `question_template` (+ `question_template_versions`) | Do Specialist soạn cho 1 kỹ năng con: khung câu hỏi, dạng trả lời (`emotion_pick` / `single_correct` / `role_choice`), điểm theo vai. Bất biến sau khi ban hành; AI chỉ viết chữ theo mẫu |
+| Specialist | `role = specialist` | Chuyên gia sư phạm (trước là Moderator): soạn kỹ năng con / mẫu / bài học, đặt tham số báo cáo, soát điểm dừng, duyệt truyện đăng bán |
+| Mức độ | `level`: `emerging` / `developing` / `secure` | "Đang làm quen" / "Đang phát triển" / "Vững"; tính theo kỹ năng con, mức năng lực = thấp nhất |
+| Điểm dừng chấm | `checkpoint.scored = true` | Điểm dừng sinh từ mẫu (có `sub_skill_id`, `template_version_id`); điểm 0–1 chỉ lần chọn đầu. `reflection` và truyện tự viết không chấm |
 | Cảnh | `scene` | Nhóm trang dùng chung một tranh |
 | Chân dung | `portrait` | Ảnh nhân vật do AI vẽ, dùng làm ảnh tham chiếu |
 | Token nhân vật | `{NV1}`, `{NV2}` | Thay cho tên thật khi gửi AI |

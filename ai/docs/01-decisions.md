@@ -210,6 +210,23 @@ số mục trong ngoặc là số mục của spec đó)*
   lại lần nữa khi lưu. Mọi trường mới là tuỳ chọn: request không có `guide` viết như story.v1.
   Topic có `age_min` / `age_max` thì prompt dùng độ tuổi đó, thiếu thì "5–8". `target` của
   `perspective` thành tuỳ chọn.
+- **Luồng sư phạm CASEL — phía backend** *(2026-10-20; service `ai` không đụng tới các điểm này)*:
+  - **Specialist** (vai `specialist`, trước là `moderator`) soạn **kỹ năng con** và **mẫu câu hỏi**; mẫu bất biến sau
+    khi ban hành, sửa = tạo phiên bản mới, sinh truyện dùng phiên bản đã ban hành mới nhất. Specialist còn đặt
+    tham số báo cáo (cửa sổ, số câu tối thiểu, hai ngưỡng) và soát từng điểm dừng đã sinh (ẩn tên, gắn cờ loại
+    khỏi thống kê, xác nhận không vấn đề).
+  - **Điểm dừng khoá theo mẫu:** điểm dừng có chấm mang `sub_skill_id`, `template_version_id`, `scored = true`.
+    Phụ huynh sửa chữ, gợi ý, đáp án cảm xúc, phương án; **không** đổi kiểu, vai, đáp án đúng/sai của phương án đã khoá
+    theo mẫu, không thêm / xoá điểm dừng chấm. Câu liên hệ bản thân (`reflection`) không chấm.
+  - **Truyện tự viết (`custom`) không chấm:** không bài học, không mẫu, không điểm dừng chấm; vẫn đọc được ở Kid Mode.
+  - **Điểm 0–1, không còn 0–100 hay bảng `eq_competency_stats`:** điểm lấy từ phiên bản mẫu (đúng/sai 1/0; chọn vai
+    theo điểm của phiên bản, mặc định 1 / 0,5 / 0), chỉ lần chọn đầu, đóng băng cùng `sub_skill_id` /
+    `template_version_id` lúc trả lời.
+  - **Mức độ (báo cáo EQ):** tính theo từng kỹ năng con trên **N = 5** câu chấm gần nhất của **lượt đọc đầu**, điểm dừng
+    không bị gắn cờ loại; cần tối thiểu **3** câu, chưa đủ = "chưa đủ dữ liệu". Trung bình < 0,5 "Đang làm quen",
+    0,5–0,79 "Đang phát triển", ≥ 0,8 "Vững" (so sánh sau khi làm tròn 6 chữ số để 0,8 / 0,5 không rơi do sai số
+    dấu phẩy động). Mức **năng lực** = mức **thấp nhất** trong các kỹ năng con đã có mức. Phụ huynh chỉ thấy mức + số
+    câu, không thấy % hay điểm.
 
 ## Đang mở — dừng lại hỏi nếu đụng tới
 

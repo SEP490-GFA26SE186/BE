@@ -9,7 +9,8 @@ export const LEVEL_ORDER = ['emerging', 'developing', 'secure'];
 export function levelFor(scores, { window, minItems, developingFrom, secureFrom }) {
   const recent = scores.slice(0, window);
   if (recent.length < minItems || recent.length === 0) return null;
-  const avg = recent.reduce((s, x) => s + Number(x), 0) / recent.length;
+  // Lam tron 6 chu so thap phan: 0.8 / 0.5 khong bi mat do sai so dau phay dong (vd 0.6+1+0.8 chia 3).
+  const avg = Math.round((recent.reduce((s, x) => s + Number(x), 0) / recent.length) * 1e6) / 1e6;
   if (avg < developingFrom) return 'emerging';
   if (avg < secureFrom) return 'developing';
   return 'secure';

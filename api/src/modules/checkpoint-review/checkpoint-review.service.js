@@ -28,7 +28,7 @@ const maskTokens = (text, names) => {
 
 // Lop chan phu: neu AI lam sot ten that (khac hoa/thuong, bien the) trong van ban thi van che.
 // Ten that chi dung de so khop, khong bao gio dua vao phan hoi hay log.
-const UNMATCHED = '';
+const UNMATCHED = ''; // ky tu vung rieng (private use), khong the xuat hien trong van ban that
 const norm = (s) => s.normalize('NFC');
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

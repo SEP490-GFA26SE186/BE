@@ -29,7 +29,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 4. Chọn bài học "Con hay nổi giận" → đọc `topics`; kỹ năng con của bài → `topic_sub_skills` → `eq_sub_skills`
    (mỗi kỹ năng con trỏ về đúng 1 mục `casel_references`).
 5. Hệ thống tạo `stories` (`private`, `length = medium`), gắn nhân vật + token `{NV1}`… →
-   `story_characters`, dựng 8 trang → `story_pages`, 4 điểm dừng → `story_checkpoints`.
+   `story_characters`, dựng 8 trang → `story_pages`, 4 điểm dừng → `story_checkpoints`; điểm dừng chấm lấy mẫu đã ban hành của kỹ năng con → ghi `sub_skill_id`, `template_version_id`, `scored = true` (truyện tự viết và câu liên hệ bản thân: `scored = false`, không kỹ năng con). Specialist có thể gắn cờ `excluded` / `reviewed_ok_*` khi soát điểm dừng.
 6. "Viết giúp tôi" → một `ai_requests` (`story_text`) → điền chữ trang, cảnh (`story_scenes`),
    câu hỏi và phương án (`checkpoint_options`).
 7. Xem lại xong → `stories.reviewed_at`; đọc giọng từng đoạn → `narration_clips` (nếu `use_tts`).
@@ -38,8 +38,8 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 
 **Bé An chơi**
 9. Mở truyện → `play_sessions` (`is_first_play = true` nếu là lần đầu).
-10. Trả lời điểm dừng → `checkpoint_answers` (lần chọn đầu, lần chọn cuối, điểm, năng lực).
-11. Báo cáo EQ tính mức theo kỹ năng con trực tiếp từ `checkpoint_answers` (lượt đọc đầu, điểm dừng không bị cờ); thời gian đọc tính từ `play_sessions` (không giới hạn phút).
+10. Trả lời điểm dừng → `checkpoint_answers` (lần chọn đầu, lần chọn cuối, điểm 0–1, `skill_id`, `sub_skill_id`, `template_version_id` — chép nguyên từ điểm dừng lúc trả lời).
+11. Báo cáo EQ tính mức theo kỹ năng con trực tiếp từ `checkpoint_answers` (lượt đọc đầu, có điểm, điểm dừng không bị cờ; 5 câu gần nhất, tối thiểu 3, ngưỡng 0,5 / 0,8 do Specialist đặt trong `platform_settings`; không còn bảng thống kê riêng); thời gian đọc tính từ `play_sessions` (không giới hạn phút).
 
 **Đăng bán**
 12. Nộp đơn người bán → `seller_profiles`.
