@@ -67,17 +67,19 @@ export const SUB_SKILLS = [
       emotionPick({
         title: 'Nhân vật chính đang cảm thấy thế nào?',
         questionFrame: 'Lúc này {NV1} đang cảm thấy thế nào?',
+        // "binh thuong" khong dung duoc voi yeu cau >= 2 dau hieu cu the
+        allowedEmotions: ['happy', 'sad', 'angry', 'scared'],
         pageSetup:
           `Kể một sự việc rõ ràng vừa xảy ra với {NV1} (được quà, bị làm đổ tháp, phải chia tay bà) và tả ít nhất hai dấu hiệu cụ thể của cảm xúc: nét mặt, cơ thể, giọng nói hoặc hành động. Cảm xúc phải khớp với sự việc, không mơ hồ. ${NO_EMOTION_WORD}`,
         hintGuidance:
           'Nhắc lại một dấu hiệu có trong lời kể (ví dụ "mắt {NV1} ngấn nước"), không nhắc tranh, không nói ra đáp án.',
         parentPrompts: [
           'Trong truyện, lúc nào bạn nhỏ vui nhất, lúc nào buồn nhất? Sao con biết?',
-          'Gần đây có lúc nào con cũng thấy giống bạn ấy không? Chuyện gì đã xảy ra?',
+          'Gần đây lúc nào con cũng thấy giống bạn ấy? Lúc đó chuyện gì đã xảy ra?',
           'Khi con thấy như vậy, mặt con và người con thế nào?',
         ],
         rationale:
-          'CASEL đặt "Identifying one\'s emotions" là kỹ năng nền của Tự nhận thức. Với trẻ 5–8 tuổi, nhận diện cảm xúc từ dấu hiệu trong một tình huống minh hoạ là cách đo trực tiếp được dùng trong SELweb (McKown; https://edinstruments.org/instruments/selweb). Bé chọn 1 trong 5 cảm xúc nên kết quả so được với đáp án do mẫu quy định, không phụ thuộc AI.',
+          'CASEL đặt "Identifying one\'s emotions" là kỹ năng nền của Tự nhận thức. Với trẻ 5–8 tuổi, nhận diện cảm xúc từ dấu hiệu trong một tình huống minh hoạ là cách đo trực tiếp được dùng trong SELweb (McKown; https://edinstruments.org/instruments/selweb). Mẫu giới hạn tập cảm xúc được phép; AI chọn một cảm xúc trong tập đó và dựng trang trước bằng dấu hiệu cho đúng cảm xúc ấy; backend kiểm đáp án thuộc tập; Specialist soát mẫu các câu đã sinh (spec §9b, §8). Bé chọn 1 trong 5 cảm xúc và được so với đáp án đã kiểm như vậy.',
       }),
       emotionPick({
         title: 'Cơ thể báo hiệu cảm xúc gì?',
@@ -89,7 +91,7 @@ export const SUB_SKILLS = [
           'Nhắc lại dấu hiệu trong cơ thể {NV1} đã kể ở trang trước (ví dụ "tay {NV1} nắm chặt lại"), không nói ra đáp án.',
         parentPrompts: [
           'Khi con giận, con thấy chỗ nào trong người thay đổi trước tiên?',
-          'Còn khi con sợ thì sao, người con có giống lúc giận không?',
+          'Còn khi con sợ, người con thấy thế nào?',
         ],
         rationale:
           'Nhận ra dấu hiệu cơ thể là một phần của "Identifying one\'s emotions" (CASEL): trẻ phải nhận ra cảm xúc khi nó đang đến thì mới tự điều chỉnh được. Mẫu chỉ cho 3 cảm xúc có dấu hiệu cơ thể rõ (giận, sợ, buồn) để câu hỏi không đánh đố.',
@@ -115,11 +117,11 @@ export const SUB_SKILLS = [
         correctDesc:
           'Đúng suy nghĩ hoặc mong muốn của {NV1} đã có trong lời kể, nói bằng lời trẻ con (ví dụ "Vì {NV1} nghĩ không ai đợi mình").',
         distractorDesc:
-          'Hai lý do có vẻ hợp lý trong bối cảnh nhưng không phải điều lời kể nói: một sự việc phụ khác trong trang, và một chi tiết bề ngoài không liên quan đến cảm xúc (màu áo, thời tiết). Không đánh đố, không đùa cợt.',
+          'Hai lý do có vẻ hợp lý trong bối cảnh nhưng không phải điều lời kể nói: một sự việc phụ khác trong trang, và một chi tiết bề ngoài không liên quan đến cảm xúc (màu áo). Cả hai khác hẳn đáp án đúng; không đánh đố, không đùa cợt.',
         hintGuidance: 'Nhắc lại câu {NV1} đã nghĩ hoặc đã nói ở trang trước, không nói ra đáp án.',
         parentPrompts: [
           'Theo con, vì sao bạn nhỏ trong truyện lại thấy như vậy?',
-          'Có khi nào con buồn hay giận vì con nghĩ một điều, rồi sau mới biết không phải thế không?',
+          'Lúc con thấy buồn hay giận, con thường đang nghĩ gì trong đầu?',
         ],
         rationale:
           'CASEL mô tả "Linking feelings, values, and thoughts" là hiểu cảm xúc gắn với suy nghĩ và điều mình coi trọng. Câu hỏi yêu cầu bé tìm đúng suy nghĩ/mong muốn gây ra cảm xúc trong lời kể, nên đo được việc nối cảm xúc với suy nghĩ chứ không chỉ gọi tên cảm xúc.',
@@ -144,12 +146,12 @@ export const SUB_SKILLS = [
           `{NV1} gặp một việc vừa sức nhưng còn mới (tự buộc dây giày, xếp xong bức tranh ghép, tự đạp xe ba bánh lên dốc nhỏ), đã thử một lần chưa được. Trước đó trong truyện có nhắc một lần {NV1} từng làm được việc gần giống. ${ROLE_CHOICE_PAGE}`,
         constructiveDesc:
           'Nhớ lại lần mình từng làm được rồi thử lại từng bước nhỏ, có thể tự nhủ một câu ngắn như "Từ từ, mình làm được".',
-        avoidantDesc: 'Để việc đó lại, nhờ người khác làm hộ ngay hoặc chuyển sang chơi việc khác.',
+        avoidantDesc: 'Để việc đó lại và chuyển sang chơi việc khác.',
         impulsiveDesc:
           'Bực bội đẩy đồ ra xa và nói "Mình chẳng làm được đâu" (không ném vào ai, không làm hỏng gì nguy hiểm).',
         parentPrompts: [
           'Bạn nhỏ trong truyện đã làm gì khi thấy việc khó? Nếu là con, con sẽ làm gì?',
-          'Có việc gì trước đây con thấy khó mà bây giờ con làm được rồi không?',
+          'Việc gì trước đây con thấy khó mà bây giờ con làm được rồi?',
           'Lần tới gặp việc khó, con muốn tự nói với mình câu gì?',
         ],
         rationale:
@@ -216,7 +218,7 @@ export const SUB_SKILLS = [
         parentPrompts: [
           'Lúc bạn nhỏ trong truyện thấy rất giận hoặc rất sợ, bạn ấy đã làm gì?',
           'Khi con thấy như vậy, cách nào giúp con dịu lại nhanh nhất?',
-          'Nhà mình có thể cùng chọn một "cách bình tĩnh" cho cả nhà không?',
+          'Cả nhà mình có thể cùng dùng "cách bình tĩnh" nào?',
         ],
         rationale:
           'CASEL nêu "Managing one\'s emotions" là kỹ năng đầu tiên của Tự quản lý. Ba phương án là ba phản ứng thật khi cảm xúc mạnh: tự điều chỉnh (1 điểm), né tránh — không gây hại nhưng chưa điều chỉnh được cảm xúc (0,5), và hành động theo xung động (0). Điểm do mẫu quy định, AI chỉ viết lời theo mô tả từng vai.',
@@ -242,7 +244,7 @@ export const SUB_SKILLS = [
         correctDesc:
           'Một cách tự xoa dịu cụ thể, an toàn, trẻ làm được ngay (bật đèn ngủ, ôm gấu bông, hít thở chậm, gọi mẹ).',
         distractorDesc:
-          'Hai việc trẻ có thể làm nhưng không làm bớt sợ: một việc không liên quan đến nỗi sợ (đếm bút màu trong hộp), và một việc làm {NV1} nghĩ mãi về điều đang lo (cứ nhìn chằm chằm vào góc tối). Không có gì đáng sợ thêm.',
+          'Hai việc trẻ có thể làm nhưng không làm bớt sợ: một việc rõ ràng không làm dịu mà cũng không phải cách tự xoa dịu (tắt luôn đèn ngủ), và một việc làm {NV1} nghĩ mãi về điều đang lo (cứ nhìn chằm chằm vào góc tối). Cả hai khác hẳn đáp án đúng; không có gì đáng sợ thêm.',
         hintGuidance: 'Nhắc đồ vật hoặc người quen thuộc đang ở gần {NV1} trong trang trước, không nói ra đáp án.',
         parentPrompts: [
           'Bạn nhỏ trong truyện đã làm gì để bớt sợ? Con thấy cách đó thế nào?',
@@ -262,8 +264,8 @@ export const SUB_SKILLS = [
         impulsiveDesc: 'Khóc ré lên, đạp tung chăn gối (không chạy ra chỗ nguy hiểm, không làm đau ai).',
         parentPrompts: [
           'Nếu là con trong truyện, con sẽ làm gì khi thấy sợ?',
-          'Con muốn bố mẹ làm gì khi con gọi lúc đang sợ?',
-          'Mình cùng nghĩ một "đồ vật can đảm" cho con nhé?',
+          'Khi con gọi bố mẹ lúc đang sợ, con muốn bố mẹ làm gì cho con?',
+          'Đồ vật nào ở nhà làm con thấy can đảm hơn khi trời tối?',
         ],
         rationale:
           'Mẫu đo bước "using" của "Identifying and using stress management strategies" (CASEL): bé có chọn dùng một cách tự xoa dịu hoặc tìm người lớn khi đang sợ không. Né tránh không gây hại (0,5) nhưng nỗi sợ không được giải toả; phản ứng bùng nổ được 0.',
@@ -292,7 +294,7 @@ export const SUB_SKILLS = [
         impulsiveDesc: 'Bỏ ngay đồ đang cầm xuống sàn, chạy ào đi chơi.',
         parentPrompts: [
           'Bạn nhỏ trong truyện đã làm gì khi đang dở việc mà có bạn rủ chơi?',
-          'Con có việc gì hay làm dở không? Mình làm gì để con nhớ làm cho xong?',
+          'Khi đang làm dở mà muốn đi chơi, điều gì giúp con làm cho xong?',
         ],
         rationale:
           'CASEL nêu "Exhibiting self-discipline and self-motivation" trong Tự quản lý. Với trẻ 5–8 tuổi, kỹ năng này thể hiện ở việc trì hoãn điều hấp dẫn để hoàn thành việc nhỏ của mình. Phương án xây dựng là tự giữ mình kèm một mục tiêu gần; né tránh và bỏ ngang là hai phản ứng thường gặp.',
@@ -322,7 +324,7 @@ export const SUB_SKILLS = [
           'Lao vào ngay không để ý gì: chen lên trước, nói to cắt lời người khác (không làm gì nguy hiểm).',
         parentPrompts: [
           'Trong truyện, bạn nhỏ đã dũng cảm thử điều gì?',
-          'Có điều gì con muốn thử mà còn ngại không? Bước nhỏ đầu tiên có thể là gì?',
+          'Điều gì con muốn thử mà còn ngại? Bước nhỏ đầu tiên có thể là gì?',
         ],
         rationale:
           'CASEL nêu "Showing the courage to take initiative" trong Tự quản lý. Câu hỏi đặt bé vào lúc muốn thử nhưng còn ngại; phương án xây dựng là chủ động bằng một bước nhỏ an toàn, khác với né tránh và với hấp tấp không để ý người khác.',
@@ -357,7 +359,7 @@ export const SUB_SKILLS = [
         parentPrompts: [
           'Theo con, vì sao bạn trong truyện lại làm như vậy?',
           'Nếu con là bạn ấy, lúc đó con mong điều gì?',
-          'Có khi nào con và bạn nghĩ khác nhau về cùng một chuyện không?',
+          'Lúc con và bạn nghĩ khác nhau về một chuyện, chuyện đó là gì?',
         ],
         rationale:
           'CASEL nêu "Taking others\' perspectives" đầu tiên trong Nhận thức xã hội. Hiểu điều người khác biết/muốn (khác với mình) là năng lực nhìn từ góc người khác mà SELweb (https://edinstruments.org/instruments/selweb) đo cho trẻ K–3 bằng tình huống minh hoạ. Phương án nhiễu "nhìn bằng mắt mình" giúp phân biệt bé có thật sự đổi góc nhìn không.',
@@ -369,11 +371,11 @@ export const SUB_SKILLS = [
           'Có một nhân vật phụ không có tên riêng (bạn mới trong lớp, em bé hàng xóm, bà cụ ở công viên) với hành động cho thấy một mong muốn (đứng nhìn các bạn chơi, cầm món đồ ngập ngừng). Câu hỏi gọi nhân vật này bằng danh xưng chung ("bạn ấy", "em bé", "bà"). Không nói thẳng mong muốn đó.',
         correctDesc: 'Mong muốn đúng với hành động và hoàn cảnh của nhân vật phụ trong lời kể (ví dụ "được chơi cùng").',
         distractorDesc:
-          'Hai mong muốn hợp lý nhưng rõ là sai: một mong muốn của chính {NV1}, và một mong muốn trái với hành động đã kể. Không đánh đố.',
+          'Hai mong muốn hợp lý nhưng rõ là sai: một mong muốn của chính {NV1} khác hẳn đáp án đúng, và một mong muốn trái với hành động đã kể. Không đánh đố.',
         hintGuidance: 'Nhắc lại việc nhân vật phụ đang làm ở trang trước (ví dụ "bạn ấy cứ đứng nhìn"), không nói ra đáp án.',
         parentPrompts: [
           'Theo con, bạn trong truyện đang mong điều gì? Sao con đoán vậy?',
-          'Ở lớp con có bạn nào trông giống bạn ấy không? Bạn ấy có thể đang mong gì?',
+          'Khi thấy một bạn đứng nhìn các bạn chơi, con đoán bạn ấy mong gì?',
         ],
         rationale:
           'Biến thể của "Taking others\' perspectives" (CASEL) dùng được khi truyện chỉ có một nhân vật có tên: bé suy ra mong muốn của người khác từ hành động của họ. Đây là dạng suy luận góc nhìn qua tình huống minh hoạ như SELweb.',
@@ -399,7 +401,7 @@ export const SUB_SKILLS = [
           `Một sự việc xảy ra với {NV2} (làm rơi kem, được khen, bị bỏ lại) và có ít nhất hai dấu hiệu cảm xúc cụ thể của {NV2} mà {NV1} nhìn thấy. ${NO_EMOTION_WORD}`,
         hintGuidance: 'Nhắc lại dấu hiệu trên mặt hoặc cơ thể {NV2} mà {NV1} đã thấy, không nói ra đáp án.',
         parentPrompts: [
-          'Bạn trong truyện thấy thế nào? Nếu là con, con có thấy giống vậy không?',
+          'Bạn trong truyện thấy thế nào? Nếu là con, con sẽ thấy ra sao?',
           'Khi thấy một bạn như thế, con muốn làm gì?',
         ],
         rationale:
@@ -443,7 +445,7 @@ export const SUB_SKILLS = [
         hintGuidance: 'Nhắc lại việc {NV1} vừa làm và phản ứng của {NV2}, không nói ra đáp án.',
         parentPrompts: [
           'Việc bạn nhỏ trong truyện làm khiến bạn kia thấy thế nào?',
-          'Có lời nói nào của người khác làm con thấy vui cả ngày không?',
+          'Câu nói nào của người khác từng làm con thấy vui cả ngày?',
         ],
         rationale:
           'CASEL nêu "Showing concern for the feelings of others" trong Nhận thức xã hội. Câu hỏi yêu cầu bé nối hành động của nhân vật chính với cảm xúc của người khác — điều kiện để biết quan tâm tới cảm xúc của họ.',
@@ -461,7 +463,7 @@ export const SUB_SKILLS = [
         parentPrompts: [
           'Nếu con là bạn nhỏ trong truyện, con sẽ nói gì với bạn kia?',
           'Khi con buồn, con thích được nghe câu gì nhất?',
-          'Hôm nay con có nói câu nào làm ai đó vui không?',
+          'Hôm nay con muốn nói câu gì để làm ai đó vui?',
         ],
         rationale:
           'Mẫu đo "Showing concern for the feelings of others" (CASEL) ở mức lựa chọn lời nói: bé phân biệt câu quan tâm tới cảm xúc người nghe với câu chỉ đúng sự thật hoặc không liên quan.',
@@ -483,14 +485,14 @@ export const SUB_SKILLS = [
         title: 'Điều gì làm nhân vật chính thấy ấm lòng?',
         questionFrame: 'Điều gì làm {NV1} thấy ấm lòng hôm nay?',
         pageSetup:
-          'Kể một việc tốt người khác làm cho {NV1} (bà để phần bánh, bạn cho mượn bút, anh dắt qua chỗ đông người) xen với vài sự việc thường ngày khác. Tả niềm vui ấm áp của {NV1} nhưng không nói thẳng ai đã làm điều đó cho mình.',
+          'Kể một việc tốt người khác làm cho {NV1} (bà để phần bánh, bạn cho mượn bút, anh dắt qua chỗ đông người) xen với vài sự việc thường ngày khác. Tả niềm vui ấm áp của {NV1} nhưng không nói thẳng sự việc nào làm {NV1} thấy ấm lòng.',
         correctDesc: 'Đúng việc tốt người khác đã làm cho {NV1} trong lời kể.',
         distractorDesc:
           'Hai sự việc khác có trong ngày nhưng không phải ai đó làm điều tốt cho {NV1}: một việc {NV1} tự làm, và một chuyện thường ngày (trời nắng, đi học về).',
         hintGuidance: 'Nhắc lại người đã ở cạnh {NV1} trong trang trước, không nói ra đáp án.',
         parentPrompts: [
           'Trong truyện, ai đã làm điều tốt cho bạn nhỏ?',
-          'Hôm nay có ai làm điều gì tốt cho con không? Mình cảm ơn người đó thế nào?',
+          'Hôm nay ai đã làm điều tốt cho con? Mình có thể cảm ơn người đó thế nào?',
         ],
         rationale:
           'CASEL nêu "Understanding and expressing gratitude" trong Nhận thức xã hội. Câu hỏi đo phần "understanding": bé nhận ra điều tốt mà người khác đã làm cho mình, phân biệt với những sự việc khác trong ngày.',
@@ -506,7 +508,7 @@ export const SUB_SKILLS = [
         impulsiveDesc: 'Đòi thêm ngay ("Cho tớ cái màu đỏ nữa!") mà quên nói cảm ơn.',
         parentPrompts: [
           'Bạn nhỏ trong truyện đã cảm ơn như thế nào?',
-          'Ngoài nói "cảm ơn", con còn cách nào khác để cho người ta biết con biết ơn?',
+          'Ngoài nói "cảm ơn", con có thể làm gì để người ta biết con biết ơn?',
         ],
         rationale:
           'Mẫu đo phần "expressing" của "Understanding and expressing gratitude" (CASEL): bé chọn cách bày tỏ lòng biết ơn khi được giúp. Phương án né tránh (ngại không nói) được nửa điểm vì không làm ai buồn nhưng lòng biết ơn chưa được bày tỏ.',
@@ -536,7 +538,7 @@ export const SUB_SKILLS = [
         hintGuidance: 'Nhắc lại việc {NV2} vừa làm ở trang trước, không nói ra đáp án.',
         parentPrompts: [
           'Trong truyện, bạn nào làm giỏi việc gì?',
-          'Bạn thân của con giỏi điều gì? Con đã bao giờ khen bạn ấy chưa?',
+          'Bạn thân của con giỏi điều gì? Con muốn nói gì với bạn ấy về điều đó?',
         ],
         rationale:
           'CASEL nêu "Recognizing strengths in others" trong Nhận thức xã hội. Câu hỏi đo việc bé nhận ra điểm mạnh của người khác từ hành động của họ; phương án nhiễu "điểm mạnh của chính mình" kiểm tra bé có nhìn vào người kia hay không. Truyện không so sánh nhân vật (nguyên tắc nội dung số 6).',
@@ -586,7 +588,7 @@ export const SUB_SKILLS = [
         parentPrompts: [
           'Bạn nhỏ trong truyện đã nói điều mình muốn thế nào?',
           'Khi con muốn bạn trả đồ chơi, con có thể nói câu gì?',
-          'Mình thử tập nói câu đó cùng nhau nhé?',
+          'Con muốn tập nói câu đó với ai trước?',
         ],
         rationale:
           'CASEL nêu "Communicating effectively" đầu tiên trong Kỹ năng quan hệ. Ở trẻ 5–8 tuổi, giao tiếp hiệu quả là nói rõ nhu cầu bằng lời thay vì im lặng hay dùng hành động; ba phương án tương ứng ba cách trẻ thường làm.',
@@ -691,7 +693,7 @@ export const SUB_SKILLS = [
         parentPrompts: [
           'Hai bạn trong truyện đã làm lành thế nào?',
           'Lần gần nhất con giận bạn, sau đó hai bạn làm lành ra sao?',
-          'Con có muốn mình cùng nghĩ một câu để nói khi muốn làm lành không?',
+          'Khi muốn làm lành, con có thể nói câu gì?',
         ],
         rationale:
           'CASEL nêu "Resolving conflicts constructively" trong Kỹ năng quan hệ. Ba phương án là ba cách trẻ phản ứng khi xung đột: giải quyết cùng nhau, rút lui (giảm căng thẳng nhưng chưa giải quyết — 0,5), leo thang (0). Đây là dạng giải quyết vấn đề xã hội qua tình huống mà SELweb đo ở trẻ K–3.',
@@ -729,7 +731,7 @@ export const SUB_SKILLS = [
         title: 'Bạn rủ làm điều chưa ổn',
         questionFrame: 'Các bạn rủ {NV1} làm theo. {NV1} sẽ làm gì?',
         pageSetup:
-          `Một hoặc vài bạn (có thể không có tên riêng) rủ {NV1} làm một việc nhỏ chưa ổn nhưng không nguy hiểm (trêu chọc một bạn khác, lấy kẹo trong tủ khi chưa xin, giấu dép của bạn). {NV1} lưỡng lự; cảm xúc gọi tên rõ. Không ai trong truyện bị phạt nặng. ${ROLE_CHOICE_PAGE}`,
+          `Một hoặc vài bạn (có thể không có tên riêng) rủ {NV1} làm một việc nhỏ chưa ổn nhưng không nguy hiểm (trêu chọc một bạn khác, lấy kẹo trong tủ khi chưa xin, giấu dép của bạn). {NV1} lưỡng lự; cảm xúc gọi tên rõ. Không ai bị phạt. ${ROLE_CHOICE_PAGE}`,
         constructiveDesc:
           'Nói "Tớ không làm đâu" một cách bình tĩnh, rủ các bạn làm việc khác, hoặc nói với người lớn.',
         avoidantDesc: 'Lặng lẽ bỏ đi chỗ khác, không nói gì với các bạn.',
@@ -737,7 +739,7 @@ export const SUB_SKILLS = [
         parentPrompts: [
           'Khi các bạn rủ, bạn nhỏ trong truyện đã làm gì?',
           'Nếu có bạn rủ con làm điều con thấy chưa ổn, con có thể nói câu gì?',
-          'Con có muốn mình cùng tập nói câu "không" thật bình tĩnh không?',
+          'Con sẽ nói câu "không" thế nào cho thật bình tĩnh?',
         ],
         rationale:
           'CASEL nêu "Resisting negative social pressure" trong Kỹ năng quan hệ. Phương án xây dựng là từ chối rõ ràng và có lối ra (rủ việc khác, tìm người lớn); rút lui im lặng tránh được việc chưa ổn nhưng không giữ được quan hệ (0,5); làm theo vì sợ bị chê là đầu hàng áp lực (0).',
@@ -781,7 +783,7 @@ export const SUB_SKILLS = [
         impulsiveDesc: 'Giằng lấy việc để làm hộ ngay mà không hỏi bạn ấy có muốn không.',
         parentPrompts: [
           'Bạn nhỏ trong truyện đã giúp người khác thế nào?',
-          'Hôm nay con có giúp ai việc gì không?',
+          'Hôm nay con đã giúp ai một việc gì? Lúc đó con thấy thế nào?',
         ],
         rationale:
           'Mẫu đo phần "offering" của "Seeking or offering support and help when needed" (CASEL): hỏi trước rồi giúp vừa sức là xây dựng; đi qua (0,5) không gây hại nhưng bỏ lỡ việc giúp; giằng làm hộ không hỏi là hấp tấp (0).',
@@ -813,7 +815,7 @@ export const SUB_SKILLS = [
           'Hai cách trẻ có thể nghĩ tới nhưng rõ là không ổn: một cách không giải quyết được vấn đề (chờ cho nó tự hết), và một cách được việc cho mình nhưng làm người khác thiệt (lấy bút của bạn khi bạn đang dùng).',
         hintGuidance: 'Nhắc lại vấn đề và những thứ {NV1} đang có trong tay, không nói ra đáp án.',
         parentPrompts: [
-          'Bạn nhỏ trong truyện đã giải quyết chuyện đó thế nào? Con còn nghĩ ra cách nào khác không?',
+          'Bạn nhỏ trong truyện đã giải quyết chuyện đó thế nào? Con còn nghĩ ra cách nào khác?',
           'Nếu con gặp chuyện giống vậy, con sẽ làm gì trước tiên?',
         ],
         rationale:
@@ -859,7 +861,7 @@ export const SUB_SKILLS = [
         hintGuidance: 'Nhắc lại chi tiết trong lời kể giúp đoán điều sẽ xảy ra (ví dụ "sàn nhà còn ướt"), không nói ra đáp án.',
         parentPrompts: [
           'Theo con, nếu bạn nhỏ trong truyện làm vậy thì chuyện gì sẽ xảy ra?',
-          'Trước khi làm một việc, con có hay đoán xem sau đó sẽ thế nào không?',
+          'Lần gần nhất con đoán trước được chuyện sẽ xảy ra là khi nào?',
         ],
         rationale:
           'CASEL nêu "Anticipating and evaluating the consequences of one\'s actions" trong Ra quyết định có trách nhiệm. Câu hỏi đo phần "anticipating": bé đoán được hệ quả gần và tự nhiên từ các chi tiết trong tình huống, phân biệt với hệ quả phóng đại hoặc không liên quan.',
@@ -870,12 +872,12 @@ export const SUB_SKILLS = [
         pageSetup:
           `{NV1} vô tình làm hỏng một món đồ trong nhà (làm vỡ bình hoa khi người lớn ở phòng bên, làm rách sách của anh). Không ai bị thương; nếu có mảnh vỡ thì {NV1} đứng xa, không tự nhặt. Người lớn trong truyện sẽ phản ứng bình tĩnh. ${ROLE_CHOICE_PAGE}`,
         constructiveDesc: 'Nói thật với người lớn ("Con lỡ làm vỡ ạ") và xin cùng sửa hoặc dọn phần an toàn.',
-        avoidantDesc: 'Lặng lẽ giấu món đồ đi và không nói với ai.',
+        avoidantDesc: 'Đứng im lo lắng, chưa dám nói với ai.',
         impulsiveDesc: 'Vội nói "Không phải con!" hoặc đổ cho con mèo.',
         parentPrompts: [
           'Bạn nhỏ trong truyện đã làm gì sau khi lỡ làm hỏng đồ? Sau đó mọi người thấy thế nào?',
-          'Nếu con lỡ làm hỏng đồ, con muốn bố mẹ phản ứng thế nào?',
-          'Bố mẹ hứa sẽ bình tĩnh nghe con kể nhé — con thấy sao?',
+          'Khi ai đó lỡ làm hỏng đồ, cả nhà mình có thể cùng làm gì?',
+          'Điều gì giúp một bạn nhỏ dám kể thật với bố mẹ?',
         ],
         rationale:
           'Mẫu đo phần "evaluating" của "Anticipating and evaluating the consequences of one\'s actions" (CASEL): bé cân nhắc hệ quả của từng cách phản ứng sau khi lỡ làm hỏng đồ. Nói thật để cùng sửa là xây dựng (1); giấu đi (0,5) tránh đối mặt nhưng không làm ai thiệt ngay; chối hoặc đổ cho người khác (0). Truyện không có hình phạt (nguyên tắc nội dung số 2).',
@@ -902,7 +904,7 @@ export const SUB_SKILLS = [
         avoidantDesc: 'Lắc đầu không thử, quay về cái mình đã quen.',
         impulsiveDesc: 'Chê ngay "Kỳ quá, chẳng hay đâu!" khi chưa tìm hiểu.',
         parentPrompts: [
-          'Trong truyện có điều gì mới lạ? Con có muốn thử không?',
+          'Trong truyện có điều gì mới lạ? Con muốn thử điều gì trong đó?',
           'Gần đây con đã thử điều gì mới? Con thấy thế nào?',
         ],
         rationale:
@@ -929,7 +931,7 @@ export const SUB_SKILLS = [
         constructiveDesc:
           'Tự nhận một việc vừa sức (xếp dép, lau bàn, bày bát đũa nhựa) hoặc hỏi "Con giúp được gì ạ?".',
         avoidantDesc: 'Tiếp tục chơi và nghĩ việc đó là của người lớn.',
-        impulsiveDesc: 'Làm ào ào không hỏi trước, khiến đồ bị xếp lộn xộn thêm.',
+        impulsiveDesc: 'Chạy quanh nhà rủ mọi người bỏ việc ra chơi cùng mình ngay.',
         parentPrompts: [
           'Bạn nhỏ trong truyện đã góp phần gì cho cả nhà?',
           'Trong nhà mình, việc nào con muốn nhận làm hằng ngày?',

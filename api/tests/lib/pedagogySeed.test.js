@@ -189,3 +189,67 @@ test('platform_settings: tham so bao cao EQ mac dinh (spec muc 7)', () => {
   assert.equal(v['eq_report.developing_from'], 0.5);
   assert.equal(v['eq_report.secure_from'], 0.8);
 });
+
+// Prisma gia lap toi thieu cho seedPedagogy: kiem luat tao mau va co publish ma khong can DB.
+function fakePrisma({ existingSubs = {}, templateCounts = {} } = {}) {
+  const created = { subSkills: [], templates: [] };
+  const prisma = {
+    user: { findUnique: async () => ({ id: 'spec-1' }) },
+    eqSkill: { findMany: async () => COMPETENCIES.map((c) => ({ id: `sk-${c}`, caselCode: c })) },
+    caselReference: { upsert: async ({ where }) => ({ id: `ref-${where.code}` }) },
+    eqSubSkill: {
+      findUnique: async ({ where }) => (existingSubs[where.code] ? { id: existingSubs[where.code] } : null),
+      create: async ({ data }) => {
+        created.subSkills.push(data);
+        return { id: `sub-${data.code}` };
+      },
+    },
+    questionTemplate: {
+      count: async ({ where }) => templateCounts[where.subSkillId] ?? 0,
+      create: async ({ data }) => {
+        created.templates.push(data);
+        return { id: `t-${created.templates.length}` };
+      },
+    },
+  };
+  return { prisma, created };
+}
+
+const { seedPedagogy } = await import('../../prisma/seed_pedagogy.js');
+const quiet = async (fn) => {
+  const log = console.log;
+  console.log = () => {};
+  try {
+    return await fn();
+  } finally {
+    console.log = log;
+  }
+};
+
+test('seedPedagogy: DB trong -> tao du 23 ky nang con + tat ca mau; publish quyet dinh trang thai', async () => {
+  for (const publish of [true, false]) {
+    const { prisma, created } = fakePrisma();
+    await quiet(() => seedPedagogy(prisma, { publish }));
+    assert.equal(created.subSkills.length, 23);
+    assert.equal(created.templates.length, allTemplates.length);
+    for (const t of created.templates) {
+      const v = t.versions.create;
+      assert.equal(v.version, 1);
+      assert.equal(v.status, publish ? 'published' : 'draft');
+      assert.equal(v.publishedBy, publish ? 'spec-1' : null);
+      assert.equal(Boolean(v.publishedAt), publish);
+    }
+  }
+});
+
+test('seedPedagogy: ky nang con da co mau thi khong tao them (ke ca khi Specialist doi ten mau)', async () => {
+  const [a, b] = SUB_SKILLS;
+  const { prisma, created } = fakePrisma({
+    existingSubs: { [a.code]: 'sub-a', [b.code]: 'sub-b' },
+    templateCounts: { 'sub-a': 1, 'sub-b': 0 }, // a: Specialist da doi ten/giu 1 mau; b: da xoa het mau
+  });
+  await quiet(() => seedPedagogy(prisma, { publish: true }));
+  assert.equal(created.subSkills.length, 21);
+  assert.ok(!created.templates.some((t) => t.subSkillId === 'sub-a'));
+  assert.equal(created.templates.filter((t) => t.subSkillId === 'sub-b').length, b.templates.length);
+});

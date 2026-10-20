@@ -8,8 +8,9 @@
 //   - casel_references: upsert theo code. Bang chi doc (khong co API ghi), nen seed la nguon duy nhat
 //     -> cap nhat nguyen van/thu tu cho khop data/casel.js.
 //   - eq_sub_skills: tao neu chua co code; da co thi bo qua (Specialist co the da sua/tat).
-//   - question_templates: tao neu chua co (sub_skill, title) kem phien ban 1; da co thi bo qua
-//     (khong dung vao phien ban Specialist da tao/ban hanh).
+//   - question_templates: chi tao (kem phien ban 1) khi ky nang con vua duoc tao o lan chay nay
+//     hoac dang co 0 mau; ky nang con da co mau thi bo qua toan bo (khong dung vao mau/phien ban
+//     Specialist da tao, doi ten, xoa hay ban hanh).
 // publish = true -> phien ban 1 o trang thai published (seed test/demo); false -> draft (seed "that",
 // Specialist doc roi ban hanh — spec §5.2).
 // =============================================================================
@@ -65,6 +66,7 @@ export async function seedPedagogy(prisma, { publish = false } = {}) {
   const counts = { subSkills: 0, templates: 0 };
   for (const sub of SUB_SKILLS) {
     let subRow = await prisma.eqSubSkill.findUnique({ where: { code: sub.code } });
+    let createdNow = false;
     if (!subRow) {
       subRow = await prisma.eqSubSkill.create({
         data: {
@@ -79,16 +81,18 @@ export async function seedPedagogy(prisma, { publish = false } = {}) {
           createdBy: specialist.id,
         },
       });
+      createdNow = true;
       counts.subSkills += 1;
     }
 
-    for (const t of sub.templates) {
-      const exists = await prisma.questionTemplate.findFirst({
-        where: { subSkillId: subRow.id, title: t.title },
-        select: { id: true },
-      });
-      if (exists) continue;
+    // Chi tao mau khi ky nang con vua tao o lan chay nay hoac dang chua co mau nao. Khong so theo
+    // title (Specialist doi ten / xoa mau thi seed se tao trung hoac hoi sinh mau da xoa).
+    if (!createdNow) {
+      const existing = await prisma.questionTemplate.count({ where: { subSkillId: subRow.id } });
+      if (existing > 0) continue;
+    }
 
+    for (const t of sub.templates) {
       const content = Object.fromEntries(VERSION_FIELDS.map((f) => [f, t[f] ?? null]));
       content.needsTarget = Boolean(t.needsTarget);
       content.allowedEmotions = t.allowedEmotions ?? [];
