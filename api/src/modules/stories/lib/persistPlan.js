@@ -68,6 +68,9 @@ export const planPersist = (response, { pages, checkpoints }) => {
     if (EMOTION_TYPES.has(c.type) && !EMOTIONS.has(ck.answer)) {
       throw invalid(`Diem dung ${label} co answer cam xuc khong hop le: ${ck.answer}`);
     }
+    if (EMOTION_TYPES.has(c.type) && c.allowedEmotions?.length && !c.allowedEmotions.includes(ck.answer)) {
+      throw invalid(`Diem dung ${label} co cam xuc ngoai danh sach cho phep cua mau: ${ck.answer}`);
+    }
     return {
       id: c.id,
       question: ck.question,

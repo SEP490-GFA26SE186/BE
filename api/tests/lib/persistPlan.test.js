@@ -98,3 +98,14 @@ test('planPersist: diem dung cam xuc thieu/sai answer -> OUTPUT_INVALID (khong d
     );
   }
 });
+
+test('planPersist: cam xuc ngoai allowedEmotions cua mau -> OUTPUT_INVALID', () => {
+  const r = rows();
+  r.checkpoints[0].allowedEmotions = ['happy', 'sad'];
+  const resp = response();
+  const k1 = Object.values(resp.checkpoints).find((c) => c.type === 'emotion_self');
+  k1.answer = 'angry';
+  assert.throws(() => planPersist(resp, r), (e) => e instanceof AiServiceError && e.code === 'OUTPUT_INVALID');
+  k1.answer = 'sad';
+  assert.doesNotThrow(() => planPersist(resp, r));
+});

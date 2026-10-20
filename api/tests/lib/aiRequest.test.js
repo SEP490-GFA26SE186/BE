@@ -76,3 +76,83 @@ test('labelPages / labelCheckpoints', () => {
   assert.equal(m.get(2), 'k1');
   assert.equal(m.get(5), 'k2');
 });
+
+const version = (over = {}) => ({
+  questionFrame: 'Hỏi bé cảm xúc của nhân vật',
+  pageSetup: 'Cảnh bé giành đồ chơi',
+  hintGuidance: 'Nhìn nét mặt',
+  allowedEmotions: [],
+  correctDesc: null,
+  distractorDesc: null,
+  constructiveDesc: null,
+  avoidantDesc: null,
+  impulsiveDesc: null,
+  constructiveScore: 1,
+  avoidantScore: 0.3,
+  impulsiveScore: 0,
+  rationale: 'khong duoc gui',
+  parentPrompts: ['x'],
+  referenceUrl: 'http://x',
+  ...over,
+});
+
+test('buildAiRequest: topic age + sub_skills, guide theo dang, khong lo diem', () => {
+  const base = input();
+  const out = buildAiRequest({
+    ...base,
+    topic: {
+      ...base.topic,
+      ageMin: 5,
+      ageMax: 8,
+      subSkills: [{ nameVi: 'Gọi tên cảm xúc', descriptionVi: 'mô tả' }],
+    },
+    checkpoints: [
+      { type: 'reflection', afterPageOrder: 8, targetToken: null },
+      {
+        type: 'emotion_self', afterPageOrder: 2, targetToken: '{NV1}', subSkillName: 'Gọi tên cảm xúc',
+        answerFormat: 'emotion_pick', version: version({ allowedEmotions: ['happy', 'sad'] }),
+      },
+      {
+        type: 'problem_solving', afterPageOrder: 5, targetToken: null, subSkillName: 'Giải quyết',
+        answerFormat: 'role_choice',
+        version: version({ constructiveDesc: 'c', avoidantDesc: 'a', impulsiveDesc: 'i' }),
+      },
+      {
+        type: 'perspective', afterPageOrder: 4, targetToken: null, subSkillName: 'Góc nhìn',
+        answerFormat: 'single_correct', version: version({ correctDesc: 'đúng', distractorDesc: 'sai' }),
+      },
+    ],
+  });
+  assert.deepEqual(out.topic.age_min, 5);
+  assert.deepEqual(out.topic.age_max, 8);
+  assert.deepEqual(out.topic.sub_skills, [{ name: 'Gọi tên cảm xúc', description: 'mô tả' }]);
+  const byType = Object.fromEntries(out.checkpoints.map((c) => [c.type, c]));
+  assert.equal(byType.reflection.guide, undefined);
+  assert.deepEqual(byType.emotion_self.guide, {
+    sub_skill: 'Gọi tên cảm xúc',
+    question_frame: 'Hỏi bé cảm xúc của nhân vật',
+    page_setup: 'Cảnh bé giành đồ chơi',
+    hint_guidance: 'Nhìn nét mặt',
+    allowed_emotions: ['happy', 'sad'],
+  });
+  assert.deepEqual(byType.problem_solving.guide.roles, { constructive: 'c', avoidant: 'a', impulsive: 'i' });
+  assert.equal('hint_guidance' in byType.problem_solving.guide, false);
+  assert.equal('allowed_emotions' in byType.problem_solving.guide, false);
+  assert.equal(byType.perspective.guide.correct_desc, 'đúng');
+  assert.equal(byType.perspective.guide.distractor_desc, 'sai');
+  const json = JSON.stringify(out);
+  for (const bad of ['Score', 'score', 'rationale', 'parent', 'reference', 'khong duoc gui']) {
+    assert.equal(json.includes(bad), false, bad);
+  }
+});
+
+test('buildAiRequest: emotion_pick khong allowed_emotions -> bo khoa', () => {
+  const base = input();
+  const out = buildAiRequest({
+    ...base,
+    checkpoints: [
+      { type: 'emotion_self', afterPageOrder: 2, targetToken: '{NV1}', subSkillName: 'S', version: version() },
+    ],
+  });
+  assert.equal('allowed_emotions' in out.checkpoints[0].guide, false);
+});
