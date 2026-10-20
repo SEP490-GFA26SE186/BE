@@ -60,13 +60,20 @@ export async function getSeededTopic() {
   return topic;
 }
 
+const FIXED_FORMATS = [
+  ['emotion_pick', false],
+  ['single_correct', true],
+  ['role_choice', false],
+];
+
 /**
  * Topic moi (cung nang luc voi topic seed) co khung o cham co dinh: 3 ky nang con, moi cai dung mot
  * mau mot ban published -> o cham lan luot emotion_self, perspective (can target), problem_solving
  * (truyen `medium` giong layout cu). Cho test can biet truoc kieu diem dung. displayOrder lon de
  * getSeededTopic khong chon; goi `retireTopic` trong `after` de no khong o lai trong danh sach.
+ * `formats`: [[answerFormat, needsTarget], ...] — moi phan tu mot ky nang con mot mau.
  */
-export async function createFixedSlotTopic() {
+export async function createFixedSlotTopic({ formats = FIXED_FORMATS } = {}) {
   const seeded = await getSeededTopic();
   const link = await prisma.topicSubSkill.findFirst({
     where: { topicId: seeded.id },
@@ -78,11 +85,6 @@ export async function createFixedSlotTopic() {
   const topic = await prisma.topic.create({
     data: { title: `IT khung cố định ${tag}`, skillId, guidance: 'x', displayOrder: 1_000_000, createdBy: user.id },
   });
-  const formats = [
-    ['emotion_pick', false],
-    ['single_correct', true],
-    ['role_choice', false],
-  ];
   for (const [i, [answerFormat, needsTarget]] of formats.entries()) {
     const sub = await prisma.eqSubSkill.create({
       data: {

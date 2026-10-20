@@ -22,6 +22,9 @@ export const TX_OPTIONS = { timeout: 20000 };
 // Diem dung hoi ve nhan vat khac: co target (mau `needsTarget`); perspective cua mau khong can
 // target thi target null nen khong loc theo kieu.
 const HAS_TARGET = { targetToken: { not: null } };
+// Can nhan vat phu: co target, hoac mau `needsTarget` ma kieu khong duoc luu target (role_choice ->
+// problem_solving, CHECK DB cam target) — van phai giu bat bien ma planSlots da dam bao.
+const NEEDS_SECONDARY = { OR: [HAS_TARGET, { templateVersion: { needsTarget: true } }] };
 
 // ---------------------------------------------------------------------------
 // Ten -> token
@@ -355,7 +358,7 @@ const bindCharacters = async (user, storyId, characters) => {
     const storyCharacters = await resolveStoryCharacters(tx, user.id, characters);
     const target = defaultTarget(storyCharacters);
 
-    const needsTarget = await tx.storyCheckpoint.count({ where: { storyId, ...HAS_TARGET } });
+    const needsTarget = await tx.storyCheckpoint.count({ where: { storyId, ...NEEDS_SECONDARY } });
     if (needsTarget > 0 && !target) {
       throw new ApiError(
         StatusCodes.UNPROCESSABLE_ENTITY,

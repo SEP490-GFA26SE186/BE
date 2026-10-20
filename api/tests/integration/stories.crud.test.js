@@ -229,6 +229,27 @@ test('PUT /stories/:id/characters: chua co chu -> thay token, targetToken ve nha
   assert.equal(rows.length, 3);
 });
 
+test('PUT /stories/:id/characters: o role_choice can target (luu khong target) -> bo nhan vat phu bi 422, khong doi gi', { skip }, async () => {
+  const f = await family();
+  const roleTopic = await createFixedSlotTopic({ formats: [['role_choice', true]] });
+  try {
+    const story = await createStory(f, { topicId: roleTopic.id });
+    const rows = await prisma.storyCheckpoint.findMany({ where: { storyId: story.id, scored: true } });
+    assert.ok(rows.length > 0 && rows.every((r) => r.type === 'problem_solving' && r.targetToken === null));
+
+    const res = await api.request('PUT', `/stories/${story.id}/characters`, {
+      token: f.token,
+      body: { characters: [{ characterId: f.bin.id, isMain: true }] },
+    });
+    assert.equal(res.status, 422, JSON.stringify(res.body));
+    assert.match(res.body.message, /nhân vật phụ/);
+    const chars = await prisma.storyCharacter.findMany({ where: { storyId: story.id }, orderBy: { token: 'asc' } });
+    assert.deepEqual(chars.map((c) => [c.token, c.characterId]), [['{NV1}', f.bin.id], ['{NV2}', f.mit.id]]);
+  } finally {
+    await retireTopic(roleTopic);
+  }
+});
+
 test('DELETE /stories/:id -> xoa mem; GET sau do -> 404', { skip }, async () => {
   const f = await family();
   const story = await createStory(f);

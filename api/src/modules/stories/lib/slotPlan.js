@@ -12,6 +12,7 @@ import ApiError from '../../../utils/ApiError.js';
 export function planSlots({ slots, subSkills, hasSecondary, rng = Math.random }) {
   if (slots.length === 0) return [];
 
+  // Xoay vong tren ky nang con DUNG DUOC: loc truoc, roi o thu i lay usable[i % usable.length].
   const usable = subSkills
     .map((s) => ({ ...s, versions: s.versions.filter((ver) => hasSecondary || !ver.needsTarget) }))
     .filter((s) => s.versions.length > 0);
