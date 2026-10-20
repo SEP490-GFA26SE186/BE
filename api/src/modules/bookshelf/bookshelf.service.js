@@ -15,8 +15,8 @@ const verifyChildAccess = async (user, childId) => {
     throw ApiError.badRequest('Child ID is required');
   }
 
-  // Admin and Moderator have system-wide access
-  const isElevated = ['admin', 'moderator'].includes(user.role);
+  // Admin and Specialist have system-wide access
+  const isElevated = ['admin', 'specialist'].includes(user.role);
 
   const child = await prisma.childProfile.findFirst({
     where: {

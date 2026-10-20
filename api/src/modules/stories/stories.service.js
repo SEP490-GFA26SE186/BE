@@ -93,7 +93,7 @@ export async function loadNameContextForStory(db, storyId) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Tu khoa bi chan dang dung (Moderator quan ly). */
+/** Tu khoa bi chan dang dung (Specialist quan ly). */
 export const loadActiveKeywords = (db) =>
   db.blockedKeyword.findMany({ where: { isActive: true }, select: { keyword: true, severity: true } });
 

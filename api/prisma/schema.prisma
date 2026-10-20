@@ -32,7 +32,7 @@ datasource db {
 
 enum UserRole {
   admin
-  moderator
+  specialist
   parent
 
   @@map("user_role")
@@ -441,7 +441,7 @@ model Character {
 }
 
 // =============================================================================
-// 2. CONTENT LIBRARY (Moderator quan ly)
+// 2. CONTENT LIBRARY (Specialist quan ly)
 // =============================================================================
 
 model EqSkill {
@@ -460,7 +460,7 @@ model EqSkill {
   @@map("eq_skills")
 }
 
-/// @note Danh sach bai hoc do Moderator quan ly
+/// @note Danh sach bai hoc do Specialist quan ly
 /// @note CHECK: age_min <= age_max
 model Topic {
   id           String   @id @default(uuid()) @db.Uuid

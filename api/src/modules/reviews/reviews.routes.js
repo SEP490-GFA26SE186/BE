@@ -57,7 +57,7 @@ export const reviewModerationRouter = Router();
 reviewModerationRouter.post(
   '/product-reviews/:reviewId/hide',
   auth,
-  authorize('moderator', 'admin'),
+  authorize('specialist', 'admin'),
   validate(z.object({ params: z.object({ reviewId: uuid('reviewId') }) })),
   ok((req) => svc.hideReview(req.user, req.params.reviewId)),
 );

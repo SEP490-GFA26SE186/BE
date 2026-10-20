@@ -20,7 +20,7 @@ before(async () => {
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
   await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
-  const mod = await prisma.user.findFirst({ where: { role: 'moderator' } });
+  const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => /^(market|moderation)\./.test(s.key))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
@@ -68,7 +68,7 @@ async function publishedListing(price) {
 
 const listingItem = (listing, price) => ({ itemType: 'listing', listingId: listing.id, unitPriceVnd: BigInt(price), sellerShareRate: 0.8, sellerAmountVnd: BigInt(price * 0.8) });
 
-test('tai khoan: chi Admin; tim kiem; khoa -> chan request + khong tu khoa minh; tao Moderator', { skip }, async () => {
+test('tai khoan: chi Admin; tim kiem; khoa -> chan request + khong tu khoa minh; tao Specialist', { skip }, async () => {
   const parent = await createParent();
   assert.equal((await call(parent.token, 'GET', '/admin/accounts')).status, 403);
   const list = await call(admin.token, 'GET', `/admin/accounts?search=${encodeURIComponent(parent.user.email)}`);
@@ -85,7 +85,7 @@ test('tai khoan: chi Admin; tim kiem; khoa -> chan request + khong tu khoa minh;
   const body = { email: `kdv${tag}@test.vn`, username: `kdv_${tag}`, fullName: 'Kiểm duyệt viên mới', password: 'matkhau123' };
   const m = await call(admin.token, 'POST', '/admin/accounts/moderators', body);
   assert.equal(m.status, 201, JSON.stringify(m.body));
-  assert.equal(m.body.data.account.role, 'moderator');
+  assert.equal(m.body.data.account.role, 'specialist');
   assert.equal((await call(admin.token, 'POST', '/admin/accounts/moderators', body)).status, 409);
   const login = await api.request('POST', '/auth/login', { body: { emailOrUsername: body.email, password: body.password } });
   assert.ok([200, 201].includes(login.status), JSON.stringify(login.body));

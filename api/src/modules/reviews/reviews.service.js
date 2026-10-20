@@ -1,6 +1,6 @@
 // Danh gia truyen (rev8 luong 4.6): chi phu huynh dang co quyen doc VA co be da doc het truyen moi danh gia
 // (DBML product_reviews). Moi phu huynh mot danh gia / truyen (sua lai duoc). Nguoi ban tra loi mot lan.
-// Bao cao danh gia -> content_reports.product_review_id; Moderator an danh gia (luong 7.3).
+// Bao cao danh gia -> content_reports.product_review_id; Specialist an danh gia (luong 7.3).
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
@@ -134,7 +134,7 @@ export async function reportReview(user, reviewId, { category, description }) {
   return { reportId: r.id };
 }
 
-/** POST /moderation/product-reviews/:id/hide — Moderator an danh gia vi pham; dong bao cao, tinh lai diem. */
+/** POST /moderation/product-reviews/:id/hide — Specialist an danh gia vi pham; dong bao cao, tinh lai diem. */
 export async function hideReview(moderator, reviewId, { now = new Date() } = {}) {
   return prisma.$transaction(async (tx) => {
     const review = await tx.productReview.findUnique({ where: { id: reviewId }, select: { id: true, listingId: true, hiddenAt: true } });

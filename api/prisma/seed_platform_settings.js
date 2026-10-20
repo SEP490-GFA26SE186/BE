@@ -2,11 +2,11 @@
 // Seed: platform_settings cho luong sinh truyen (spec story-generation-node §5.1)
 // Gia tri khop BE/ai/docs/03-story-structure.md.
 //
-// Phai chay sau seedTopics: updated_by tro vao moderator ma seedTopics tao.
+// Phai chay sau seedTopics: updated_by tro vao specialist ma seedTopics tao.
 // upsert voi update: {} — chay lai KHONG ghi de gia tri Admin da chinh.
 // =============================================================================
 
-const MODERATOR_EMAIL = 'pedagogy@storyweaver.ai';
+const SPECIALIST_EMAIL = 'pedagogy@storyweaver.ai';
 
 export const platformSettingsData = [
   {
@@ -88,16 +88,16 @@ export const platformSettingsData = [
 export async function seedPlatformSettings(prisma) {
   console.log('🌱 Seeding platform_settings...');
 
-  const moderator = await prisma.user.findUnique({ where: { email: MODERATOR_EMAIL } });
-  if (!moderator) {
-    throw new Error(`Không thấy ${MODERATOR_EMAIL} — seedTopics phải chạy trước seedPlatformSettings.`);
+  const specialist = await prisma.user.findUnique({ where: { email: SPECIALIST_EMAIL } });
+  if (!specialist) {
+    throw new Error(`Không thấy ${SPECIALIST_EMAIL} — seedTopics phải chạy trước seedPlatformSettings.`);
   }
 
   for (const { key, value } of platformSettingsData) {
     await prisma.platformSetting.upsert({
       where: { key },
       update: {},
-      create: { key, value, updatedBy: moderator.id },
+      create: { key, value, updatedBy: specialist.id },
     });
   }
 

@@ -1,5 +1,5 @@
 // Giam sat noi dung (rev8 luong 7). Bon router theo nguoi dung:
-// - moderationMonitoringRouter (/moderation): bao cao, tam go, canh cao, kiem tra ngau nhien — Moderator / Admin;
+// - moderationMonitoringRouter (/moderation): bao cao, tam go, canh cao, kiem tra ngau nhien — Specialist / Admin;
 // - reportRouter (/market): phu huynh bao cao truyen dang ban;
 // - sellerStrikesRouter (/sellers): nguoi ban xem canh cao + khang nghi;
 // - appealsAdminRouter (/admin): Admin xet khang nghi.
@@ -15,7 +15,7 @@ import { REPORT_CATEGORY_LABELS } from './lib/monitoring.js';
 const ok = (fn, statusCode) => catchAsync(async (req, res) => ApiResponse.success(res, { ...(statusCode && { statusCode }), data: await fn(req) }));
 const uuid = (label) => z.string({ required_error: `Thiếu ${label}` }).uuid(`${label} không hợp lệ`);
 const reason = (min, label) => z.string({ required_error: `Nhập ${label}` }).trim().min(min, `${label} tối thiểu ${min} ký tự`).max(2000);
-const mod = [auth, authorize('moderator', 'admin')];
+const mod = [auth, authorize('specialist', 'admin')];
 
 export const moderationMonitoringRouter = Router();
 

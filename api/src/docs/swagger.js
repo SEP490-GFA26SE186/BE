@@ -1,6 +1,6 @@
 import { env } from '../config/index.js';
 import storiesPaths from './paths/stories.paths.js';
-import moderatorPaths from './paths/moderator.paths.js';
+import specialistPaths from './paths/specialist.paths.js';
 import monitoringPaths from './paths/monitoring.paths.js';
 import adminPaths from './paths/admin.paths.js';
 import reviewsPaths from './paths/reviews.paths.js';
@@ -17,9 +17,9 @@ API Backend cung cấp đầy đủ các chức năng quản lý tài khoản ph
 ### Bảng Phân Quyền Truy Cập (Role-Based Access Control - RBAC)
 Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện truy cập:
 - **[Public]**: Không yêu cầu đăng nhập. Bất kỳ ai cũng có thể truy cập (Health check, Login, Register, Xem danh mục EQ, Duyệt kịch bản mẫu...).
-- **[Parent]**: Yêu cầu xác thực tài khoản Phụ huynh (\`parent\`, \`moderator\`, \`admin\`) qua Bearer Access Token.
+- **[Parent]**: Yêu cầu xác thực tài khoản Phụ huynh (\`parent\`, \`specialist\`, \`admin\`) qua Bearer Access Token.
 - **[Kid Session | Parent]**: Dành cho phiên đọc Chế độ Trẻ em (\`kid_session\` token) hoặc tài khoản Phụ huynh.
-- **[Moderator | Admin]**: Dành cho Kiểm duyệt viên và Quản trị viên (\`moderator\`, \`admin\`) quản lý nội dung sư phạm, duyệt chợ truyện.
+- **[Specialist | Admin]**: Dành cho Chuyên gia sư phạm và Quản trị viên (\`specialist\`, \`admin\`) quản lý nội dung sư phạm, duyệt chợ truyện.
 - **[Admin]**: Dành riêng cho Quản trị viên cấp cao (\`admin\`) quản trị cấu hình hệ thống và xóa dữ liệu nhạy cảm.
     `,
     contact: {
@@ -73,7 +73,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         type: 'object',
         properties: {
           id: { type: 'string', format: 'uuid', example: 'd3b07384-d113-49d6-a246-24b5d2757279' },
-          role: { type: 'string', enum: ['parent', 'moderator', 'admin'], example: 'parent' },
+          role: { type: 'string', enum: ['parent', 'specialist', 'admin'], example: 'parent' },
           username: { type: 'string', example: 'hoangnam' },
           email: { type: 'string', format: 'email', example: 'hoangnam@example.com' },
           fullName: { type: 'string', example: 'Nguyễn Hoàng Nam' },
@@ -488,8 +488,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/me': {
       get: {
         tags: ['Auth'],
-        summary: '[Parent | Moderator | Admin] Lấy thông tin tài khoản hiện tại',
-        description: '**Quyền truy cập:** Đã đăng nhập (`parent`, `moderator`, `admin`).\nLấy thông tin tài khoản đang đăng nhập kèm số dư ví credit/earning.',
+        summary: '[Parent | Specialist | Admin] Lấy thông tin tài khoản hiện tại',
+        description: '**Quyền truy cập:** Đã đăng nhập (`parent`, `specialist`, `admin`).\nLấy thông tin tài khoản đang đăng nhập kèm số dư ví credit/earning.',
         security: [{ BearerAuth: [] }],
         responses: {
           200: {
@@ -1642,13 +1642,13 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/listings/price-tiers': { get: { tags: ['Publishing'], summary: 'Bậc giá đăng bán', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ priceTiers: [{ id, label, priceVnd }] }' } } } },
     '/listings/mine': { get: { tags: ['Publishing'], summary: '[Parent] Truyện tôi đăng bán', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ listings: [{ id, title, status, priceVnd, lastDecision }] }' } } } },
     '/listings': { post: { tags: ['Publishing'], summary: '[Seller] Đăng bán một truyện riêng đã hoàn tất', description: 'Tạo bản sao published đã gỡ cá nhân hoá: tên chung cho từng token (aliases), bỏ situation và audio, use_tts=false. 422 khi còn tên thật (kể cả trong tên mới) hoặc bí danh trùng / là tên thật.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['storyId', 'title', 'priceTierId', 'aliases'], properties: { storyId: { type: 'string', format: 'uuid' }, title: { type: 'string' }, description: { type: 'string' }, priceTierId: { type: 'string', format: 'uuid' }, aliases: { type: 'array', items: { type: 'object', properties: { token: { type: 'string', example: '{NV1}' }, aliasName: { type: 'string' } } } } } } } } }, responses: { 200: { description: '{ listing }' } } } },
-    '/moderation/sellers': { get: { tags: ['Moderation'], summary: '[Moderator] Hồ sơ người bán theo trạng thái (?status=pending)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ sellers }' } } } },
-    '/moderation/sellers/{userId}/decision': { post: { tags: ['Moderation'], summary: '[Moderator] Duyệt / từ chối hồ sơ người bán', security: [{ BearerAuth: [] }], parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['approve'], properties: { approve: { type: 'boolean' } } } } } }, responses: { 200: { description: '{ seller }' } } } },
-    '/moderation/submissions': { get: { tags: ['Moderation'], summary: '[Moderator] Hàng đợi truyện chờ duyệt (cũ nhất trước)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ queue: [{ reviewId, listingId, title, seller, priceVnd, claimedBy }] }' } } } },
-    '/moderation/submissions/{reviewId}/claim': { post: { tags: ['Moderation'], summary: '[Moderator] Nhận bài (giữ 30 phút)', description: 'Người khác đang giữ → 409.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
-    '/moderation/submissions/{reviewId}': { get: { tags: ['Moderation'], summary: '[Moderator] Chi tiết lượt duyệt: truyện (tên chung), checklist, trang đã xem, tiến độ', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ review, listing, story, checklist, pageViews, progress }' } } } },
-    '/moderation/submissions/{reviewId}/pages/{pageId}/view': { post: { tags: ['Moderation'], summary: '[Moderator] Đánh dấu đã xem trang (+ nhận xét)', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'pageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { comment: { type: 'string' } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
-    '/moderation/submissions/{reviewId}/decision': { post: { tags: ['Moderation'], summary: '[Moderator] Quyết định', description: 'Lượt nộp bán: approved | changes_requested | rejected. Lượt hậu kiểm (report_followup / random_audit): approved = giữ / bán lại, taken_down = gỡ hẳn (archived + tự cảnh cáo). approved chỉ khi đã xem 100% trang và đạt đủ checklist; quyết định khác bắt buộc nhận xét.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'changes_requested', 'rejected', 'taken_down'] }, comment: { type: 'string' }, issueStrike: { type: 'boolean', description: 'rejected + true → cảnh cáo nguồn rejection' }, checklist: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'string', format: 'uuid' }, passed: { type: 'boolean' } } } } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
+    '/moderation/sellers': { get: { tags: ['Moderation'], summary: '[Specialist] Hồ sơ người bán theo trạng thái (?status=pending)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ sellers }' } } } },
+    '/moderation/sellers/{userId}/decision': { post: { tags: ['Moderation'], summary: '[Specialist] Duyệt / từ chối hồ sơ người bán', security: [{ BearerAuth: [] }], parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['approve'], properties: { approve: { type: 'boolean' } } } } } }, responses: { 200: { description: '{ seller }' } } } },
+    '/moderation/submissions': { get: { tags: ['Moderation'], summary: '[Specialist] Hàng đợi truyện chờ duyệt (cũ nhất trước)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ queue: [{ reviewId, listingId, title, seller, priceVnd, claimedBy }] }' } } } },
+    '/moderation/submissions/{reviewId}/claim': { post: { tags: ['Moderation'], summary: '[Specialist] Nhận bài (giữ 30 phút)', description: 'Người khác đang giữ → 409.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
+    '/moderation/submissions/{reviewId}': { get: { tags: ['Moderation'], summary: '[Specialist] Chi tiết lượt duyệt: truyện (tên chung), checklist, trang đã xem, tiến độ', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ review, listing, story, checklist, pageViews, progress }' } } } },
+    '/moderation/submissions/{reviewId}/pages/{pageId}/view': { post: { tags: ['Moderation'], summary: '[Specialist] Đánh dấu đã xem trang (+ nhận xét)', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'pageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { comment: { type: 'string' } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
+    '/moderation/submissions/{reviewId}/decision': { post: { tags: ['Moderation'], summary: '[Specialist] Quyết định', description: 'Lượt nộp bán: approved | changes_requested | rejected. Lượt hậu kiểm (report_followup / random_audit): approved = giữ / bán lại, taken_down = gỡ hẳn (archived + tự cảnh cáo). approved chỉ khi đã xem 100% trang và đạt đủ checklist; quyết định khác bắt buộc nhận xét.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'changes_requested', 'rejected', 'taken_down'] }, comment: { type: 'string' }, issueStrike: { type: 'boolean', description: 'rejected + true → cảnh cáo nguồn rejection' }, checklist: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'string', format: 'uuid' }, passed: { type: 'boolean' } } } } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
 
     // ---- MARKET + RUT TIEN (rev8 luong 4, 6) ----
     '/market/listings': { get: { tags: ['Market'], summary: 'Truyện đang bán (chỉ published)', security: [{ BearerAuth: [] }], parameters: [{ name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'competency', in: 'query', schema: { type: 'string' } }, { name: 'age', in: 'query', schema: { type: 'string' } }, { name: 'priceTierId', in: 'query', schema: { type: 'string' } }, { name: 'sort', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: '{ items: [{ id, title, topic, totalPages, priceTier, seller, purchaseCount, owned }], pagination }' } } } },
@@ -1727,7 +1727,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       get: {
         tags: ['Plans & Subscriptions'],
         summary: '[Parent] Xem thông tin gói đăng ký và định mức sử dụng hiện tại',
-        description: '**Quyền truy cập:** `parent`, `moderator`, `admin`.\nXem chi tiết gói thành viên đang sử dụng, thời gian hết hạn, số lượng hồ sơ bé/nhân vật đã tạo và số lượt AI story / AI image còn lại trong chu kỳ.',
+        description: '**Quyền truy cập:** `parent`, `specialist`, `admin`.\nXem chi tiết gói thành viên đang sử dụng, thời gian hết hạn, số lượng hồ sơ bé/nhân vật đã tạo và số lượt AI story / AI image còn lại trong chu kỳ.',
         security: [{ BearerAuth: [] }],
         responses: {
           200: { description: 'Lấy thông tin gói thành viên hiện tại thành công' },
@@ -1739,7 +1739,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     // Paths tach file (src/docs/paths/*.paths.js)
     // ==========================================
     ...storiesPaths,
-    ...moderatorPaths,
+    ...specialistPaths,
     ...monitoringPaths,
     ...adminPaths,
     ...reviewsPaths,
@@ -1765,7 +1765,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Tải lên / Tạo ảnh nền mặc định mới',
+        summary: '[Specialist / Admin] Tải lên / Tạo ảnh nền mặc định mới',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1804,7 +1804,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       put: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Cập nhật thông tin ảnh nền',
+        summary: '[Specialist / Admin] Cập nhật thông tin ảnh nền',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
@@ -1831,7 +1831,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       delete: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Xóa hoặc chuyển trạng thái ngưng hoạt động của ảnh nền',
+        summary: '[Specialist / Admin] Xóa hoặc chuyển trạng thái ngưng hoạt động của ảnh nền',
         description: 'Nếu ảnh nền đã gắn với trang truyện, hệ thống tự động tắt kích hoạt (`isActive: false`) để bảo toàn tính toàn vẹn dữ liệu.',
         security: [{ BearerAuth: [] }],
         parameters: [
@@ -1862,7 +1862,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Tạo mới âm thanh giao diện',
+        summary: '[Specialist / Admin] Tạo mới âm thanh giao diện',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1914,7 +1914,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       put: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Cập nhật âm thanh giao diện',
+        summary: '[Specialist / Admin] Cập nhật âm thanh giao diện',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
@@ -1941,7 +1941,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       delete: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Xóa âm thanh giao diện',
+        summary: '[Specialist / Admin] Xóa âm thanh giao diện',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
@@ -1968,7 +1968,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       post: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Tạo mới tiêu chuẩn kiểm duyệt',
+        summary: '[Specialist / Admin] Tạo mới tiêu chuẩn kiểm duyệt',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
@@ -2006,7 +2006,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       put: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Cập nhật tiêu chuẩn kiểm duyệt',
+        summary: '[Specialist / Admin] Cập nhật tiêu chuẩn kiểm duyệt',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
@@ -2033,7 +2033,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
       },
       delete: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Xóa hoặc tắt kích hoạt tiêu chuẩn kiểm duyệt',
+        summary: '[Specialist / Admin] Xóa hoặc tắt kích hoạt tiêu chuẩn kiểm duyệt',
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
@@ -2050,7 +2050,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/content-library/stats': {
       get: {
         tags: ['Content Library'],
-        summary: '[Moderator / Admin] Thống kê toàn bộ tài nguyên Content Library',
+        summary: '[Specialist / Admin] Thống kê toàn bộ tài nguyên Content Library',
         description: 'Tổng số kịch bản mẫu theo trạng thái, số ảnh nền, file âm thanh, tiêu chuẩn kiểm duyệt và từ khóa cấm.',
         security: [{ BearerAuth: [] }],
         responses: {

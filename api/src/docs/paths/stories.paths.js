@@ -165,9 +165,9 @@ const storiesPaths = {
   '/stories/{id}': {
     get: {
       tags: ['Stories'],
-      summary: '[Parent | Moderator | Admin] Chi tiết truyện',
+      summary: '[Parent | Specialist | Admin] Chi tiết truyện',
       description:
-        '**Quyền truy cập:** phụ huynh sở hữu truyện; `moderator`, `admin` được đọc.\n' +
+        '**Quyền truy cập:** phụ huynh sở hữu truyện; `specialist`, `admin` được đọc.\n' +
         'Trả trang, cảnh, điểm dừng, phương án và nhân vật. Chữ truyện **giữ dạng token** `{NV1}`, `{NV2}`…; ' +
         'frontend thay token bằng tên khi hiển thị, dùng bảng `characters` (`token → name`).',
       security: bearer,

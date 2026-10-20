@@ -1,4 +1,4 @@
-// Giam sat noi dung (rev8 luong 7) — viec cua Moderator: bao cao vi pham, tam go truyen, canh cao tac gia,
+// Giam sat noi dung (rev8 luong 7) — viec cua Specialist: bao cao vi pham, tam go truyen, canh cao tac gia,
 // kiem tra ngau nhien. Khang nghi canh cao do Admin (khac nguoi ra canh cao) quyet (DBML strike_appeals).
 // Quyet dinh hau kiem (giu / go han) nam o publishing.decide (dung chung khong gian duyet).
 import { StatusCodes } from 'http-status-codes';
@@ -94,7 +94,7 @@ const formatReport = (r) => ({
   handler: r.handler?.fullName ?? null,
   pageOrder: r.page?.pageOrder ?? null,
   listing: formatReportListing(r.listing ?? r.productReview?.listing),
-  // Bao cao danh gia (luong 7.1): danh gia bi bao cao, Moderator an duoc (luong 7.3)
+  // Bao cao danh gia (luong 7.1): danh gia bi bao cao, Specialist an duoc (luong 7.3)
   review: r.productReview && { id: r.productReview.id, rating: r.productReview.rating, comment: r.productReview.comment, hidden: Boolean(r.productReview.hiddenAt) },
 });
 
@@ -153,7 +153,7 @@ export async function closeOpenReports(tx, moderatorId, listingId, decision, now
 // Tam go / danh sach truyen bi tam go
 // ---------------------------------------------------------------------------
 
-/** Moderator chu dong tam go truyen dang ban (kem ly do) -> tao luot hau kiem de quyet giu / go han. */
+/** Specialist chu dong tam go truyen dang ban (kem ly do) -> tao luot hau kiem de quyet giu / go han. */
 export async function suspendListing(moderator, listingId, { reason }) {
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM listings WHERE id = ${listingId}::uuid FOR UPDATE`;
@@ -224,7 +224,7 @@ export async function issueStrikeTx(tx, issuerId, { sellerId, source, sourceId =
   return { strikeId: strike.id, activeStrikes, strikeLimit, sellerSuspended };
 }
 
-/** Moderator ra canh cao thu cong (tu bao cao / truyen bi go). */
+/** Specialist ra canh cao thu cong (tu bao cao / truyen bi go). */
 export async function issueStrike(moderator, body, { now = new Date() } = {}) {
   return prisma.$transaction((tx) => issueStrikeTx(tx, moderator.id, body, now), TX);
 }
@@ -257,7 +257,7 @@ const formatStrike = (s, now) => ({
   },
 });
 
-/** Danh sach canh cao (Moderator). active=true -> chi canh cao con hieu luc. */
+/** Danh sach canh cao (Specialist). active=true -> chi canh cao con hieu luc. */
 export async function listStrikes({ sellerId, active } = {}, { now = new Date() } = {}) {
   const rows = await prisma.creatorStrike.findMany({
     where: { ...(sellerId && { sellerId }), ...(active && { revokedAt: null, expiresAt: { gt: now } }) },
@@ -344,7 +344,7 @@ export async function decideAppeal(admin, appealId, { approve, note }, { now = n
 /**
  * Chon toi da `auditPerWeek` truyen dang ban (nguoi ban con hoat dong, chua co luot duyet dang mo),
  * uu tien truyen lau chua duoc kiem. Worker goi moi chu ky: chi chon khi tuan nay chua chon (idempotent).
- * force (Moderator bam) -> chon ngay, bo qua moc tuan.
+ * force (Specialist bam) -> chon ngay, bo qua moc tuan.
  */
 export async function scheduleRandomAudits(db = prisma, { now = new Date(), force = false, count } = {}) {
   const last = await db.moderationReview.findFirst({ where: { reviewType: 'random_audit' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
@@ -374,7 +374,7 @@ export async function scheduleRandomAudits(db = prisma, { now = new Date(), forc
   return { created: reviewIds.length, reviewIds };
 }
 
-/** Moderator bam "chon dot kiem tra" -> ghi nhat ky. */
+/** Specialist bam "chon dot kiem tra" -> ghi nhat ky. */
 export async function runRandomAudits(moderator, { count } = {}) {
   const result = await scheduleRandomAudits(prisma, { force: true, count });
   if (result.created) await audit(prisma, moderator.id, 'audit.schedule', 'moderation_review', null, null, result);

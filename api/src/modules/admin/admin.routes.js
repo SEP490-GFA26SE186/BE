@@ -21,7 +21,7 @@ router.get('/overview', ...only, ok(() => admin.overview()));
 router.get(
   '/accounts',
   ...only,
-  validate(z.object({ query: z.object({ role: z.enum(['all', 'parent', 'moderator', 'admin']).default('all'), status: z.enum(['all', 'active', 'locked']).default('all'), search: z.string().max(100).optional(), page, limit: z.coerce.number().int().min(1).max(100).default(20) }) })),
+  validate(z.object({ query: z.object({ role: z.enum(['all', 'parent', 'specialist', 'admin']).default('all'), status: z.enum(['all', 'active', 'locked']).default('all'), search: z.string().max(100).optional(), page, limit: z.coerce.number().int().min(1).max(100).default(20) }) })),
   ok((req) => admin.listAccounts(req.query)),
 );
 router.patch(

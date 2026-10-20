@@ -1,4 +1,4 @@
-// Tu khoa bi chan (blocked_keywords, rev8). Moderator quan ly; dung o hai noi:
+// Tu khoa bi chan (blocked_keywords, rev8). Specialist quan ly; dung o hai noi:
 // - gui sang ai/ moi lan sinh truyen (validator: block -> viet lai / loi, warn -> canh bao);
 // - kiem chu phu huynh tu viet / sua trong editor (stories/lib/keywords.js: block chan han, warn canh bao).
 // Thay route /moderation/keywords cu (ghi sai cot createdById). Gan TRUOC router moderation cu.
@@ -11,7 +11,7 @@ import { auth, authorize, validate } from '../../middlewares/index.js';
 import { ApiResponse, catchAsync } from '../../utils/index.js';
 
 const router = Router();
-const mod = [auth, authorize('moderator', 'admin')];
+const mod = [auth, authorize('specialist', 'admin')];
 const ok = (fn, statusCode) => catchAsync(async (req, res) => ApiResponse.success(res, { ...(statusCode && { statusCode }), data: await fn(req) }));
 
 const keyword = z.string().trim().min(1, 'Nhập từ khoá').max(100).transform((s) => s.normalize('NFC').toLocaleLowerCase('vi'));

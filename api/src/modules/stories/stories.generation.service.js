@@ -105,7 +105,7 @@ export async function startGeneration(
       'Truyện tự viết không dùng được AI viết chữ. Hãy chỉnh sửa trực tiếp các trang.',
     );
   }
-  // Luong 7.6: Moderator tam khoa quyen dung AI (van doc truyen / tu viet duoc)
+  // Luong 7.6: Specialist tam khoa quyen dung AI (van doc truyen / tu viet duoc)
   const { aiBlockedUntil } = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { aiBlockedUntil: true } });
   if (aiBlockedUntil && aiBlockedUntil > new Date()) {
     throw ApiError.forbidden(

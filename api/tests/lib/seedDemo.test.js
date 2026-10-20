@@ -9,7 +9,7 @@ const { DEMO_USERS, DEMO_PASSWORD, DEMO_KID_PIN, demoGrantKey } = await import('
 const DOC_URL = new URL('../../../../Web/docs/DEMO_ACCOUNTS.md', import.meta.url);
 
 test('seed demo: dung 3 vai tro', () => {
-  assert.deepEqual(DEMO_USERS.map((u) => u.role).sort(), ['admin', 'moderator', 'parent']);
+  assert.deepEqual(DEMO_USERS.map((u) => u.role).sort(), ['admin', 'parent', 'specialist']);
 });
 
 // Repo Web nam canh BE (D:/sep490/Web); clone rieng BE (CI) thi bo qua thay vi fail.

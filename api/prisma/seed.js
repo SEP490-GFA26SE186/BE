@@ -20,7 +20,7 @@ async function main() {
   // Thu tu quan trong: topics.skill_id tro vao eq_skills.
   await seedEqSkills(prisma);
   await seedTopics(prisma);
-  // updated_by tro vao moderator do seedTopics tao.
+  // updated_by tro vao specialist do seedTopics tao.
   await seedPlatformSettings(prisma);
   await seedPlans(prisma);
   await seedMarket(prisma);

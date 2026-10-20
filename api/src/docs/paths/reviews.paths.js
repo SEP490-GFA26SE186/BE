@@ -31,7 +31,7 @@ export default {
     post: { tags: ['Market'], summary: '[Parent] Báo cáo đánh giá', security: bearer, parameters: [path('reviewId')], requestBody: json({ category: { type: 'string' }, description: { type: 'string' } }, ['category']), responses: { 201: { description: '{ reportId }' }, 409: { description: 'Đã báo cáo' } } },
   },
   '/moderation/product-reviews/{reviewId}/hide': {
-    post: { tags: ['Moderation'], summary: '[Moderator] Ẩn đánh giá vi phạm', description: 'Đóng các báo cáo đang mở của đánh giá, tính lại điểm truyện và người bán.', security: bearer, parameters: [path('reviewId')], responses: { 200: { description: '{ reviewId, hidden, reportsResolved }' } } },
+    post: { tags: ['Moderation'], summary: '[Specialist] Ẩn đánh giá vi phạm', description: 'Đóng các báo cáo đang mở của đánh giá, tính lại điểm truyện và người bán.', security: bearer, parameters: [path('reviewId')], responses: { 200: { description: '{ reviewId, hidden, reportsResolved }' } } },
   },
   '/children/{id}/eq-journey': {
     get: {

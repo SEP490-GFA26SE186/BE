@@ -142,7 +142,7 @@ test('POST /stories custom -> 4 trang, 0 diem dung', { skip }, async () => {
   assert.equal(story.checkpoints.length, 0);
 });
 
-test('GET /stories/:id: nguoi khac -> 404; moderator doc duoc', { skip }, async () => {
+test('GET /stories/:id: nguoi khac -> 404; specialist doc duoc', { skip }, async () => {
   const f = await family();
   const story = await createStory(f);
 
@@ -150,7 +150,7 @@ test('GET /stories/:id: nguoi khac -> 404; moderator doc duoc', { skip }, async 
   const res = await api.request('GET', `/stories/${story.id}`, { token: other.token });
   assert.equal(res.status, 404);
 
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const res2 = await api.request('GET', `/stories/${story.id}`, { token: mod.token });
   assert.equal(res2.status, 200);
   assert.equal(res2.body.data.story.id, story.id);

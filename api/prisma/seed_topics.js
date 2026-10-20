@@ -1,5 +1,5 @@
 // =============================================================================
-// Seed: topics (danh sach bai hoc do Moderator quan ly) — rev 8
+// Seed: topics (danh sach bai hoc do Specialist quan ly) — rev 8
 //
 // Thay cho seed_templates.js cua rev 6. rev 8 bo he thong templates/stages/slots:
 // AI viet ca truyen mot lan tu topic + situation, khung trang do story_layout
@@ -10,7 +10,7 @@
 
 import bcrypt from 'bcryptjs';
 
-const MODERATOR_EMAIL = 'pedagogy@storyweaver.ai';
+const SPECIALIST_EMAIL = 'pedagogy@storyweaver.ai';
 
 // guidance: vai cau huong dan noi dung, gui kem cho AI khi viet truyen
 const topicsData = [
@@ -64,21 +64,21 @@ const topicsData = [
 export async function seedTopics(prisma) {
   console.log('🌱 Seeding Topics...');
 
-  // 1. Moderator tao cac bai hoc nay (topics.created_by)
-  let moderator = await prisma.user.findUnique({ where: { email: MODERATOR_EMAIL } });
-  if (!moderator) {
+  // 1. Specialist tao cac bai hoc nay (topics.created_by)
+  let specialist = await prisma.user.findUnique({ where: { email: SPECIALIST_EMAIL } });
+  if (!specialist) {
     const passwordHash = await bcrypt.hash('PedagogySecret2026!', 10);
-    moderator = await prisma.user.create({
+    specialist = await prisma.user.create({
       data: {
-        email: MODERATOR_EMAIL,
+        email: SPECIALIST_EMAIL,
         username: 'storyweaver_pedagogy',
         fullName: 'Ban Sư Phạm StoryWeaver AI',
         passwordHash,
-        role: 'moderator',
+        role: 'specialist',
         isActive: true,
       },
     });
-    console.log('  ✓ Created pedagogy moderator:', moderator.id);
+    console.log('  ✓ Created pedagogy specialist:', specialist.id);
   }
 
   const skills = await prisma.eqSkill.findMany();
@@ -109,7 +109,7 @@ export async function seedTopics(prisma) {
         ageMin: topic.ageMin,
         ageMax: topic.ageMax,
         displayOrder: topic.displayOrder,
-        createdBy: moderator.id,
+        createdBy: specialist.id,
       },
     });
     console.log(`  ✓ "${created.title}" [${topic.caselCode}]`);

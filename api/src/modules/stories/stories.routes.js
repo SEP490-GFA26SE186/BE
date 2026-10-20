@@ -5,7 +5,7 @@ import { auth, validate } from '../../middlewares/index.js';
 
 const router = Router();
 
-// Moi route can dang nhap. Quyen theo truyen (chu truyen / moderator / admin) kiem trong
+// Moi route can dang nhap. Quyen theo truyen (chu truyen / specialist / admin) kiem trong
 // stories.access.js.
 router.use(auth);
 

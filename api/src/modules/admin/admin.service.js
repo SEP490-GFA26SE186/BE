@@ -95,7 +95,7 @@ export async function createModerator(admin, { email, username, fullName, passwo
   if (exists) throw new ApiError(StatusCodes.CONFLICT, 'Email hoặc tên đăng nhập đã được dùng.');
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { role: 'moderator', email, username, fullName, passwordHash: await bcrypt.hash(password, 10), emailVerifiedAt: new Date() },
+      data: { role: 'specialist', email, username, fullName, passwordHash: await bcrypt.hash(password, 10), emailVerifiedAt: new Date() },
       select: { id: true, email: true, username: true, fullName: true, role: true, isActive: true, createdAt: true },
     });
     await audit(tx, admin.id, 'account.create_moderator', 'user', user.id, null, { email, username });

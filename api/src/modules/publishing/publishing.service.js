@@ -115,7 +115,7 @@ async function forbiddenNamesOf(userId) {
  * POST /listings { storyId, title, description?, priceTierId, aliases: [{ token, aliasName }] }
  * Truyen rieng da hoan tat -> ban sao `published` (go ca nhan hoa) + listing `submitted` + luot duyet.
  * Ban rieng bat giong doc -> ban sao cung bat va SINH LAI giong doc bang ten chung (audio cu chua ten that,
- * khong dung lai duoc). Moderator chi nhan duyet khi giong doc xong (claimReview).
+ * khong dung lai duoc). Specialist chi nhan duyet khi giong doc xong (claimReview).
  */
 export async function createListing(user, body, narrationOptions) {
   const seller = await prisma.sellerProfile.findUnique({ where: { userId: user.id } });
@@ -206,7 +206,7 @@ export async function createListing(user, body, narrationOptions) {
   return { listing: await withNarration(formatListing(listing)) };
 }
 
-/** Tien do giong doc cua ban dang ban (nguoi ban + Moderator thay; Moderator chi duyet khi xong). */
+/** Tien do giong doc cua ban dang ban (nguoi ban + Specialist thay; Specialist chi duyet khi xong). */
 async function withNarration(listing) {
   if (!listing.hasNarration) return { ...listing, narration: null };
   const check = await loadReadiness(prisma, listing.publishedStoryId);
@@ -282,7 +282,7 @@ export async function claimReview(moderator, reviewId, { now = new Date() } = {}
     await tx.$queryRaw`SELECT id FROM moderation_reviews WHERE id = ${reviewId}::uuid FOR UPDATE`;
     const review = await loadReview(reviewId, tx);
     if (review.decidedAt) throw new ApiError(StatusCodes.CONFLICT, 'Bài này đã được quyết định.');
-    if (claimedByOther(review, moderator.id, now)) throw new ApiError(StatusCodes.CONFLICT, 'Moderator khác đang duyệt bài này.');
+    if (claimedByOther(review, moderator.id, now)) throw new ApiError(StatusCodes.CONFLICT, 'Specialist khác đang duyệt bài này.');
     await assertNarrationReady(tx, review.listing.publishedStoryId);
     await tx.moderationReview.update({
       where: { id: reviewId },
@@ -293,7 +293,7 @@ export async function claimReview(moderator, reviewId, { now = new Date() } = {}
   return getReview(moderator, reviewId, { now });
 }
 
-/** Truyen bat giong doc: phai doc xong moi duyet (Moderator nghe khi duyet; nguoi mua nhan truyen co san audio). */
+/** Truyen bat giong doc: phai doc xong moi duyet (Specialist nghe khi duyet; nguoi mua nhan truyen co san audio). */
 async function assertNarrationReady(db, storyId) {
   const check = await loadReadiness(db, storyId);
   const n = check?.narration;

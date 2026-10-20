@@ -20,7 +20,7 @@ export const DEMO_CREDITS = 50;
 
 export const DEMO_USERS = [
   { role: 'parent', email: 'me.lanhuong@storyweaver.vn', username: 'me_lanhuong', fullName: 'Mẹ Lan Hương', phone: '0901234567' },
-  { role: 'moderator', email: 'kdv@storyweaver.vn', username: 'kdv_demo', fullName: 'Kiểm duyệt viên', phone: '0907654321' },
+  { role: 'specialist', email: 'kdv@storyweaver.vn', username: 'kdv_demo', fullName: 'Chuyên gia sư phạm', phone: '0907654321' },
   { role: 'admin', email: 'admin@storyweaver.vn', username: 'admin_demo', fullName: 'Quản trị viên', phone: '0909999999' },
 ];
 

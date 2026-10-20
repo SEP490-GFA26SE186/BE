@@ -8,7 +8,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 | Khối | Trả lời câu hỏi | Bảng chính | Bảng phụ |
 |---|---|---|---|
 | **Tài khoản** (4) | Ai dùng app, con là ai, nhà có nhân vật nào? | `users`, `child_profiles`, `characters` | `auth_tokens` |
-| **Thư viện nội dung** (6) | Moderator/Admin chuẩn bị sẵn gì? | `topics` | `eq_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
+| **Thư viện nội dung** (6) | Specialist/Admin chuẩn bị sẵn gì? | `topics` | `eq_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
 | **Truyện** (8) | Một truyện gồm những gì? | `stories`, `story_pages`, `story_checkpoints` | `story_characters`, `story_scenes`, `checkpoint_options`, `narration_clips`, `bookshelf_items` |
 | **Học** (3) | Trẻ đã trả lời gì, điểm EQ ra sao? | `play_sessions`, `checkpoint_answers` | `eq_competency_stats` |
 | **AI** (1) | Đã gọi AI bao nhiêu, tốn bao nhiêu? | `ai_requests` | (prompt nằm trong dịch vụ ai/) |
@@ -43,7 +43,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 **Đăng bán**
 12. Nộp đơn người bán → `seller_profiles`.
 13. Đăng bán → bản sao `stories` (`published`) + `story_characters` dùng `alias_name` → `listings`.
-14. Moderator duyệt → `moderation_reviews`, checklist → `review_checklist_results`, đã xem từng
+14. Specialist duyệt → `moderation_reviews`, checklist → `review_checklist_results`, đã xem từng
     trang → `review_page_views`.
 
 **Mẹ Hoa mua**
@@ -118,4 +118,4 @@ DBML không diễn tả được; đã ghi trong `Note` của từng bảng, t�
 | Chuyển doanh thu treo quá 3 ngày (`market.earning_hold_days`) sang khả dụng, trừ khoản đang chờ hoàn tiền | Mỗi 15 phút |
 | Hết hạn đơn chưa thanh toán | Mỗi vài phút |
 | Tính lại bộ đếm `listings` | Admin bấm ở trang Đối soát (chưa có cron) |
-| Chọn truyện kiểm tra ngẫu nhiên cho Moderator | Hằng tuần |
+| Chọn truyện kiểm tra ngẫu nhiên cho Specialist | Hằng tuần |

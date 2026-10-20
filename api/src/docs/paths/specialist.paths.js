@@ -1,4 +1,4 @@
-// Bai hoc (topics) + tu khoa bi chan (blocked_keywords) — Moderator quan ly (rev8).
+// Bai hoc (topics) + tu khoa bi chan (blocked_keywords) — Specialist quan ly (rev8).
 const bearer = [{ BearerAuth: [] }];
 const idParam = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } };
 
@@ -29,7 +29,7 @@ export default {
       tags: ['Topics'],
       summary: 'Danh sách bài học',
       description:
-        '**Phụ huynh:** chỉ bài học đang dùng, không kèm `guidance`.\n**Moderator / Admin:** mọi bài học + `guidance`, `storiesCount`, `creator`; lọc `skillId`, `search`, `isActive`.',
+        '**Phụ huynh:** chỉ bài học đang dùng, không kèm `guidance`.\n**Specialist / Admin:** mọi bài học + `guidance`, `storiesCount`, `creator`; lọc `skillId`, `search`, `isActive`.',
       security: bearer,
       parameters: [
         { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' } },
@@ -40,16 +40,16 @@ export default {
     },
     post: {
       tags: ['Topics'],
-      summary: '[Moderator | Admin] Tạo bài học',
+      summary: '[Specialist | Admin] Tạo bài học',
       security: bearer,
       requestBody: topicBody(true),
-      responses: { 201: { description: 'Đã tạo' }, 400: { description: 'Dữ liệu sai (vd. ageMin > ageMax)' }, 403: { description: 'Không phải Moderator / Admin' } },
+      responses: { 201: { description: 'Đã tạo' }, 400: { description: 'Dữ liệu sai (vd. ageMin > ageMax)' }, 403: { description: 'Không phải Specialist / Admin' } },
     },
   },
   '/topics/{id}': {
     put: {
       tags: ['Topics'],
-      summary: '[Moderator | Admin] Sửa bài học',
+      summary: '[Specialist | Admin] Sửa bài học',
       description: 'Một bài học dùng cho nhiều truyện. Đã có truyện dùng thì **khoá năng lực CASEL** (điểm năng lực của truyện cũ phải giữ nguyên ý nghĩa).',
       security: bearer,
       parameters: [idParam],
@@ -58,7 +58,7 @@ export default {
     },
     delete: {
       tags: ['Topics'],
-      summary: '[Moderator | Admin] Xoá bài học',
+      summary: '[Specialist | Admin] Xoá bài học',
       description: 'Chưa có truyện dùng → xoá hẳn (`deleted: true`). Đã có truyện → chuyển **ngưng dùng** (`deactivated: true`), truyện cũ vẫn đọc / bán bình thường.',
       security: bearer,
       parameters: [idParam],
@@ -69,7 +69,7 @@ export default {
   '/moderation/keywords': {
     get: {
       tags: ['Moderation'],
-      summary: '[Moderator | Admin] Danh sách từ khoá bị chặn',
+      summary: '[Specialist | Admin] Danh sách từ khoá bị chặn',
       description:
         'Dùng ở hai nơi: gửi sang AI mỗi lần sinh truyện, và kiểm chữ phụ huynh tự viết / sửa trong editor. `block` → chặn hẳn (422, không lưu); `warn` → lưu được, trả `keywordWarnings`.',
       security: bearer,
@@ -81,7 +81,7 @@ export default {
     },
     post: {
       tags: ['Moderation'],
-      summary: '[Moderator | Admin] Thêm từ khoá',
+      summary: '[Specialist | Admin] Thêm từ khoá',
       description: 'Từ khoá được chuẩn hoá chữ thường + NFC. Khớp nguyên tiếng, không phân biệt hoa thường, giữ dấu.',
       security: bearer,
       requestBody: {
@@ -102,7 +102,7 @@ export default {
   '/moderation/keywords/bulk': {
     post: {
       tags: ['Moderation'],
-      summary: '[Moderator | Admin] Thêm nhiều từ khoá',
+      summary: '[Specialist | Admin] Thêm nhiều từ khoá',
       description: 'Tối đa 500 từ. Từ đã có → cập nhật mức độ và bật lại.',
       security: bearer,
       requestBody: {
@@ -123,7 +123,7 @@ export default {
   '/moderation/keywords/{id}': {
     put: {
       tags: ['Moderation'],
-      summary: '[Moderator | Admin] Đổi mức độ / bật tắt từ khoá',
+      summary: '[Specialist | Admin] Đổi mức độ / bật tắt từ khoá',
       security: bearer,
       parameters: [idParam],
       requestBody: {
@@ -138,7 +138,7 @@ export default {
     },
     delete: {
       tags: ['Moderation'],
-      summary: '[Moderator | Admin] Xoá từ khoá',
+      summary: '[Specialist | Admin] Xoá từ khoá',
       security: bearer,
       parameters: [idParam],
       responses: { 200: { description: 'Đã xoá' }, 404: { description: 'Không tìm thấy' } },

@@ -31,8 +31,8 @@ const topicBody = (over = {}) => ({
   ...over,
 });
 
-test('bai hoc: Moderator tao / sua; phu huynh khong tao duoc, chi thay bai dang dung va khong thay guidance', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+test('bai hoc: Specialist tao / sua; phu huynh khong tao duoc, chi thay bai dang dung va khong thay guidance', { skip }, async () => {
+  const mod = await createUser({ role: 'specialist' });
   const parent = await createParent();
   assert.equal((await call(parent.token, 'POST', '/topics', topicBody())).status, 403);
   const bad = await call(mod.token, 'POST', '/topics', topicBody({ ageMin: 9, ageMax: 6 }));
@@ -55,7 +55,7 @@ test('bai hoc: Moderator tao / sua; phu huynh khong tao duoc, chi thay bai dang 
 });
 
 test('bai hoc da co truyen: khoa doi nang luc; xoa -> chuyen ngung dung; bai chua dung -> xoa han', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const used = (await call(mod.token, 'POST', '/topics', topicBody())).body.data;
   const parent = await createParent();
   const child = await createChild(parent.user.id, 'Bin');
@@ -78,7 +78,7 @@ test('bai hoc da co truyen: khoa doi nang luc; xoa -> chuyen ngung dung; bai chu
 });
 
 test('tu khoa: them / trung / them nhieu / sua / xoa; chuan hoa chu thuong', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const kw = `từ thử ${Date.now()}`;
   const a = await call(mod.token, 'POST', '/moderation/keywords', { keyword: kw.toUpperCase(), severity: 'warn' });
   assert.equal(a.status, 201, JSON.stringify(a.body));
@@ -94,7 +94,7 @@ test('tu khoa: them / trung / them nhieu / sua / xoa; chuan hoa chu thuong', { s
 });
 
 test('editor: tu `block` chan han (khong luu, 422 dung o), `warn` luu + canh bao; hoan tat kiem ca truyen', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const tag = Date.now();
   const blockWord = `đánh nhau${tag}`;
   const warnWord = `hư${tag}`;

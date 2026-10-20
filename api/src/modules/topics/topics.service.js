@@ -1,10 +1,10 @@
-// Bai hoc (topics) do Moderator soan, gan mot nang luc CASEL (rev8 thay khuon truyen / template).
-// Mot bai hoc dung cho nhieu truyen. Phu huynh chon bai hoc khi tao truyen; Moderator them / sua / an / xoa.
+// Bai hoc (topics) do Specialist soan, gan mot nang luc CASEL (rev8 thay khuon truyen / template).
+// Mot bai hoc dung cho nhieu truyen. Phu huynh chon bai hoc khi tao truyen; Specialist them / sua / an / xoa.
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 
-const MANAGERS = new Set(['moderator', 'admin']);
+const MANAGERS = new Set(['specialist', 'admin']);
 
 const PARENT_SELECT = {
   id: true,
@@ -38,7 +38,7 @@ const MANAGED_INCLUDE = {
 
 /**
  * GET /topics. Phu huynh: chi bai hoc dang dung, khong kem `guidance` (huong dan cho AI).
- * Moderator / Admin: moi bai hoc + guidance + so truyen dang dung, loc skillId / search / isActive.
+ * Specialist / Admin: moi bai hoc + guidance + so truyen dang dung, loc skillId / search / isActive.
  */
 const listTopics = async (user, { skillId, search, isActive } = {}) => {
   if (!MANAGERS.has(user?.role)) {

@@ -40,7 +40,7 @@ export default {
       summary: '[Admin] Tài khoản',
       security: bearer,
       parameters: [
-        query('role', { type: 'string', enum: ['all', 'parent', 'moderator', 'admin'] }),
+        query('role', { type: 'string', enum: ['all', 'parent', 'specialist', 'admin'] }),
         query('status', { type: 'string', enum: ['all', 'active', 'locked'] }),
         query('search', { type: 'string' }),
         query('page', { type: 'integer' }),
@@ -63,7 +63,7 @@ export default {
   '/admin/accounts/moderators': {
     post: {
       tags: ['Admin'],
-      summary: '[Admin] Tạo tài khoản Kiểm duyệt viên',
+      summary: '[Admin] Tạo tài khoản Chuyên gia sư phạm',
       security: bearer,
       requestBody: json(obj({ email: { type: 'string' }, username: { type: 'string' }, fullName: { type: 'string' }, password: { type: 'string', minLength: 8 } }, ['email', 'username', 'fullName', 'password'])),
       responses: { 201: { description: '{ account }' }, 409: { description: 'Email / tên đăng nhập đã dùng' } },
@@ -159,7 +159,7 @@ export default {
   '/admin/audit-logs': {
     get: {
       tags: ['Admin'],
-      summary: '[Admin] Nhật ký thao tác (Admin + Moderator)',
+      summary: '[Admin] Nhật ký thao tác (Admin + Specialist)',
       security: bearer,
       parameters: [query('action', { type: 'string', example: 'refund' }), query('page', { type: 'integer' }), query('limit', { type: 'integer' })],
       responses: { 200: { description: '{ prefixes, logs, pagination }' } },

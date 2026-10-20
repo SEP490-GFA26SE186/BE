@@ -8,7 +8,7 @@ import ApiError from '../utils/ApiError.js';
  *
  * @example
  * router.get('/admin-only', auth, authorize('admin'), controller.adminDashboard);
- * router.get('/mod-or-admin', auth, authorize('admin', 'moderator'), controller.list);
+ * router.get('/mod-or-admin', auth, authorize('admin', 'specialist'), controller.list);
  */
 const authorize = (...allowedRoles) => (req, _res, next) => {
   if (!req.user) {
