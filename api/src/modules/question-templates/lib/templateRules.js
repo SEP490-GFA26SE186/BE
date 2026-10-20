@@ -53,6 +53,9 @@ export const checkpointTypeFor = (format, needsTarget) => {
  */
 export const scoreFor = (version, { correct, role } = {}) => {
   const format = version.answerFormat ?? version.template?.answerFormat;
-  if (format === 'role_choice') return Number(version[`${role}Score`]);
+  if (format === 'role_choice') {
+    if (!ROLES.includes(role)) throw new Error(`scoreFor: role_choice cần role hợp lệ (${ROLES.join(', ')}), nhận "${role}"`);
+    return Number(version[`${role}Score`]);
+  }
   return correct ? 1 : 0;
 };

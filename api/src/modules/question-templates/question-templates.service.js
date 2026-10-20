@@ -13,7 +13,13 @@ const SUB_SKILL = { select: { id: true, nameVi: true, skillId: true } };
 const INCLUDE = { subSkill: SUB_SKILL, versions: { orderBy: { version: 'desc' } } };
 
 /** Decimal -> Number de tra JSON. */
-const formatVersion = (v) => v && { ...v, ...Object.fromEntries(SCORES.map((k) => [k, v[k] == null ? null : Number(v[k])])) };
+const formatVersion = (v) =>
+  v && {
+    ...v,
+    ...Object.fromEntries(SCORES.map((k) => [k, v[k] == null ? null : Number(v[k])])),
+    allowedEmotions: v.allowedEmotions ?? [],
+    parentPrompts: v.parentPrompts ?? [],
+  };
 
 const formatTemplate = (t) => {
   const { versions, ...rest } = t;
@@ -81,7 +87,9 @@ const saveDraft = async (user, id, body) => {
   const draft = t.versions.find((v) => v.status === 'draft');
   try {
     if (draft) {
-      await prisma.questionTemplateVersion.update({ where: { id: draft.id }, data });
+      // Chan dua voi publish: chi ghi khi hang van la nhap
+      const res = await prisma.questionTemplateVersion.updateMany({ where: { id: draft.id, status: 'draft' }, data });
+      if (res.count === 0) throw ApiError.conflict('Bản nháp vừa được ban hành, hãy tải lại.');
     } else {
       const latest = t.versions.find((v) => v.status === 'published');
       await prisma.questionTemplateVersion.create({

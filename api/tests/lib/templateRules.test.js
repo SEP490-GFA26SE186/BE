@@ -46,3 +46,9 @@ test('assertVersionComplete: parentPrompts 2-3, cam xuc, diem', () => {
   assert.match(code(() => assertVersionComplete('role_choice', { ...role, avoidantScore: 1 })).message, /constructiveScore/);
   assert.match(code(() => assertVersionComplete('role_choice', { ...role, impulsiveScore: null })).message, /impulsiveScore/);
 });
+
+test('scoreFor: role_choice thieu / sai role -> nem loi (loi lap trinh)', () => {
+  const v = { answerFormat: 'role_choice', constructiveScore: 1, avoidantScore: 0.5, impulsiveScore: 0 };
+  assert.throws(() => scoreFor(v, {}), /role/);
+  assert.throws(() => scoreFor(v, { role: 'bogus' }), /role/);
+});
