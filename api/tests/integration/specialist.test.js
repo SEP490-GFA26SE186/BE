@@ -6,11 +6,19 @@ import { prisma, createParent, createUser, createChild, createCharacter, startSe
 const skip = !hasTestDb;
 let api;
 let skills;
+let usable; // caselCode -> ky nang con dang bat, co mau ban hanh (seed)
 
 before(async () => {
   if (skip) return;
   api = await startServer();
   skills = Object.fromEntries((await prisma.eqSkill.findMany()).map((s) => [s.caselCode, s]));
+  usable = {};
+  for (const s of Object.values(skills)) {
+    usable[s.caselCode] = await prisma.eqSubSkill.findMany({
+      where: { skillId: s.id, isActive: true, ageMin: { lte: 8 }, ageMax: { gte: 5 }, templates: { some: { isActive: true, versions: { some: { status: 'published' } } } } },
+      orderBy: { displayOrder: 'asc' },
+    });
+  }
 });
 
 // Bai hoc thu nam cuoi danh sach va ngung dung khi xong: getSeededTopic() cua test khac lay bai dang dung dau tien.
@@ -24,6 +32,7 @@ const call = (token, method, path, body) => api.request(method, path, { token, b
 const topicBody = (over = {}) => ({
   title: `Bài học thử ${Date.now()}`,
   skillId: skills.self_management.id,
+  subSkillIds: usable.self_management.slice(0, 1).map((x) => x.id),
   guidance: 'Giúp bé hít thở và nói ra cảm xúc khi giận.',
   ageMin: 5,
   ageMax: 8,
@@ -48,10 +57,65 @@ test('bai hoc: Specialist tao / sua; phu huynh khong tao duoc, chi thay bai dang
   assert.ok(!parentList.some((x) => x.id === t.id), 'bai ngung dung an voi phu huynh');
   assert.ok(parentList.every((x) => x.guidance === undefined));
 
-  const upd = await call(mod.token, 'PUT', `/topics/${t.id}`, { isActive: true, skillId: skills.self_awareness.id });
+  const upd = await call(mod.token, 'PUT', `/topics/${t.id}`, { isActive: true, skillId: skills.self_awareness.id, subSkillIds: [usable.self_awareness[0].id] });
   assert.equal(upd.status, 200, JSON.stringify(upd.body));
   assert.equal(upd.body.data.skill.caselCode, 'self_awareness', 'chua co truyen -> doi nang luc duoc');
   assert.ok((await call(parent.token, 'GET', '/topics')).body.data.some((x) => x.id === t.id));
+});
+
+test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban hanh', { skip }, async () => {
+  const mod = await createUser({ role: 'specialist' });
+  const parent = await createParent();
+  const two = usable.self_management.slice(0, 2).map((x) => x.id);
+  const post = (over) => call(mod.token, 'POST', '/topics', topicBody(over));
+
+  const { subSkillIds: _omit, ...noSub } = topicBody();
+  assert.equal((await call(mod.token, 'POST', '/topics', noSub)).status, 400, 'thieu subSkillIds');
+  assert.equal((await post({ subSkillIds: [] })).status, 400);
+  assert.equal((await post({ subSkillIds: [two[0], two[0]] })).status, 400, 'trung');
+  const four = [...usable.self_management, ...usable.self_awareness].slice(0, 4).map((x) => x.id);
+  assert.equal((await post({ subSkillIds: four })).status, 400, '4 ky nang con');
+
+  const other = await post({ subSkillIds: [usable.self_awareness[0].id] });
+  assert.equal(other.status, 422, JSON.stringify(other.body));
+  assert.ok(other.body.message.includes(usable.self_awareness[0].nameVi));
+
+  const old = await prisma.eqSubSkill.create({
+    data: {
+      skillId: skills.self_management.id, caselReferenceId: usable.self_management[0].caselReferenceId, code: `thu_${Date.now()}`,
+      nameVi: `Kỹ năng thử tuổi ${Date.now()}`, descriptionVi: 'x', ageMin: 12, ageMax: 15, createdBy: mod.user.id,
+    },
+  });
+  const noAge = await post({ subSkillIds: [old.id] });
+  assert.equal(noAge.status, 422, JSON.stringify(noAge.body));
+  assert.ok(noAge.body.message.includes(old.nameVi));
+
+  const nameNoTpl = `Kỹ năng thử chưa mẫu ${Date.now()}`;
+  const noTpl = await prisma.eqSubSkill.create({
+    data: { skillId: skills.self_management.id, caselReferenceId: usable.self_management[0].caselReferenceId, code: `thu2_${Date.now()}`, nameVi: nameNoTpl, descriptionVi: 'x', createdBy: mod.user.id },
+  });
+  const noPub = await post({ subSkillIds: [noTpl.id] });
+  assert.equal(noPub.status, 422, JSON.stringify(noPub.body));
+  assert.ok(noPub.body.message.includes(nameNoTpl));
+  await prisma.eqSubSkill.updateMany({ where: { id: { in: [old.id, noTpl.id] } }, data: { isActive: false } });
+
+  const ok = await post({ subSkillIds: two });
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  assert.equal(ok.body.data.subSkills.length, 2);
+  assert.ok(ok.body.data.subSkills.every((x) => x.id && x.nameVi && x.caselReference?.textEn));
+  const pl = (await call(parent.token, 'GET', '/topics')).body.data;
+  assert.ok(pl.length > 0 && pl.every((x) => Array.isArray(x.subSkills) && x.subSkills.length >= 1 && x.subSkills.every((y) => y.id && y.nameVi && y.caselReference === undefined)));
+
+  // update: thay toan bo lien ket; doi nang luc ma khong gui subSkillIds -> 422; doi tuoi khong giao -> 422
+  const id = ok.body.data.id;
+  const swap = await call(mod.token, 'PUT', `/topics/${id}`, { subSkillIds: [two[1]] });
+  assert.equal(swap.status, 200, JSON.stringify(swap.body));
+  assert.deepEqual(swap.body.data.subSkills.map((x) => x.id), [two[1]]);
+  assert.equal((await call(mod.token, 'PUT', `/topics/${id}`, { skillId: skills.self_awareness.id })).status, 422);
+  assert.equal((await call(mod.token, 'PUT', `/topics/${id}`, { subSkillIds: [usable.self_awareness[0].id] })).status, 422);
+  const ages = await call(mod.token, 'PUT', `/topics/${id}`, { ageMin: 16, ageMax: 17 });
+  assert.equal(ages.status, 422, JSON.stringify(ages.body));
+  assert.equal((await prisma.topicSubSkill.count({ where: { topicId: id } })), 1, 'loi thi giu nguyen lien ket');
 });
 
 test('bai hoc da co truyen: khoa doi nang luc; xoa -> chuyen ngung dung; bai chua dung -> xoa han', { skip }, async () => {

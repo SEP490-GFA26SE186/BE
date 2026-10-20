@@ -122,6 +122,7 @@ test('ky nang con: xoa khi da gan topic -> 409; tat OK; chua dung -> xoa han', {
   const topic = await call(mod.token, 'POST', '/topics', {
     title: `Bài học thử ks ${Date.now()}`,
     skillId: skills.self_management.id,
+    subSkillIds: [(await prisma.eqSubSkill.findFirst({ where: { skillId: skills.self_management.id, isActive: true, templates: { some: { isActive: true, versions: { some: { status: 'published' } } } } } })).id],
     guidance: 'Giúp bé hít thở và nói ra cảm xúc khi giận.',
     isActive: false,
   });

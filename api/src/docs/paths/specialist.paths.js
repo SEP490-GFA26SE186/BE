@@ -8,10 +8,18 @@ const topicBody = (required) => ({
     'application/json': {
       schema: {
         type: 'object',
-        ...(required && { required: ['title', 'skillId', 'guidance'] }),
+        ...(required && { required: ['title', 'skillId', 'subSkillIds', 'guidance'] }),
         properties: {
           title: { type: 'string', example: 'Khi bé giận em' },
           skillId: { type: 'string', format: 'uuid', description: 'Năng lực CASEL. Bài học đã có truyện dùng thì không đổi được (422).' },
+          subSkillIds: {
+            type: 'array',
+            items: { type: 'string', format: 'uuid' },
+            minItems: 1,
+            maxItems: 3,
+            description:
+              '1-3 kỹ năng con, không trùng. Mỗi kỹ năng con phải đang bật, cùng năng lực CASEL, khoảng tuổi giao với bài học, và có mẫu đang bật đã ban hành (sai -> 422 nêu tên). Khi sửa: thay toàn bộ liên kết; đổi `skillId` thì bắt buộc gửi lại.',
+          },
           guidance: { type: 'string', description: 'Hướng dẫn cho AI viết truyện (phụ huynh không thấy).' },
           ageMin: { type: 'integer', minimum: 1, maximum: 18, default: 5 },
           ageMax: { type: 'integer', minimum: 1, maximum: 18, default: 8 },
@@ -190,14 +198,14 @@ export default {
         { name: 'search', in: 'query', schema: { type: 'string' } },
         { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
       ],
-      responses: { 200: { description: 'Mảng bài học trong `data`' } },
+      responses: { 200: { description: 'Mảng bài học trong `data`. Phụ huynh: `subSkills: [{ id, nameVi }]`; Specialist / Admin: `subSkills: [{ id, nameVi, caselReference: { textEn } }]`' } },
     },
     post: {
       tags: ['Topics'],
       summary: '[Specialist | Admin] Tạo bài học',
       security: bearer,
       requestBody: topicBody(true),
-      responses: { 201: { description: 'Đã tạo' }, 400: { description: 'Dữ liệu sai (vd. ageMin > ageMax)' }, 403: { description: 'Không phải Specialist / Admin' } },
+      responses: { 201: { description: 'Đã tạo' }, 400: { description: 'Dữ liệu sai (vd. ageMin > ageMax)' }, 403: { description: 'Không phải Specialist / Admin' }, 422: { description: 'Kỹ năng con khác năng lực / không giao tuổi / chưa có mẫu ban hành' } },
     },
   },
   '/topics/{id}': {
@@ -208,7 +216,7 @@ export default {
       security: bearer,
       parameters: [idParam],
       requestBody: topicBody(false),
-      responses: { 200: { description: 'Đã sửa' }, 404: { description: 'Không tìm thấy' }, 422: { description: 'Đổi năng lực khi đã có truyện dùng' } },
+      responses: { 200: { description: 'Đã sửa' }, 404: { description: 'Không tìm thấy' }, 422: { description: 'Đổi năng lực khi đã có truyện dùng, hoặc kỹ năng con không hợp lệ' } },
     },
     delete: {
       tags: ['Topics'],
