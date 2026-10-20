@@ -302,6 +302,7 @@ GUIDE_CASES = {
     "distractor_desc_on_emotion": (0, make_guide("emotion_self", distractor_desc="x")),
     "guide_on_reflection": (3, make_guide("emotion_self")),
     "unknown_emotion": (0, make_guide("emotion_self", allowed_emotions=["bored"])),
+    "hint_guidance_on_problem_solving": (2, make_guide("problem_solving", hint_guidance="x")),
 }  # fmt: skip
 
 

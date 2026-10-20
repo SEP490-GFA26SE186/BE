@@ -211,6 +211,10 @@ def _guide_errors(cp: CheckpointFrame) -> list[str]:
             f"checkpoint '{cp.id}' kiểu {kind}: guide.allowed_emotions chỉ dùng cho emotion_self, "
             "emotion_other"
         )
+    if g.hint_guidance is not None and cp.type is CheckpointType.PROBLEM_SOLVING:
+        errors.append(
+            f"checkpoint '{cp.id}' kiểu problem_solving không có hint, bỏ guide.hint_guidance"
+        )
     for name in ("correct_desc", "distractor_desc"):
         if getattr(g, name) is not None and cp.type is not CheckpointType.PERSPECTIVE:
             errors.append(f"checkpoint '{cp.id}' kiểu {kind}: guide.{name} chỉ dùng cho perspective")

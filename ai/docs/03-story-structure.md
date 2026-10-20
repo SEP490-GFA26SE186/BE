@@ -25,11 +25,14 @@ Từ 2026-10-20, Node điền **mỗi điểm dừng có chấm** từ một m�
 kèm `guide` (docs 05). Khung (số trang, kiểu, vị trí điểm dừng) vẫn do backend quyết; `guide`
 quyết **nội dung** từng điểm dừng:
 
-- `question` viết theo `question_frame`; `hint` theo `hint_guidance`.
-- Trang ngay trước điểm dừng làm đúng `page_setup` (thay cho quy tắc mặc định theo kiểu ở mục dưới).
+- Các dòng mẫu là **mô tả ý định**, viết cho người lớn và dùng lại cho nhiều truyện: AI **không
+  chép nguyên văn**, mà viết lời vừa tầm trẻ, gắn với nhân vật (token), đồ vật, sự việc của truyện này.
+- `question` đúng ý `question_frame`; `hint` đúng ý `hint_guidance` (không dùng cho `problem_solving`).
+- Trang ngay trước điểm dừng làm đúng ý `page_setup`; guide thiếu `page_setup` thì dùng quy tắc mặc
+  định theo kiểu ở mục dưới.
 - `emotion_*`: `answer` chọn trong `allowed_emotions` (validator `EMOTION_NOT_ALLOWED`).
-- `perspective`: phương án đúng theo `correct_desc`, hai phương án nhiễu theo `distractor_desc`.
-- `problem_solving`: `text` của mỗi vai làm đúng `roles.<vai>`; ba vai vẫn cố định.
+- `perspective`: phương án đúng đúng ý `correct_desc`, hai phương án nhiễu đúng ý `distractor_desc`.
+- `problem_solving`: `text` của mỗi vai là hành động cụ thể đúng ý `roles.<vai>`; ba vai vẫn cố định.
 - Topic có `age_min` / `age_max` → prompt viết cho "trẻ {min}–{max} tuổi"; có `sub_skills` → liệt kê
   kỹ năng con của bài học.
 

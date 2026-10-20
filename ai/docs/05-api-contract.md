@@ -52,7 +52,7 @@ có điểm, không có `rationale` (field lạ → `INVALID_INPUT`).
 | `sub_skill` | string | mọi kiểu có chấm — tên kỹ năng con điểm dừng này luyện |
 | `question_frame` | string | mọi kiểu có chấm — câu hỏi phải viết theo khung này |
 | `page_setup` | string \| null | trang ngay trước điểm dừng phải làm gì |
-| `hint_guidance` | string \| null | `hint` viết theo hướng này |
+| `hint_guidance` | string \| null | `hint` viết theo hướng này; không dùng cho `problem_solving` (kiểu này không có hint) |
 | `allowed_emotions` | `[emotion]` \| null | chỉ `emotion_self` / `emotion_other`; `answer` phải thuộc danh sách (không rỗng) — sai thì `EMOTION_NOT_ALLOWED` (thử lại) |
 | `correct_desc`, `distractor_desc` | string \| null | chỉ `perspective` — mô tả phương án đúng / nhiễu |
 | `roles` | `{constructive, avoidant, impulsive}` \| null | chỉ `problem_solving` — mô tả từng vai; vai vẫn cố định |

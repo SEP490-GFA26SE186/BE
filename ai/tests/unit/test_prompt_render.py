@@ -217,3 +217,32 @@ def test_render_v2_keeps_seven_principles(settings) -> None:
     assert "# Bảy nguyên tắc nội dung" in prompt
     for n in range(1, 8):
         assert f"\n{n}. " in prompt
+
+
+# ---- Task 11 fix round 1 ----
+
+
+def test_render_tells_the_model_never_to_copy_the_guide(settings) -> None:
+    prompt = render_story_prompt(make_frame("long", guides=True), settings)
+    assert "KHÔNG chép hướng dẫn của chuyên gia" in prompt
+    assert "MÔ TẢ Ý ĐỊNH" in prompt
+    assert "đúng ý mô tả" in prompt
+    assert "theo đúng mô tả" not in prompt and "làm đúng mô tả" not in prompt
+    for label in (
+        "Mô tả phương án đúng:", "Mô tả phương án nhiễu:", "Mô tả vai constructive:",
+        "Mô tả vai avoidant:", "Mô tả vai impulsive:",
+    ):  # fmt: skip
+        assert label in prompt, label
+
+
+def test_render_guide_without_page_setup_gets_the_type_default(settings) -> None:
+    from tests.fixtures.frames import make_guide
+
+    req = make_frame("long", guides=True)
+    payload = req.model_dump(mode="json", by_alias=True)
+    ps = next(c for c in payload["checkpoints"] if c["type"] == "problem_solving")
+    ps["guide"] = make_guide("problem_solving", page_setup=None)
+    prompt = render_story_prompt(StoryGenerateRequest.model_validate(payload), settings)
+    assert "Trang ngay trước điểm dừng problem_solving" in prompt
+    # The guided types that do carry a page_setup do not get the default.
+    assert "Trang ngay trước điểm dừng perspective" not in prompt

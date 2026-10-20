@@ -30,18 +30,18 @@ _DEFAULT_AGE_RANGE = "trẻ 5–8 tuổi"
 # than the task-10 contract); a guided checkpoint gets its own `page_setup` instead.
 _DEFAULT_PAGE_SETUP: dict[CheckpointType, str] = {
     CheckpointType.EMOTION_SELF: (
-        "- Trang ngay trước điểm dừng emotion_self hoặc emotion_other không có hướng dẫn riêng: "
-        "lời kể có dấu hiệu cảm xúc cụ thể\n"
+        "- Trang ngay trước điểm dừng emotion_self hoặc emotion_other không có dòng "
+        '"Trang ngay trước phải": lời kể có dấu hiệu cảm xúc cụ thể\n'
         "  (mặt đỏ, tay nắm chặt, giọng run, mắt ngấn nước...) để câu gợi ý nhắc lại được. Nếu "
         'viết "{NV1} đang giận" thì câu hỏi trở nên vô nghĩa.'
     ),
     CheckpointType.PERSPECTIVE: (
-        "- Trang ngay trước điểm dừng perspective không có hướng dẫn riêng: có một sự việc gây ra "
-        "phản ứng của nhân vật khác."
+        "- Trang ngay trước điểm dừng perspective không có dòng "
+        '"Trang ngay trước phải": có một sự việc gây ra phản ứng của nhân vật khác.'
     ),
     CheckpointType.PROBLEM_SOLVING: (
-        "- Trang ngay trước điểm dừng problem_solving không có hướng dẫn riêng: cao trào, nhân "
-        "vật chính đứng trước một lựa chọn."
+        "- Trang ngay trước điểm dừng problem_solving không có dòng "
+        '"Trang ngay trước phải": cao trào, nhân vật chính đứng trước một lựa chọn.'
     ),
 }
 _SETUP_KEY = {CheckpointType.EMOTION_OTHER: CheckpointType.EMOTION_SELF}
@@ -88,32 +88,34 @@ def _checkpoint_block(cp: CheckpointFrame) -> str:
     lines = [
         head,
         f"  - Kỹ năng con: {g.sub_skill}",
-        f"  - Câu hỏi viết theo khung: {g.question_frame}",
+        f"  - Khung câu hỏi: {g.question_frame}",
     ]
     if g.page_setup:
         lines.append(f"  - Trang ngay trước phải ({cp.after}): {g.page_setup}")
     if g.hint_guidance:
-        lines.append(f"  - Gợi ý (hint): {g.hint_guidance}")
+        lines.append(f"  - Hướng gợi ý (hint): {g.hint_guidance}")
     if g.allowed_emotions:
         allowed = ", ".join(e.value for e in g.allowed_emotions)
         lines.append(f"  - Cảm xúc được chọn làm answer: {allowed}")
     if g.correct_desc:
-        lines.append(f"  - Phương án đúng: {g.correct_desc}")
+        lines.append(f"  - Mô tả phương án đúng: {g.correct_desc}")
     if g.distractor_desc:
-        lines.append(f"  - Phương án nhiễu: {g.distractor_desc}")
+        lines.append(f"  - Mô tả phương án nhiễu: {g.distractor_desc}")
     if g.roles:
-        lines.append(f"  - Vai constructive: {g.roles.constructive}")
-        lines.append(f"  - Vai avoidant: {g.roles.avoidant}")
-        lines.append(f"  - Vai impulsive: {g.roles.impulsive}")
+        lines.append(f"  - Mô tả vai constructive: {g.roles.constructive}")
+        lines.append(f"  - Mô tả vai avoidant: {g.roles.avoidant}")
+        lines.append(f"  - Mô tả vai impulsive: {g.roles.impulsive}")
     return "\n".join(lines)
 
 
 def _default_page_setup(req: StoryGenerateRequest) -> str:
-    """v1 page-setup bullets for the unguided scored checkpoints, one per type, in v1 order."""
+    """v1 page-setup bullets for scored checkpoints with no `page_setup` of their own (no guide,
+    or a guide that left it out), one per type, in v1 order."""
     needed = {
         _SETUP_KEY.get(cp.type, cp.type)
         for cp in req.checkpoints
-        if cp.guide is None and cp.type is not CheckpointType.REFLECTION
+        if (cp.guide is None or not cp.guide.page_setup)
+        and cp.type is not CheckpointType.REFLECTION
     }
     return "".join(f"{text}\n" for t, text in _DEFAULT_PAGE_SETUP.items() if t in needed)
 

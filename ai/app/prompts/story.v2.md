@@ -49,7 +49,7 @@ $checkpoints
 
 Mỗi trang phải phục vụ điểm dừng đứng ngay sau nó:
 
-- Điểm dừng có "Trang ngay trước phải": trang ngay trước nó làm đúng điều đó.
+- Điểm dừng có "Trang ngay trước phải": trang ngay trước nó làm đúng ý điều đó.
 - Trang ngay trước một câu hỏi cảm xúc (emotion_self, emotion_other) KHÔNG nói thẳng tên cảm xúc
   là đáp án; chỉ tả dấu hiệu cụ thể để câu gợi ý nhắc lại được.
 $default_page_setup- Các trang sau điểm dừng problem_solving: mạch chính đi theo hướng làm lành, sửa sai, bất kể trẻ
@@ -59,8 +59,14 @@ $default_page_setup- Các trang sau điểm dừng problem_solving: mạch chín
 # Điểm dừng theo kiểu
 
 Chỉ viết các trường được nêu cho từng kiểu, không thêm trường khác. Khi điểm dừng có hướng dẫn
-của chuyên gia: question viết theo "Câu hỏi viết theo khung"; hint theo "Gợi ý"; các phương án
-theo đúng mô tả được giao. Hướng dẫn chỉ quyết nội dung; hình dạng các trường vẫn theo quy tắc dưới.
+của chuyên gia: question đúng ý "Khung câu hỏi"; hint đúng ý "Hướng gợi ý"; các phương án đúng ý
+các dòng "Mô tả ...". Hướng dẫn chỉ quyết nội dung; hình dạng các trường vẫn theo quy tắc dưới.
+
+KHÔNG chép hướng dẫn của chuyên gia. Các dòng hướng dẫn là MÔ TẢ Ý ĐỊNH, viết cho người lớn và dùng
+lại cho rất nhiều truyện khác nhau. Hãy tự viết question, hint và từng phương án bằng lời ngắn, vừa
+tầm trẻ, gắn với chính truyện này: nhân vật (dùng token), đồ vật và sự việc trong truyện. Mỗi
+phương án là một hành động hoặc một lý do cụ thể trong truyện, đúng ý của mô tả, không lặp lại
+nguyên văn câu mô tả.
 
 - emotion_self: question về cảm xúc của nhân vật chính tại một thời điểm; answer là một trong năm
   giá trị happy, sad, angry, scared, neutral (nếu hướng dẫn có "Cảm xúc được chọn làm answer" thì
@@ -70,11 +76,12 @@ theo đúng mô tả được giao. Hướng dẫn chỉ quyết nội dung; hì
 - perspective: question hỏi vì sao một nhân vật lại phản ứng như vậy (nhân vật được nêu ở phần
   "hỏi về" nếu có); đúng ba options với option_id o1, o2, o3, mỗi option chỉ có text; answer là
   option_id của phương án đúng; hint. Một phương án đúng rõ ràng, hai phương án nhiễu hợp lý nhưng
-  rõ là sai, không đánh đố, không đùa cợt. Có "Phương án đúng" / "Phương án nhiễu" thì viết theo đó.
+  rõ là sai, không đánh đố, không đùa cợt. Có "Mô tả phương án đúng" / "Mô tả phương án nhiễu"
+  thì viết đúng ý mô tả, bằng chi tiết của truyện này.
 - problem_solving: question về việc nhân vật chính có thể làm; đúng ba options theo ba role
   constructive (xây dựng), avoidant (né tránh), impulsive (bốc đồng), mỗi option có text và
-  feedback; có "Vai constructive / avoidant / impulsive" thì text của vai đó làm đúng mô tả, không
-  đổi vai. Ba hành động đều có thể xảy ra với trẻ thật; impulsive không được là hành vi nguy hiểm.
+  feedback; có "Mô tả vai constructive / avoidant / impulsive" thì text của vai đó đúng ý mô tả,
+  bằng hành động cụ thể trong truyện này, không đổi vai. Ba hành động đều có thể xảy ra với trẻ thật; impulsive không được là hành vi nguy hiểm.
   feedback là hệ quả tự nhiên, không phán xét. Không có đáp án đúng.
 - reflection: chỉ có question, mở và nhẹ nhàng, không bắt trẻ thú nhận điều xấu.
 
