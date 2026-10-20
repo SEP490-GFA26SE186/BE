@@ -11,7 +11,7 @@ def _sample() -> StoryGenerateRequest:
 
 
 def test_prompt_version_from_front_matter() -> None:
-    assert PROMPT_VERSION == "story.v1"
+    assert PROMPT_VERSION == "story.v2"
 
 
 def test_render_sample(settings) -> None:
@@ -20,7 +20,7 @@ def test_render_sample(settings) -> None:
     assert "{NV1}" in prompt  # the literal token survives (no str.format / f-string)
     assert str(req.limits.page_max_words) in prompt
     assert "$" not in prompt  # every placeholder substituted
-    assert "version: story.v1" not in prompt  # front matter is not sent to the model
+    assert "version: story.v2" not in prompt  # front matter is not sent to the model
     for page_id in req.pages:
         assert page_id in prompt
     for cp in req.checkpoints:
@@ -149,3 +149,71 @@ def test_render_keeps_the_parent_story_main_events(settings) -> None:
     prompt = render_story_prompt(make_frame("medium"), settings)
     assert "làm cảm hứng" not in prompt
     assert "diễn biến chính" in prompt
+
+
+# ---- Task 11: story.v2 follows the Specialist guide of each checkpoint ----
+
+
+def test_render_guided_checkpoints_follow_their_guide(settings) -> None:
+    req = make_frame("long", guides=True)
+    prompt = render_story_prompt(req, settings)
+    assert "$" not in prompt
+    for cp in req.checkpoints:
+        if cp.guide is None:
+            continue
+        assert cp.guide.question_frame in prompt
+        assert cp.guide.page_setup in prompt
+        assert cp.guide.sub_skill in prompt
+    ps = next(cp for cp in req.checkpoints if cp.type.value == "problem_solving")
+    for text in (ps.guide.roles.constructive, ps.guide.roles.avoidant, ps.guide.roles.impulsive):
+        assert text in prompt
+    persp = next(cp for cp in req.checkpoints if cp.type.value == "perspective")
+    assert persp.guide.correct_desc in prompt and persp.guide.distractor_desc in prompt
+    emo = next(cp for cp in req.checkpoints if cp.type.value == "emotion_other")
+    block = prompt.split(f"- {emo.id}:", 1)[1].split("\n- k", 1)[0]
+    assert "sad, scared" in block
+    assert emo.guide.hint_guidance in block
+
+
+def test_render_uses_topic_age_range(settings) -> None:
+    prompt = render_story_prompt(make_frame("medium", guides=True), settings)
+    assert "6–9 tuổi" in prompt
+    assert "5–8" not in prompt
+
+
+def test_render_falls_back_to_default_age_range(settings) -> None:
+    prompt = render_story_prompt(make_frame("medium"), settings)
+    assert "trẻ 5–8 tuổi" in prompt
+
+
+def test_render_lists_sub_skills(settings) -> None:
+    from tests.fixtures.frames import SUB_SKILLS
+
+    prompt = render_story_prompt(make_frame("medium", guides=True), settings)
+    line = next(ln for ln in prompt.splitlines() if ln.startswith("Kỹ năng con"))
+    assert SUB_SKILLS[0]["name"] in prompt and SUB_SKILLS[1]["description"] in prompt
+    assert line  # header present
+    assert "Kỹ năng con của bài học: (không có)" in render_story_prompt(
+        make_frame("medium"), settings
+    )
+
+
+def test_render_unguided_checkpoint_line_is_unchanged_from_v1(settings) -> None:
+    prompt = render_story_prompt(make_frame("long"), settings)
+    assert "- k2: kiểu perspective, sau trang p4, hỏi về {NV2}" in prompt.splitlines()
+    # Old callers keep the v1 per-type page setup as a default.
+    assert "Trang ngay trước điểm dừng problem_solving" in prompt
+
+
+def test_render_fully_guided_frame_drops_the_v1_default_setup(settings) -> None:
+    prompt = render_story_prompt(make_frame("long", guides=True), settings)
+    assert "Trang ngay trước điểm dừng problem_solving" not in prompt
+    # Rule kept for every frame: after problem_solving the story heads to making up.
+    assert "làm lành" in prompt
+
+
+def test_render_v2_keeps_seven_principles(settings) -> None:
+    prompt = render_story_prompt(make_frame("medium", guides=True), settings)
+    assert "# Bảy nguyên tắc nội dung" in prompt
+    for n in range(1, 8):
+        assert f"\n{n}. " in prompt

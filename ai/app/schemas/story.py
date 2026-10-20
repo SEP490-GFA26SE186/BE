@@ -41,13 +41,31 @@ class ProblemSolvingRole(StrEnum):
     IMPULSIVE = "impulsive"
 
 
-_NEEDS_TARGET = {CheckpointType.EMOTION_OTHER, CheckpointType.PERSPECTIVE}
+# Perspective may ask "why" about the scene in general (task-10 contract), so only
+# emotion_other still needs to know whose feeling it asks about.
+_NEEDS_TARGET = {CheckpointType.EMOTION_OTHER}
+_EMOTION_TYPES = {CheckpointType.EMOTION_SELF, CheckpointType.EMOTION_OTHER}
+
+
+class SubSkillIn(StrictModel):
+    name: str
+    description: str
 
 
 class Topic(StrictModel):
     title: str
     competency: Competency
     guidance: str
+    # Optional until Node sends them (task-10 contract); the prompt falls back to 5-8.
+    age_min: PositiveInt | None = None
+    age_max: PositiveInt | None = None
+    sub_skills: list[SubSkillIn] = []
+
+    @model_validator(mode="after")
+    def _age_range_ordered(self) -> "Topic":
+        if self.age_min is not None and self.age_max is not None and self.age_min > self.age_max:
+            raise ValueError("cần age_min <= age_max")
+        return self
 
 
 class CharacterIn(StrictModel):
@@ -56,11 +74,37 @@ class CharacterIn(StrictModel):
     is_main: bool
 
 
+class RoleGuide(StrictModel):
+    """What each problem_solving option must be (Specialist template); roles stay fixed."""
+
+    constructive: str
+    avoidant: str
+    impulsive: str
+
+
+class CheckpointGuide(StrictModel):
+    """Specialist-authored question template for one scored checkpoint (task-10 contract).
+
+    The AI writes the question / options / page to it; it never carries scores or rationale
+    (StrictModel rejects them). Type-specific fields are checked by the request validator.
+    """
+
+    sub_skill: str
+    question_frame: str
+    page_setup: str | None = None
+    hint_guidance: str | None = None
+    allowed_emotions: list[Emotion] | None = None  # emotion_* only
+    correct_desc: str | None = None  # perspective only
+    distractor_desc: str | None = None  # perspective only
+    roles: RoleGuide | None = None  # problem_solving only
+
+
 class CheckpointFrame(StrictModel):
     id: str
     type: CheckpointType
     after: str
     target: str | None = None
+    guide: CheckpointGuide | None = None
 
 
 class Limits(StrictModel):
@@ -140,6 +184,7 @@ class StoryGenerateRequest(ForceableRequest):
                 errors.append(f"checkpoint '{cp.id}' kiểu {cp.type.value} thiếu target")
             if cp.target is not None and cp.target not in tokens:
                 errors.append(f"checkpoint '{cp.id}': target '{cp.target}' không phải token đã khai")
+            errors.extend(_guide_errors(cp))
 
         mains = sum(1 for c in self.characters if c.is_main)
         if mains != 1:
@@ -148,6 +193,28 @@ class StoryGenerateRequest(ForceableRequest):
         if errors:
             raise ValueError("; ".join(errors))
         return self
+
+
+def _guide_errors(cp: CheckpointFrame) -> list[str]:
+    """A guide may only carry the fields of its checkpoint type (task-10 contract)."""
+    g = cp.guide
+    if g is None:
+        return []
+    kind = cp.type.value
+    if cp.type is CheckpointType.REFLECTION:
+        return [f"checkpoint '{cp.id}' kiểu reflection không có guide"]
+    errors: list[str] = []
+    if g.roles is not None and cp.type is not CheckpointType.PROBLEM_SOLVING:
+        errors.append(f"checkpoint '{cp.id}' kiểu {kind}: guide.roles chỉ dùng cho problem_solving")
+    if g.allowed_emotions is not None and cp.type not in _EMOTION_TYPES:
+        errors.append(
+            f"checkpoint '{cp.id}' kiểu {kind}: guide.allowed_emotions chỉ dùng cho emotion_self, "
+            "emotion_other"
+        )
+    for name in ("correct_desc", "distractor_desc"):
+        if getattr(g, name) is not None and cp.type is not CheckpointType.PERSPECTIVE:
+            errors.append(f"checkpoint '{cp.id}' kiểu {kind}: guide.{name} chỉ dùng cho perspective")
+    return errors
 
 
 # ---- Response ----

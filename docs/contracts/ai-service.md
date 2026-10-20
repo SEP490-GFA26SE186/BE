@@ -109,7 +109,9 @@ Do `api/src/modules/stories/lib/aiRequest.js` `buildAiRequest` dựng từ DB:
 | `situation` | chuỗi hoặc `null` | `stories.situation` |
 | `tone` | `gentle` \| `playful` | luôn `gentle` |
 | `checkpoints[].type` | `emotion_self` · `emotion_other` · `perspective` · `problem_solving` · `reflection` | |
-| `checkpoints[].target` | **bắt buộc** với `emotion_other` / `perspective`, phải là token đã khai | chỉ gửi khi cần |
+| `checkpoints[].target` | **bắt buộc** với `emotion_other`; tuỳ chọn với `perspective` (từ story.v2); phải là token đã khai | chỉ gửi khi cần |
+| `checkpoints[].guide` | **tuỳ chọn** (story.v2): `{sub_skill, question_frame, page_setup?, hint_guidance?, allowed_emotions?, correct_desc?, distractor_desc?, roles?}`, `extra=forbid`; `allowed_emotions` chỉ `emotion_*`, `correct_desc` / `distractor_desc` chỉ `perspective`, `roles {constructive, avoidant, impulsive}` chỉ `problem_solving`; `reflection` không có `guide`. `answer` cảm xúc ngoài `allowed_emotions` → validator `EMOTION_NOT_ALLOWED` (thử lại nội bộ) | mẫu câu hỏi của Chuyên gia (task 10); không gửi điểm / `rationale` |
+| `topic.age_min` / `topic.age_max` / `topic.sub_skills` | **tuỳ chọn** (story.v2): số nguyên dương, `age_min <= age_max`; `sub_skills: [{name, description}]`, mặc định `[]`. Thiếu tuổi → prompt "trẻ 5–8 tuổi" | bài học + kỹ năng con |
 | `checkpoints[].after` | phải có trong `pages`, mỗi trang tối đa một checkpoint | `p<pageOrder>` |
 | `limits` | đủ 8 khoá, số nguyên dương, **không có mặc định** | `platform_settings` `limits.*` |
 | `blocked_keywords[].severity` | `warn` \| `block` | bảng `blocked_keywords` |
@@ -196,7 +198,7 @@ Mẫu đầy đủ: `ai/docs/samples/story_response.json`.
     "k4": { "type": "reflection", "question": "…" }
   },
   "warnings": [{ "code": "PAGE_LENGTH_OUT_OF_RANGE", "target_id": "p3", "detail": "…" }],
-  "prompt_version": "story.v1",
+  "prompt_version": "story.v2",
   "usage": { }
 }
 ```

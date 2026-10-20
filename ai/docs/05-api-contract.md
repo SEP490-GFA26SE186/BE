@@ -29,16 +29,37 @@ Request:
 | Trường | Kiểu | Ghi chú |
 |---|---|---|
 | `request_id` | string | |
-| `topic` | `{title, competency, guidance}` | Bài học do Moderator quản lý; `competency` là một trong 5 năng lực CASEL (docs 02) |
+| `topic` | `{title, competency, guidance, age_min?, age_max?, sub_skills?}` | Bài học do Moderator quản lý; `competency` là một trong 5 năng lực CASEL (docs 02). `age_min` / `age_max` (số nguyên dương, `age_min <= age_max`) đưa vào prompt ("trẻ 6–9 tuổi"); thiếu một trong hai thì prompt dùng "trẻ 5–8 tuổi". `sub_skills: [{name, description}]` (1–3 kỹ năng con cùng năng lực, lời Việt), mặc định `[]` |
 | `characters` | `[{token, description, is_main}]` | `token` khớp `{NV<số>}`; đúng một `is_main = true` |
 | `situation` | string \| null | Chuyện thật, đã che tên |
 | `tone` | `gentle` \| `playful` | |
 | `pages` | `[page_id]` | Theo thứ tự, không trùng |
-| `checkpoints` | `[{id, type, after, target?}]` | `after` thuộc `pages`, tối đa 1 điểm dừng mỗi trang; `target` là token đã khai, bắt buộc với `emotion_other`, `perspective` |
+| `checkpoints` | `[{id, type, after, target?, guide?}]` | `after` thuộc `pages`, tối đa 1 điểm dừng mỗi trang; `target` là token đã khai, bắt buộc với `emotion_other` (tuỳ chọn với `perspective` từ story.v2); `guide` xem dưới |
 | `limits` | object | **Bắt buộc**, không có mặc định: `page_min_words`, `page_max_words`, `page_target_min_words`, `page_target_max_words` (mục tiêu đưa vào prompt; phải `min <= target_min <= target_max <= max`, sai thì `INVALID_INPUT`), `sentence_max_words`, `question_max_words`, `option_max_words`, `hint_max_words`, `feedback_max_words`, `max_scenes` (docs 03) |
 | `forbidden_terms` | `[string]` | Tên thật |
 | `blocked_keywords` | `[{keyword, severity}]` | `severity`: `warn` \| `block` |
 | `__force` | optional | Xem mục `__force` |
+
+### `checkpoints[].guide` (tuỳ chọn, từ story.v2)
+
+Mẫu câu hỏi do Chuyên gia soạn cho một điểm dừng có chấm; Node gửi kèm từng điểm dừng (task 10).
+Thiếu `guide` thì điểm dừng được viết như story.v1 (khung mặc định theo kiểu, docs 03). AI viết
+`question` / `options` / `hint` / trang ngay trước theo mẫu; **output không đổi hình dạng**. Không
+có điểm, không có `rationale` (field lạ → `INVALID_INPUT`).
+
+| Trường | Kiểu | Dùng cho |
+|---|---|---|
+| `sub_skill` | string | mọi kiểu có chấm — tên kỹ năng con điểm dừng này luyện |
+| `question_frame` | string | mọi kiểu có chấm — câu hỏi phải viết theo khung này |
+| `page_setup` | string \| null | trang ngay trước điểm dừng phải làm gì |
+| `hint_guidance` | string \| null | `hint` viết theo hướng này |
+| `allowed_emotions` | `[emotion]` \| null | chỉ `emotion_self` / `emotion_other`; `answer` phải thuộc danh sách (không rỗng) — sai thì `EMOTION_NOT_ALLOWED` (thử lại) |
+| `correct_desc`, `distractor_desc` | string \| null | chỉ `perspective` — mô tả phương án đúng / nhiễu |
+| `roles` | `{constructive, avoidant, impulsive}` \| null | chỉ `problem_solving` — mô tả từng vai; vai vẫn cố định |
+
+Ví dụ request có `guide`: `scripts/try_story_samples/self_management_guided.json`. `reflection`
+không được có `guide`. Trường sai kiểu điểm dừng → `INVALID_INPUT`, thông điệp nêu id
+điểm dừng.
 
 Pydantic chỉ kiểm **toàn vẹn tham chiếu** (id không trùng, `after` / `target` tồn tại, một
 `is_main`). Chính sách cấu trúc truyện (4–20 trang, vị trí `reflection`…) **không** kiểm ở đây —
@@ -53,7 +74,7 @@ Response:
 | `scenes` | `{scene_id: mô tả tiếng Anh}` |
 | `checkpoints` | `{checkpoint_id: ...}` theo kiểu — xem docs 03. `problem_solving.options` khoá theo vai (`constructive` / `avoidant` / `impulsive`), `perspective.options` khoá theo `option_id` |
 | `warnings` | `[{code, target_id, detail}]`; `detail` tiếng Việt |
-| `prompt_version` | vd. `story.v1` |
+| `prompt_version` | vd. `story.v2` |
 | `usage` | cộng dồn |
 
 ## `POST /v1/images/portrait`

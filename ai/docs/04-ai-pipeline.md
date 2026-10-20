@@ -5,7 +5,7 @@
 ```
 1. Nhận khung + nhân vật (đã che tên) + bài học + chuyện thật + giới hạn
 2. assert_no_forbidden_terms(request)           ← chặn nếu còn tên thật (chỉ trường phụ huynh nhập)
-3. Dựng prompt từ prompts/story.v1.md
+3. Dựng prompt từ prompts/story.v2.md (v1 giữ làm lịch sử)
 4. Gọi LLM một lần, yêu cầu JSON theo schema, đặt trần token đầu ra
 5. Parse (bị cắt cụt hoặc JSON hỏng → issue, không ném lỗi) + validator
 6. Sai → thử lại 1 lần kèm danh sách lỗi → vẫn sai: OUTPUT_INVALID
@@ -29,6 +29,7 @@ Không có endpoint viết lại một trang hay điền một điểm dừng �
 | `docs04:2` | Đủ mọi `page_id` và `checkpoint_id` đã gửi, không id lạ | thử lại | `PAGE_IDS_MISMATCH`, `CHECKPOINT_IDS_MISMATCH` |
 | `docs04:3` | Mọi trang có `scene`; số cảnh ≤ `max_scenes`; mỗi cảnh có mô tả | thử lại | `PAGE_SCENE_MISSING`, `SCENE_COUNT_EXCEEDED`, `SCENE_DESCRIPTION_MISSING` |
 | `docs04:4` | `emotion_*`: `answer` thuộc bộ 5 cảm xúc | thử lại | `EMOTION_ANSWER_INVALID` |
+| `docs03` | `emotion_*` có `guide.allowed_emotions` (không rỗng): `answer` thuộc danh sách đó (`EMOTION_NOT_ALLOWED`, story.v2) | thử lại | `EMOTION_NOT_ALLOWED` |
 | `docs03` | `emotion_*` và `perspective`: có `hint` (`EMOTION_HINT_MISSING`, theo docs 03) | thử lại | `EMOTION_HINT_MISSING` |
 | `docs04:5` | `perspective`: đúng 3 phương án, `answer` trỏ vào một phương án | thử lại | `PERSPECTIVE_OPTIONS_INVALID`, `PERSPECTIVE_ANSWER_INVALID` |
 | `docs04:6` | `problem_solving`: đủ 3 vai `constructive` / `avoidant` / `impulsive`, mỗi vai có `text` + `feedback` | thử lại | `PROBLEM_SOLVING_ROLES_INVALID`, `PROBLEM_SOLVING_FIELD_MISSING` |

@@ -111,3 +111,38 @@ def test_force_inside_nested_object_is_invalid_input(client) -> None:
         "message": r.json()["error"]["message"],
         "retryable": False,
     }
+
+
+# ---- Task 11: guides and topic age / sub-skills (task-10 contract), all optional ----
+
+from tests.fixtures.frames import SUB_SKILLS, make_guide  # noqa: E402
+
+
+def _guided_payload() -> dict:
+    body = _payload()
+    body["topic"].update(age_min=6, age_max=9, sub_skills=SUB_SKILLS)
+    for cp in body["checkpoints"]:
+        if cp["type"] != "reflection":
+            cp["guide"] = make_guide(cp["type"])
+    body["checkpoints"][1].pop("target")  # perspective target is optional now
+    return body
+
+
+def test_node_guided_payload_succeeds(client) -> None:
+    r = client.post(URL, json=_guided_payload(), headers=H)
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert list(b["checkpoints"]) == ["k1", "k2", "k3", "k4", "k5"]
+    # The mock answers inside guide.allowed_emotions, so no EMOTION_NOT_ALLOWED retry.
+    assert b["checkpoints"]["k1"]["answer"] in {"angry", "sad"}
+    assert b["checkpoints"]["k4"]["answer"] in {"sad", "scared"}
+    assert b["usage"]["attempts"] == 1
+
+
+def test_node_guide_on_reflection_is_invalid_input(client) -> None:
+    body = _guided_payload()
+    body["checkpoints"][4]["guide"] = make_guide("emotion_self")
+    r = client.post(URL, json=body, headers=H)
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "INVALID_INPUT"
+    assert "k5" in r.json()["error"]["message"]

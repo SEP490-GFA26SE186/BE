@@ -201,6 +201,15 @@ số mục trong ngoặc là số mục của spec đó)*
 **EQ** *(backend làm, service chỉ cần biết để không lấn sân)*
 - Chấm theo 5 năng lực CASEL; chỉ lần chọn đầu của lần chơi đầu; tính trên toàn bộ lịch sử.
 - Service **không** nhận, không tính, không trả điểm.
+- **Mẫu câu hỏi do Chuyên gia soạn, AI viết theo mẫu, không bao giờ chấm** *(2026-10-20, spec
+  `docs/superpowers/specs/2026-10-20-casel-pedagogy-design.md`)*: mỗi bài học có 1–3 kỹ năng con
+  cùng năng lực; Node chọn mẫu cho từng điểm dừng có chấm và gửi `guide` (khung câu hỏi, việc trang
+  trước phải làm, gợi ý, cảm xúc cho phép, mô tả đúng / nhiễu, mô tả ba vai) — **không gửi điểm,
+  không gửi `rationale`**. Service chỉ viết chữ theo mẫu (prompt `story.v2`); output không đổi hình
+  dạng. `answer` cảm xúc ngoài `allowed_emotions` là lỗi thử lại (`EMOTION_NOT_ALLOWED`), Node kiểm
+  lại lần nữa khi lưu. Mọi trường mới là tuỳ chọn: request không có `guide` viết như story.v1.
+  Topic có `age_min` / `age_max` thì prompt dùng độ tuổi đó, thiếu thì "5–8". `target` của
+  `perspective` thành tuỳ chọn.
 
 ## Đang mở — dừng lại hỏi nếu đụng tới
 

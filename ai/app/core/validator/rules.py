@@ -165,6 +165,24 @@ def _check_emotion_answer(ctx: ValidationContext) -> Iterable[Issue]:
             )
 
 
+def _check_emotion_allowed(ctx: ValidationContext) -> Iterable[Issue]:
+    # The Specialist template may narrow the five emotions (task-10 contract); an empty or
+    # absent list means no narrowing. An answer outside the five is #7's business.
+    valid = {e.value for e in Emotion}
+    for frame_cp, cp in _paired_checkpoints(ctx, _EMOTION):
+        allowed = frame_cp.guide.allowed_emotions if frame_cp.guide else None
+        if not allowed or cp.answer not in valid:
+            continue
+        names = [e.value for e in allowed]
+        if cp.answer not in names:
+            yield _issue(
+                "EMOTION_NOT_ALLOWED",
+                frame_cp.id,
+                f"Checkpoint '{frame_cp.id}' có answer '{_q(cp.answer)}' không thuộc cảm xúc "
+                f"hướng dẫn cho phép: {', '.join(names)}.",
+            )
+
+
 def _check_hint(ctx: ValidationContext) -> Iterable[Issue]:
     for frame_cp, cp in _paired_checkpoints(ctx, _HINTED):
         if _blank(cp.hint):
@@ -452,6 +470,7 @@ RULES: tuple[Rule, ...] = (
     Rule("SCENE_COUNT_EXCEEDED", R, "docs04:3", _check_scene_count),
     Rule("SCENE_DESCRIPTION_MISSING", R, "docs04:3", _check_scene_description),
     Rule("EMOTION_ANSWER_INVALID", R, "docs04:4", _check_emotion_answer, _EMOTION),
+    Rule("EMOTION_NOT_ALLOWED", R, "docs03", _check_emotion_allowed, _EMOTION),
     Rule("EMOTION_HINT_MISSING", R, "docs03", _check_hint, _HINTED),
     Rule("PERSPECTIVE_OPTIONS_INVALID", R, "docs04:5", _check_perspective_options, _PERSPECTIVE),
     Rule("PERSPECTIVE_ANSWER_INVALID", R, "docs04:5", _check_perspective_answer, _PERSPECTIVE),

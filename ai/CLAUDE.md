@@ -57,7 +57,7 @@ app/
   main.py  config.py  errors.py  deps.py
   api/        health.py  v1/{story,images,tts}.py
   schemas/    common.py  story.py  llm.py  images.py  tts.py   # request/response theo endpoint
-  prompts/    story.v1.md              # image_style.v1.md: M4
+  prompts/    story.v2.md (story.v1.md: history)  image_style.v1.md
   providers/
     llm/      base.py  mock.py  gemini.py  claude.py  claude_code.py   # claude*: README "Claude"
     image/    base.py  mock.py         # M4: port.py registry.py adapters/ decorators/ safety/
