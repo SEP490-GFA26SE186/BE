@@ -83,6 +83,13 @@ export const platformSettingsData = [
   { key: 'moderation.strike_limit', value: 3 },
   { key: 'moderation.strike_valid_days', value: 90 },
   { key: 'moderation.audit_per_week', value: 3 },
+  // Báo cáo EQ theo kỹ năng con (spec sư phạm CASEL §7, Specialist sửa được): xét N câu chấm gần nhất,
+  // tối thiểu min_items câu mới xếp mức; tỉ lệ < developing_from = "Đang làm quen",
+  // từ developing_from đến dưới secure_from = "Đang phát triển", từ secure_from = "Vững".
+  { key: 'eq_report.window', value: 5 },
+  { key: 'eq_report.min_items', value: 3 },
+  { key: 'eq_report.developing_from', value: 0.5 },
+  { key: 'eq_report.secure_from', value: 0.8 },
 ];
 
 export async function seedPlatformSettings(prisma) {

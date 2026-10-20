@@ -9,6 +9,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { seedEqSkills } from './seed_eq_skills.js';
+import { seedPedagogy } from './seed_pedagogy.js';
 import { seedTopics } from './seed_topics.js';
 import { seedPlatformSettings } from './seed_platform_settings.js';
 import { seedPlans } from './seed_plans.js';
@@ -17,8 +18,11 @@ import { seedMarket } from './seed_market.js';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Thu tu quan trong: topics.skill_id tro vao eq_skills.
+  // Thu tu quan trong: topics.skill_id tro vao eq_skills; topic_sub_skills tro vao eq_sub_skills.
   await seedEqSkills(prisma);
+  // Mac dinh ban hanh san de test/demo chay duoc; seed "that" dat SEED_PUBLISH_PEDAGOGY=false
+  // de mau o trang thai nhap cho Specialist doc va ban hanh (spec su pham §5.2).
+  await seedPedagogy(prisma, { publish: process.env.SEED_PUBLISH_PEDAGOGY !== 'false' });
   await seedTopics(prisma);
   // updated_by tro vao specialist do seedTopics tao.
   await seedPlatformSettings(prisma);
