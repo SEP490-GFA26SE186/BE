@@ -21,8 +21,13 @@ def _ai_env() -> set[str]:
     return set(compose["services"]["ai"]["environment"])
 
 
+#: Read by a child process, not by Settings: the `claude` CLI that claude_code drives
+#: (README "Claude").
+CHILD_PROCESS_ENV = {"CLAUDE_CODE_OAUTH_TOKEN"}
+
+
 def test_ai_block_only_passes_variables_settings_reads() -> None:
-    known = {name.upper() for name in Settings.model_fields}
+    known = {name.upper() for name in Settings.model_fields} | CHILD_PROCESS_ENV
     assert _ai_env() - known == set()
 
 

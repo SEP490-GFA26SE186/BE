@@ -40,8 +40,8 @@ service chỉ kiểm tra lại); chấm điểm EQ.
 ## Stack
 
 - Python 3.12+, FastAPI, Pydantic v2, pydantic-settings, httpx
-- Chữ: Claude qua `anthropic` (production, `LLM_PROVIDER=claude`) và `claude-agent-sdk` (chỉ dev,
-  `claude_code`) — README "Claude". Gemini (`google-genai`) giữ lại làm lựa chọn cấu hình.
+- Chữ: Claude qua `claude-agent-sdk` (`claude_code`, gói Pro/Max — dev và Docker, từ 2026-10-19) và
+  `anthropic` (`claude`, API key) — README "Claude". Gemini (`google-genai`) giữ lại làm lựa chọn cấu hình.
   Với mọi SDK: **đọc tài liệu / source SDK hiện hành** trước khi viết, không dựa vào
   trí nhớ về tên hàm
 - VieNeu-TTS 0.3B GGUF (Apache-2.0), chạy CPU — **đọc README repo VieNeu-TTS** để lấy API thật

@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     # Shared with Node. Required, no default, so a container cannot silently run unauthenticated.
     internal_token: str
 
-    # claude = Anthropic API (key or `ant auth login` profile); claude_code = the logged-in
-    # `claude` CLI driven by claude-agent-sdk, DEV ONLY (README "Claude").
+    # claude = Anthropic API (key or `ant auth login` profile); claude_code = the `claude` CLI
+    # on a Pro/Max subscription, driven by claude-agent-sdk (README "Claude").
     llm_provider: Literal["mock", "gemini", "claude", "claude_code"] = "mock"
     tts_provider: Literal["mock", "vieneu"] = "mock"
     # vieneu (spec 4.4). Node always sends voice_id (platform_settings tts.voice); the default

@@ -25,13 +25,20 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Cai deps truoc khi copy source: layer nay duoc cache lai khi chi sua code
-# AI_EXTRAS=tts -> cai them VieNeu-TTS (TTS_PROVIDER=vieneu). Mac dinh rong: image nho, chi mock.
+# AI_EXTRAS: danh sach extra cach nhau bang dau cach. Mac dinh rong: image nho, chi mock.
+#   tts         -> VieNeu-TTS (TTS_PROVIDER=vieneu)
+#   claude-code -> claude-agent-sdk (LLM_PROVIDER=claude_code). Wheel Linux cua SDK KEM SAN CLI
+#                  `claude` (_bundled/claude, ~100 MB), nen KHONG can Node/npm, va ban CLI luon
+#                  khop SDK (claude_agent_sdk._cli_version) — khong lap lai bay "CLI cu bi Docker
+#                  cache" cua d:/crawler_flatform. Xac thuc: env CLAUDE_CODE_OAUTH_TOKEN (README "Claude").
+#   Vi du: AI_EXTRAS="tts claude-code"
 ARG AI_EXTRAS=""
 COPY pyproject.toml uv.lock* ./
-RUN uv sync --no-dev --no-install-project ${AI_EXTRAS:+--extra ${AI_EXTRAS}}
+RUN uv sync --no-dev --no-install-project $(for extra in ${AI_EXTRAS}; do printf ' --extra %s' "$extra"; done)
 
 COPY app ./app
 
+# User khong phai root: CLI `claude` (LLM_PROVIDER=claude_code) can $HOME ghi duoc (~/.claude).
 RUN useradd --create-home --uid 10001 appuser  && mkdir -p /home/appuser/.cache/huggingface && chown -R appuser /home/appuser/.cache
 USER appuser
 # Model VieNeu tai ve day lan dau; compose mount volume vao de khong tai lai moi lan tao container.

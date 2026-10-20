@@ -102,9 +102,11 @@ dùng sinh ảnh (spec §2.1).
   mục tiêu 40–60. Validator M2 chỉ cưỡng chế min/max; prompt có thể cần nhấn mục tiêu.
 
 **Chữ — Claude là provider chính** *(2026-10-15, người dùng chốt; thay Gemini)*
-- **Production: `LLM_PROVIDER=claude`** (Anthropic API, `ANTHROPIC_API_KEY` trong container, tính tiền
-  theo token). **Máy dev: `claude_code`** (CLI `claude` đang đăng nhập qua `claude-agent-sdk`) — không
-  bao giờ phục vụ phụ huynh thật (gói subscription cho dùng cá nhân); image Docker không cài SDK.
+- **`LLM_PROVIDER=claude_code` cho cả máy dev lẫn bản deploy** *(2026-10-19, người dùng chốt; thay
+  "production dùng API key")*: đồ án cá nhân, không thương mại, chạy trên gói Pro/Max của chính người
+  làm. Container xác thực bằng `CLAUDE_CODE_OAUTH_TOKEN` (từ `claude setup-token`); image cài SDK khi
+  build với `AI_EXTRAS=claude-code` (wheel Linux kèm sẵn CLI). Theo khuôn `d:/crawler_flatform`.
+  Adapter `claude` (Anthropic API) giữ lại làm lựa chọn cấu hình.
 - `GeminiLLMProvider` **giữ lại** trong code như một lựa chọn cấu hình, không còn là hướng chính.
   Không có dự phòng tự động giữa hai provider (quyết định riêng nếu cần).
 - **Cấu hình đã đo được** (`claude_code`, alias `sonnet` -> `claude-sonnet-5-5`):
@@ -208,7 +210,7 @@ số mục trong ngoặc là số mục của spec đó)*
   Link **không hết hạn** (hết hạn cần token auth — gói trả phí); muốn có hạn thì đổi sang
   `private_download_url` có `expires_at` (đi qua API, không qua CDN).
 
-- **Adapter `claude` (API) chưa chạy thật lần nào** — việc kế tiếp: đo 20 trang với
+- **Adapter `claude` (API) chưa chạy thật lần nào** (không còn là hướng chính từ 2026-10-19) — nếu dùng lại: đo 20 trang với
   `LLM_CLAUDE_THINKING=between_tools` để quyết có hạ timeout 150s / 320s không. (chưa có key / profile `ant auth login`). Số đo ở
   trên là của `claude_code`; API có thể khác (tắt thinking được bằng `between_tools`, tốc độ, giá).
 

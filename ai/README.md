@@ -144,10 +144,10 @@ thật và hợp đồng với Node không đổi gì.
 |---|---|---|
 | File | `app/providers/llm/claude.py` | `app/providers/llm/claude_code.py` |
 | Gói | `anthropic==1.11.0` (dependency chính) | `claude-agent-sdk==0.2.163` (extra `.[claude-code]`) |
-| Xác thực | `ANTHROPIC_API_KEY` trong `ai/.env`; trống thì SDK tự tìm: biến môi trường, rồi profile `ant auth login` | CLI `claude` đang đăng nhập (`claude login`, gói Pro/Max). Không cần key |
+| Xác thực | `ANTHROPIC_API_KEY` trong `ai/.env`; trống thì SDK tự tìm: biến môi trường, rồi profile `ant auth login` | Gói Pro/Max, không cần key. Máy dev: `claude login`. Container: `CLAUDE_CODE_OAUTH_TOKEN` (từ `claude setup-token`) |
 | Tính tiền | Theo token, vào org/workspace của key/profile | Theo hạn mức gói subscription; `estimated_cost_micros` không có ý nghĩa |
-| Dùng ở đâu | Dev, và deploy được (container cần key: không có profile) | **Chỉ máy dev.** Image Docker không cài SDK, provider báo lỗi ngay lúc khởi động |
-| Kiểm lúc khởi động | `models.retrieve` (không sinh, không tính tiền): sai model, thiếu credential đều dừng ngay | Có SDK và có CLI. Không gọi model, nên model alias sai hay CLI chưa login chỉ lộ ở truyện đầu |
+| Dùng ở đâu | Dev, và deploy được (container cần key: không có profile) | **Provider chính từ 2026-10-19** (đồ án cá nhân, `docs/01`): máy dev và Docker (`AI_EXTRAS=claude-code`) |
+| Kiểm lúc khởi động | `models.retrieve` (không sinh, không tính tiền): sai model, thiếu credential đều dừng ngay | Có SDK và có CLI (bản kèm wheel, rồi PATH); xoá biến xác thực rỗng. Không gọi model, nên model alias sai hay token sai chỉ lộ ở truyện đầu |
 
 Biến (đặt tên `LLM_CLAUDE_*` chứ không `CLAUDE_*`: Claude Code tự export `CLAUDE_EFFORT`,
 `CLAUDE_CODE_*` cho mọi tiến trình con, chạy service trong terminal Claude Code sẽ lặng lẽ nhận nhầm):
@@ -179,10 +179,23 @@ Riêng `claude_code` (theo khuôn `d:/crawler_flatform`, `core/adapters/claude_s
   dòng); schema truyện chỉ vài KB nên không chạm trần.
 - `query()` chỉ nhận một prompt: lần thử lại gộp các lượt cũ vào trước, đánh dấu `<turn role=...>`.
 - Trần token gửi qua env `CLAUDE_CODE_MAX_OUTPUT_TOKENS` của CLI.
-- SDK 0.2.163 ghim CLI `2.1.286` (`claude_agent_sdk._cli_version`); wheel Windows không kèm CLI nên
-  dùng `claude` trong PATH. Lệch phiên bản có thể ra lỗi khó hiểu
+- SDK 0.2.163 ghim CLI `2.1.286` (`claude_agent_sdk._cli_version`). Wheel macOS/Linux kèm sẵn CLI đó
+  (`claude_agent_sdk/_bundled/claude`) và SDK ưu tiên nó hơn PATH; wheel Windows không kèm nên dùng
+  `claude` trong PATH. Lệch phiên bản có thể ra lỗi khó hiểu
   (`Claude Code returned an error result: success`); khi đó đặt `LLM_CLAUDE_CLI_PATH` trỏ đúng bản.
-- Không bao giờ dùng cho phụ huynh thật: gói subscription dành cho dùng cá nhân.
+- **Trong Docker** (cùng khuôn `d:/crawler_flatform/platform/Dockerfile`, nhưng không cần Node):
+  1. Một lần, trên máy có trình duyệt, đăng nhập bằng tài khoản Pro/Max: `claude setup-token` -> token.
+  2. `.env` ở root: `AI_EXTRAS=claude-code` (thêm `tts` nếu cần: `"tts claude-code"`),
+     `LLM_PROVIDER=claude_code`, `LLM_CLAUDE_MODEL=sonnet`, `LLM_CLAUDE_EFFORT=low`,
+     `LLM_THINKING_BUDGET=12000`, `CLAUDE_CODE_OAUTH_TOKEN=<token>`; để trống `ANTHROPIC_API_KEY`
+     (có key thì CLI có thể tính tiền vào key thay vì gói — service ghi cảnh báo).
+  3. `docker compose up -d --build ai`.
+  `CLAUDE_CODE_OAUTH_TOKEN` đứng trước bước đăng nhập trình duyệt trong thứ tự xác thực của CLI, nên
+  container không cần `claude login`. Compose truyền `${VAR:-}`, biến chưa đặt thành chuỗi rỗng, mà CLI
+  coi chuỗi rỗng là key rồi bỏ qua các cách khác -> `verify_model()` xoá `CLAUDE_CODE_OAUTH_TOKEN` /
+  `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` rỗng khỏi môi trường trước khi CLI chạy.
+- Hạn mức là của gói (cửa sổ 5 giờ / 7 ngày), không phải theo token: hết hạn mức thì CLI trả lỗi, ra
+  `PROVIDER_ERROR` và BullMQ thử lại. `estimated_cost_micros` không có ý nghĩa với provider này.
 - **Windows: phải trỏ tới `claude.exe` thật.** PyPI không có wheel Windows cho `claude-agent-sdk`
   (chỉ macOS/Linux kèm CLI), còn `claude` trong PATH của bản npm là shim `claude.CMD` mà SDK từ chối
   chạy (cmd.exe chèn lệnh được qua đối số). Đặt `LLM_CLAUDE_CLI_PATH=%APPDATA%\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe`;

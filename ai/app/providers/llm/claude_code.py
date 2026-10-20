@@ -1,15 +1,15 @@
-"""Claude text provider through the logged-in Claude Code CLI - DEV ONLY.
+"""Claude text provider through the Claude Code CLI on a Pro/Max subscription.
 
 Built on claude-agent-sdk 0.2.163 (names read from the installed package: query.py, types.py,
 _errors.py). The SDK does not call the model itself: it drives the `claude` CLI as a child
-process, so the call runs on whatever that CLI is signed into (`claude login`, a Pro/Max
-subscription) and needs no API key. Same pattern as d:/crawler_flatform
-(core/adapters/claude_sdk_tools.py).
+process, so the call runs on whatever that CLI is signed into and needs no API key. Same
+pattern as d:/crawler_flatform (core/adapters/claude_sdk_tools.py, platform/Dockerfile).
 
-Why DEV ONLY (README "Claude"): the machine needs the CLI installed and logged in, a
-subscription is for personal interactive use and not for serving parents, and every call
-spawns a fresh CLI process (seconds of fixed overhead). The package is an optional extra
-(`.[claude-code]`), so the service image does not ship it.
+Two ways to sign in (README "Claude"): `claude login` on a dev machine, or in a container the
+env var CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`), which the CLI reads before any
+browser login. The package is an optional extra (`.[claude-code]`); the image installs it with
+build arg AI_EXTRAS=claude-code, and its Linux wheel bundles the CLI, so no Node is needed.
+Every call spawns a fresh CLI process (seconds of fixed overhead).
 
 The CLI is locked down: no built-in tools, no MCP servers, no user/project settings. Structured
 output goes through the CLI's `--json-schema` (a forced tool call validated after generation,
@@ -20,8 +20,10 @@ Logs never contain prompt or output text.
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -45,8 +47,37 @@ _SYSTEM_PROMPT = (
 # The structured output is a synthetic tool call; the CLI may need another turn when its own
 # schema check rejects the first attempt. Not a story-level retry (that is the orchestrator's).
 _MAX_TURNS = 3
-_INSTALL_HINT = 'pip install -e ".[claude-code]" (chỉ dùng trên máy dev)'
-_CLI_HINT = "Cài Claude Code CLI và chạy `claude login`, hoặc đặt LLM_CLAUDE_CLI_PATH."
+_INSTALL_HINT = 'pip install -e ".[claude-code]" (Docker: build arg AI_EXTRAS=claude-code)'
+_CLI_HINT = (
+    "Cài Claude Code CLI và chạy `claude login` (hoặc đặt CLAUDE_CODE_OAUTH_TOKEN), "
+    "hoặc đặt LLM_CLAUDE_CLI_PATH."
+)
+# Credentials the CLI reads from its environment. Compose passes every variable as `${VAR:-}`,
+# so an unset one arrives as an EMPTY string, and the CLI takes an empty value as a credential
+# and stops consulting the others: the failure then reads "bad token", not "not configured"
+# (d:/crawler_flatform, worker/src/crawler.ts). The SDK hands os.environ to the CLI as is.
+_AUTH_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+
+
+def _drop_blank_auth_env() -> None:
+    for name in _AUTH_ENV:
+        if name in os.environ and not os.environ[name].strip():
+            del os.environ[name]
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        logger.warning(
+            "claude_code: ANTHROPIC_API_KEY is set, the CLI may bill the API key "
+            "instead of the subscription"
+        )
+
+
+def _bundled_cli() -> Path | None:
+    """The CLI shipped inside the SDK wheel (macOS/Linux only), which the SDK itself prefers
+    over PATH. In the Docker image this is the only CLI there is."""
+    import claude_agent_sdk
+
+    name = "claude.exe" if sys.platform == "win32" else "claude"
+    path = Path(claude_agent_sdk.__file__).parent / "_bundled" / name
+    return path if path.is_file() else None
 
 
 def _flatten(call: StoryLLMCall) -> str:
@@ -89,11 +120,14 @@ class ClaudeCodeLLMProvider:
             import claude_agent_sdk  # noqa: F401
         except ImportError:
             raise RuntimeError(f"Thiếu gói claude-agent-sdk. {_INSTALL_HINT}") from None
+        _drop_blank_auth_env()
         configured = self._settings.llm_claude_cli_path
         if configured:
             if not Path(configured).is_file():
                 raise RuntimeError(f"LLM_CLAUDE_CLI_PATH không trỏ tới file có thật: {configured}")
             cli = configured
+        elif _bundled_cli() is not None:
+            return
         else:
             cli = shutil.which("claude")
             if cli is None:

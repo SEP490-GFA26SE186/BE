@@ -109,11 +109,12 @@ services:
     build:
       context: ./ai
       args:
-        # tts = cai VieNeu-TTS vao image (can khi TTS_PROVIDER=vieneu). Doi xong phai `up --build ai`.
+        # Cach nhau bang dau cach. tts = VieNeu-TTS (TTS_PROVIDER=vieneu); claude-code = claude-agent-sdk
+        # kem san CLI (LLM_PROVIDER=claude_code). Doi xong phai `up --build ai`.
         AI_EXTRAS: ${AI_EXTRAS:-}
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      # Chu (mock | gemini | claude; claude_code chi chay ngoai Docker) va giong doc (mock; vieneu o M5) chon rieng. Anh chi co mock toi M4b.
+      # Chu (mock | gemini | claude | claude_code) va giong doc (mock | vieneu) chon rieng. Anh chi co mock.
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       TTS_PROVIDER: ${TTS_PROVIDER:-mock}
       # Chi khi TTS_PROVIDER=vieneu. De trong = mac dinh ai/app/config.py (Kim Thanh, fp32, 120 s, mp3).
@@ -125,9 +126,12 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-}
       # Chi khi LLM_PROVIDER=claude (Anthropic API). Trong container khong co profile
-      # `ant auth login`, nen phai co ANTHROPIC_API_KEY. LLM_PROVIDER=claude_code (CLI, dev)
-      # khong chay duoc trong image nay: image khong cai claude-agent-sdk.
+      # `ant auth login`, nen phai co ANTHROPIC_API_KEY.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Chi khi LLM_PROVIDER=claude_code (goi Pro/Max qua CLI, can AI_EXTRAS chua claude-code).
+      # Lay bang `claude setup-token` tren may co trinh duyet. De trong thi ai/ xoa bien rong luc
+      # khoi dong (CLI coi chuoi rong la key) — xem README "Claude".
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       LLM_CLAUDE_MODEL: ${LLM_CLAUDE_MODEL:-}
       LLM_CLAUDE_THINKING: ${LLM_CLAUDE_THINKING:-}
       LLM_CLAUDE_EFFORT: ${LLM_CLAUDE_EFFORT:-}
