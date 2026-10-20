@@ -23,7 +23,82 @@ const topicBody = (required) => ({
   },
 });
 
+const subSkillBody = (required) => ({
+  required: true,
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        ...(required && { required: ['skillId', 'caselReferenceId', 'nameVi', 'descriptionVi'] }),
+        properties: {
+          skillId: { type: 'string', format: 'uuid', description: 'Năng lực CASEL.' },
+          caselReferenceId: { type: 'string', format: 'uuid', description: 'Mục CASEL (cùng năng lực), lấy từ GET /eq-skills/casel-references.' },
+          code: { type: 'string', example: 'sm_stress_strategies', description: 'Chữ thường + gạch dưới; bỏ trống để tự sinh.' },
+          nameVi: { type: 'string', example: 'Hít thở khi giận' },
+          descriptionVi: { type: 'string' },
+          ageMin: { type: 'integer', minimum: 1, maximum: 18, default: 5 },
+          ageMax: { type: 'integer', minimum: 1, maximum: 18, default: 8 },
+          displayOrder: { type: 'integer', default: 0 },
+          isActive: { type: 'boolean', default: true },
+        },
+      },
+    },
+  },
+});
+
 export default {
+  '/eq-skills/casel-references': {
+    get: {
+      tags: ['EQ Skills'],
+      summary: 'Danh sách 40 mục tham chiếu CASEL',
+      description: 'Mọi người dùng đã đăng nhập. Lọc theo `skillId` (năng lực CASEL). Kỹ năng con phải trỏ về một mục cùng năng lực.',
+      security: bearer,
+      parameters: [{ name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' } }],
+      responses: { 200: { description: 'Mảng `[{ id, skillId, code, textEn, displayOrder }]` trong `data`' }, 401: { description: 'Chưa đăng nhập' } },
+    },
+  },
+  '/sub-skills': {
+    get: {
+      tags: ['Sub-skills'],
+      summary: 'Danh sách kỹ năng con',
+      description:
+        '**Phụ huynh:** chỉ kỹ năng con đang dùng, không kèm số đếm.\n**Specialist / Admin:** tất cả + `templatesCount`, `publishedTemplatesCount`, `topicsCount`, `checkpointsCount`; lọc `skillId`, `search`, `isActive`.',
+      security: bearer,
+      parameters: [
+        { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+        { name: 'search', in: 'query', schema: { type: 'string' } },
+        { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
+      ],
+      responses: { 200: { description: 'Mảng kỹ năng con trong `data`' } },
+    },
+    post: {
+      tags: ['Sub-skills'],
+      summary: '[Specialist | Admin] Tạo kỹ năng con',
+      description: '`caselReferenceId` phải thuộc cùng `skillId` (400). `code` thiếu thì sinh từ mã mục CASEL (thêm `_2`, `_3` nếu trùng).',
+      security: bearer,
+      requestBody: subSkillBody(true),
+      responses: { 201: { description: 'Đã tạo' }, 400: { description: 'Mục CASEL khác năng lực / tuổi sai' }, 403: { description: 'Không phải Specialist / Admin' }, 409: { description: 'Mã trùng' } },
+    },
+  },
+  '/sub-skills/{id}': {
+    put: {
+      tags: ['Sub-skills'],
+      summary: '[Specialist | Admin] Sửa kỹ năng con',
+      description: 'Đã có điểm dừng (checkpoint) dùng thì **khoá** `skillId` / `caselReferenceId` (422).',
+      security: bearer,
+      parameters: [idParam],
+      requestBody: subSkillBody(false),
+      responses: { 200: { description: 'Đã sửa' }, 400: { description: 'Dữ liệu sai' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Mã trùng' }, 422: { description: 'Đổi năng lực / mục CASEL khi đã có điểm dừng dùng' } },
+    },
+    delete: {
+      tags: ['Sub-skills'],
+      summary: '[Specialist | Admin] Xoá kỹ năng con',
+      description: 'Chưa có mẫu / bài học / điểm dừng nào dùng thì xoá hẳn; ngược lại 409 "chỉ tắt được" (dùng PUT `isActive: false`).',
+      security: bearer,
+      parameters: [idParam],
+      responses: { 200: { description: '`{ deleted, message }`' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Đã có mẫu / bài học / điểm dừng dùng' } },
+    },
+  },
   '/topics': {
     get: {
       tags: ['Topics'],

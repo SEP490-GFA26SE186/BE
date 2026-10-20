@@ -14,6 +14,7 @@ import { adminWithdrawalsRouter, sellerMoneyRouter } from '../../modules/market/
 import { listingsRouter, moderationReviewRouter, sellersRouter } from '../../modules/publishing/publishing.routes.js';
 import { plansRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
 import storiesRoutes from '../../modules/stories/stories.routes.js';
+import subSkillsRoutes from '../../modules/sub-skills/sub-skills.routes.js';
 import topicsRoutes from '../../modules/topics/topics.routes.js';
 
 import contentLibraryRouter, {
@@ -39,6 +40,7 @@ router.use('/characters', charactersRoutes);
 router.use('/eq-skills', eqSkillsRoutes);
 router.use('/stories', storiesRoutes);
 router.use('/topics', topicsRoutes);
+router.use('/sub-skills', subSkillsRoutes);
 router.use('/backgrounds', backgroundsRouter);
 router.use('/ui-audio-assets', uiAudioAssetsRouter);
 router.use('/checklist-items', checklistItemsRouter);
