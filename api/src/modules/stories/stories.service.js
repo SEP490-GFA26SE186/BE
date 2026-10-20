@@ -4,6 +4,7 @@ import ApiError from '../../utils/ApiError.js';
 import { loadStorySettings } from './lib/storySettings.js';
 import { buildNameContext, tokenizeNames, findLeftoverNames, findDroppedTokens } from './lib/names.js';
 import { assignTokens, defaultTarget, buildSkeleton } from './lib/skeleton.js';
+import { planSlots } from './lib/slotPlan.js';
 import {
   STORY_DETAIL_INCLUDE,
   STORY_SUMMARY_INCLUDE,
@@ -18,7 +19,9 @@ export { formatStoryDetail };
 
 // Tao truyen ~15-30 cau lenh qua mang toi Supabase; mac dinh 5s cua Prisma khong du.
 export const TX_OPTIONS = { timeout: 20000 };
-const NEEDS_TARGET = ['emotion_other', 'perspective'];
+// Diem dung hoi ve nhan vat khac: co target (mau `needsTarget`); perspective cua mau khong can
+// target thi target null nen khong loc theo kieu.
+const HAS_TARGET = { targetToken: { not: null } };
 
 // ---------------------------------------------------------------------------
 // Ten -> token
@@ -129,12 +132,51 @@ export const getDetail = async (db, storyId) => {
 // Service
 // ---------------------------------------------------------------------------
 
-const createStory = async (user, data) => {
+/**
+ * Ky nang con cua topic (theo displayOrder) kem mau dang bat va ban published moi nhat cua tung mau
+ * (spec casel-pedagogy §6.1). Ky nang con da tat khong dung.
+ */
+const TOPIC_SLOT_SELECT = {
+  isActive: true,
+  subSkills: {
+    select: {
+      subSkill: {
+        select: {
+          id: true,
+          displayOrder: true,
+          isActive: true,
+          templates: {
+            where: { isActive: true },
+            select: {
+              id: true,
+              answerFormat: true,
+              versions: { where: { status: 'published' }, orderBy: { version: 'desc' }, take: 1 },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+/** TOPIC_SLOT_SELECT -> input `subSkills` cua planSlots; moi version mang them `answerFormat` cua mau. */
+const slotSubSkills = (topic) =>
+  topic.subSkills
+    .map((l) => l.subSkill)
+    .filter((s) => s.isActive)
+    .sort((a, b) => a.displayOrder - b.displayOrder || a.id.localeCompare(b.id))
+    .map((s) => ({
+      id: s.id,
+      displayOrder: s.displayOrder,
+      versions: s.templates.flatMap((t) => t.versions.map((v) => ({ ...v, answerFormat: t.answerFormat }))),
+    }));
+
+const createStory = async (user, data, { rng = Math.random } = {}) => {
   const { topicId, length, title, situation, characters, useAiImage = false, useTts = true } = data;
 
   const settings = await loadStorySettings(prisma);
 
-  const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: { isActive: true } });
+  const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: TOPIC_SLOT_SELECT });
   if (!topic) throw ApiError.notFound('Không tìm thấy chủ đề.');
   if (!topic.isActive) throw ApiError.badRequest('Chủ đề này đã ngừng sử dụng, vui lòng chọn chủ đề khác.');
 
@@ -143,11 +185,24 @@ const createStory = async (user, data) => {
   const nameContext = buildNameContext({ storyCharacters, children });
   const tokenizedSituation = tokenizeOrReject(situation?.trim() ? situation : null, nameContext);
 
+  // Xep mau vao o cham truoc khi ghi gi (va truoc moi buoc giu credit o luc sinh): 422 o day khong
+  // tao truyen, khong dong toi vi.
+  const layout = length === 'custom' ? null : settings.layouts[length];
+  const plan = layout
+    ? planSlots({
+      slots: layout.checkpoints.filter((c) => c.type === 'scored').map((c) => c.after),
+      subSkills: slotSubSkills(topic),
+      hasSecondary: storyCharacters.some((c) => !c.isMain),
+      rng,
+    })
+    : [];
+
   const skeleton = buildSkeleton({
     length,
     layouts: settings.layouts,
     customLimits: settings.customLimits,
     storyCharacters,
+    plan,
   });
 
   const storyId = await prisma.$transaction(async (tx) => {
@@ -203,6 +258,9 @@ const createStory = async (user, data) => {
           type: cp.type,
           targetToken: cp.targetToken,
           answerEmotion: cp.answerEmotion,
+          subSkillId: cp.subSkillId,
+          templateVersionId: cp.templateVersionId,
+          scored: cp.scored,
           origin: 'human',
         })),
       });
@@ -297,7 +355,7 @@ const bindCharacters = async (user, storyId, characters) => {
     const storyCharacters = await resolveStoryCharacters(tx, user.id, characters);
     const target = defaultTarget(storyCharacters);
 
-    const needsTarget = await tx.storyCheckpoint.count({ where: { storyId, type: { in: NEEDS_TARGET } } });
+    const needsTarget = await tx.storyCheckpoint.count({ where: { storyId, ...HAS_TARGET } });
     if (needsTarget > 0 && !target) {
       throw new ApiError(
         StatusCodes.UNPROCESSABLE_ENTITY,
@@ -348,7 +406,7 @@ const bindCharacters = async (user, storyId, characters) => {
     });
     if (needsTarget > 0) {
       await tx.storyCheckpoint.updateMany({
-        where: { storyId, type: { in: NEEDS_TARGET } },
+        where: { storyId, ...HAS_TARGET },
         data: { targetToken: target },
       });
     }

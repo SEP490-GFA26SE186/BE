@@ -1,6 +1,8 @@
 import ApiError from '../../../utils/ApiError.js';
 
 const LAYOUT_SIZES = ['short', 'medium', 'long'];
+// O cham dien bang mau cau hoi cua ky nang con (spec §6.1); reflection o cuoi khong cham.
+const SLOT_TYPES = new Set(['scored', 'reflection']);
 const LIMIT_KEYS = [
   'page_min_words',
   'page_max_words',
@@ -45,10 +47,10 @@ export function parseStorySettings(rows) {
     const ok =
       v && isPosInt(v.pages) && Array.isArray(v.checkpoints) &&
       v.checkpoints.every(
-        (c) => c && typeof c.type === 'string' && c.type && isPosInt(c.after) && c.after <= v.pages,
+        (c) => c && SLOT_TYPES.has(c.type) && isPosInt(c.after) && c.after <= v.pages,
       );
     if (!ok) {
-      invalid.push(`${key} (cần pages > 0 và mỗi checkpoint có type, after trong 1..pages)`);
+      invalid.push(`${key} (cần pages > 0 và mỗi checkpoint có type scored/reflection, after trong 1..pages)`);
       continue;
     }
     layouts[size] = {

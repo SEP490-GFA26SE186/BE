@@ -1,6 +1,7 @@
 // =============================================================================
 // Seed: platform_settings cho luong sinh truyen (spec story-generation-node §5.1)
-// Gia tri khop BE/ai/docs/03-story-structure.md.
+// Gia tri khop BE/ai/docs/03-story-structure.md. O 'scored' dien bang mau cau hoi cua ky nang con
+// cua topic khi tao truyen (spec casel-pedagogy §6.1); 'reflection' khong cham.
 //
 // Phai chay sau seedTopics: updated_by tro vao specialist ma seedTopics tao.
 // upsert voi update: {} — chay lai KHONG ghi de gia tri Admin da chinh.
@@ -14,9 +15,9 @@ export const platformSettingsData = [
     value: {
       pages: 6,
       checkpoints: [
-        { type: 'emotion_self', after: 2 },
-        { type: 'perspective', after: 3 },
-        { type: 'problem_solving', after: 4 },
+        { type: 'scored', after: 2 },
+        { type: 'scored', after: 3 },
+        { type: 'scored', after: 4 },
         { type: 'reflection', after: 6 },
       ],
     },
@@ -26,9 +27,9 @@ export const platformSettingsData = [
     value: {
       pages: 8,
       checkpoints: [
-        { type: 'emotion_self', after: 2 },
-        { type: 'perspective', after: 4 },
-        { type: 'problem_solving', after: 5 },
+        { type: 'scored', after: 2 },
+        { type: 'scored', after: 4 },
+        { type: 'scored', after: 5 },
         { type: 'reflection', after: 8 },
       ],
     },
@@ -38,10 +39,10 @@ export const platformSettingsData = [
     value: {
       pages: 10,
       checkpoints: [
-        { type: 'emotion_self', after: 2 },
-        { type: 'perspective', after: 4 },
-        { type: 'problem_solving', after: 6 },
-        { type: 'emotion_other', after: 8 },
+        { type: 'scored', after: 2 },
+        { type: 'scored', after: 4 },
+        { type: 'scored', after: 6 },
+        { type: 'scored', after: 8 },
         { type: 'reflection', after: 10 },
       ],
     },

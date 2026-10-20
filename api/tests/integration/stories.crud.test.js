@@ -7,7 +7,8 @@ import {
   createUser,
   createChild,
   createCharacter,
-  getSeededTopic,
+  createFixedSlotTopic,
+  retireTopic,
   startServer,
 } from './_fixtures.js';
 
@@ -18,10 +19,12 @@ let topic;
 before(async () => {
   if (skip) return;
   api = await startServer();
-  topic = await getSeededTopic();
+  // Kieu diem dung co dinh (emotion_self, perspective, problem_solving) thay vi chon mau ngau nhien.
+  topic = await createFixedSlotTopic();
 });
 
 after(async () => {
+  if (topic) await retireTopic(topic);
   if (api) await api.close();
   await prisma.$disconnect();
 });

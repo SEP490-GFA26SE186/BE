@@ -61,6 +61,56 @@ export async function getSeededTopic() {
 }
 
 /**
+ * Topic moi (cung nang luc voi topic seed) co khung o cham co dinh: 3 ky nang con, moi cai dung mot
+ * mau mot ban published -> o cham lan luot emotion_self, perspective (can target), problem_solving
+ * (truyen `medium` giong layout cu). Cho test can biet truoc kieu diem dung. displayOrder lon de
+ * getSeededTopic khong chon; goi `retireTopic` trong `after` de no khong o lai trong danh sach.
+ */
+export async function createFixedSlotTopic() {
+  const seeded = await getSeededTopic();
+  const link = await prisma.topicSubSkill.findFirst({
+    where: { topicId: seeded.id },
+    select: { subSkill: { select: { skillId: true, caselReferenceId: true } } },
+  });
+  const { skillId, caselReferenceId } = link.subSkill;
+  const { user } = await createUser({ role: 'specialist' });
+  const tag = rand();
+  const topic = await prisma.topic.create({
+    data: { title: `IT khung cố định ${tag}`, skillId, guidance: 'x', displayOrder: 1_000_000, createdBy: user.id },
+  });
+  const formats = [
+    ['emotion_pick', false],
+    ['single_correct', true],
+    ['role_choice', false],
+  ];
+  for (const [i, [answerFormat, needsTarget]] of formats.entries()) {
+    const sub = await prisma.eqSubSkill.create({
+      data: {
+        skillId, caselReferenceId, code: `it_fixed_${tag}_${i}`, nameVi: `Kỹ năng cố định ${tag} ${i}`,
+        descriptionVi: 'x', displayOrder: i, createdBy: user.id,
+      },
+    });
+    await prisma.topicSubSkill.create({ data: { topicId: topic.id, subSkillId: sub.id } });
+    const tpl = await prisma.questionTemplate.create({
+      data: { subSkillId: sub.id, title: `Mẫu ${answerFormat}`, answerFormat, createdBy: user.id },
+    });
+    await prisma.questionTemplateVersion.create({
+      data: {
+        templateId: tpl.id, version: 1, status: 'published', questionFrame: 'Khung câu hỏi', needsTarget,
+        constructiveScore: answerFormat === 'role_choice' ? 1 : null,
+        avoidantScore: answerFormat === 'role_choice' ? 0.3 : null,
+        impulsiveScore: answerFormat === 'role_choice' ? 0 : null,
+        createdBy: user.id,
+      },
+    });
+  }
+  return topic;
+}
+
+export const retireTopic = (topic) =>
+  topic ? prisma.topic.update({ where: { id: topic.id }, data: { isActive: false } }) : undefined;
+
+/**
  * Chay app tren cong ngau nhien. Tra ve { request(method, path, { token, body }), close() }.
  * `request` tra ve { status, body } (body da parse JSON neu co).
  */
