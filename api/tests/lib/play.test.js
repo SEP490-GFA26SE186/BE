@@ -104,3 +104,19 @@ test('kidStoryContent: ten that, khong kem dap an / vai / phan hoi; tat giong do
     assert.ok(!serialized.includes(leak), `khong duoc lo ${leak}`);
   }
 });
+
+test('firstScore: gan sai (thieu vai, diem NaN, dang khong khop kieu) -> null, khong nem loi', () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const rc = ver('role_choice', { constructiveScore: 1, avoidantScore: 0.5, impulsiveScore: 0 });
+    const noRole = { ...psCp, options: [{ id: 'px', optionOrder: 1, role: null, text: 'x' }] };
+    assert.equal(firstScore(scoredCp(noRole, rc), readChoice(noRole, { optionId: 'px' })), null);
+    const nan = ver('role_choice', { constructiveScore: 1, avoidantScore: null, impulsiveScore: undefined });
+    assert.equal(firstScore(scoredCp(psCp, { ...nan, avoidantScore: NaN }), readChoice(psCp, { optionId: 'p2' })), null);
+    assert.equal(firstScore(scoredCp(psCp, ver('emotion_pick')), readChoice(psCp, { optionId: 'p1' })), null);
+    assert.equal(firstScore(scoredCp(emotionCp, rc), { emotion: 'angry' }), null);
+  } finally {
+    console.warn = warn;
+  }
+});

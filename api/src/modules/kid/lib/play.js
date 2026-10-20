@@ -38,14 +38,33 @@ export function isCorrect(checkpoint, choice) {
   return true;
 }
 
-/** Diem lan chon dau theo phien ban mau cua diem dung; null = khong cham. */
+const FORMAT_FOR_TYPE = {
+  emotion_self: 'emotion_pick',
+  emotion_other: 'emotion_pick',
+  perspective: 'single_correct',
+  problem_solving: 'role_choice',
+};
+
+/**
+ * Diem lan chon dau theo phien ban mau cua diem dung; null = khong cham.
+ * Gan sai (dang tra loi khong khop kieu diem dung, thieu vai, diem khong hop le) -> null + canh bao
+ * (chi id) de be van tra loi duoc, khong 500.
+ */
 export function firstScore(checkpoint, choice) {
   if (!checkpoint.scored || checkpoint.excluded || checkpoint.type === 'reflection' || !checkpoint.templateVersion) return null;
-  return scoreFor(checkpoint.templateVersion, {
-    type: checkpoint.type,
-    correct: isCorrect(checkpoint, choice),
-    role: choice.option?.role,
-  });
+  const version = checkpoint.templateVersion;
+  const warn = (why) => {
+    console.warn(`[kid] khong cham diem checkpoint ${checkpoint.id} (phien ban ${checkpoint.templateVersionId ?? version.id ?? '?'}): ${why}`);
+    return null;
+  };
+  const format = version.answerFormat ?? version.template?.answerFormat;
+  if (FORMAT_FOR_TYPE[checkpoint.type] !== format) return warn(`dang ${format} khong khop kieu ${checkpoint.type}`);
+  try {
+    const score = scoreFor(version, { type: checkpoint.type, correct: isCorrect(checkpoint, choice), role: choice.option?.role });
+    return Number.isFinite(score) ? score : warn('diem khong hop le');
+  } catch {
+    return warn('khong tinh duoc diem (thieu vai hop le)');
+  }
 }
 
 /**
