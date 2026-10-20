@@ -145,6 +145,20 @@ test('POST /stories custom -> 4 trang, 0 diem dung', { skip }, async () => {
   assert.equal(story.checkpoints.length, 0);
 });
 
+test('POST /stories custom khong topicId -> 201, topic null; AI khong topicId -> 400', { skip }, async () => {
+  const f = await family();
+  const chars = [{ characterId: f.bin.id, isMain: true }];
+  const noTopic = (over) => ({ ...createBody(f, { characters: chars, ...over }), topicId: undefined });
+  const ok = await api.request('POST', '/stories', { token: f.token, body: noTopic({ length: 'custom' }) });
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  assert.equal(ok.body.data.story.topicId, null);
+  assert.equal(ok.body.data.story.topic, null);
+  const list = await api.request('GET', '/stories', { token: f.token });
+  assert.equal(list.status, 200);
+  const bad = await api.request('POST', '/stories', { token: f.token, body: noTopic({ length: 'short' }) });
+  assert.equal(bad.status, 400);
+});
+
 test('GET /stories/:id: nguoi khac -> 404; specialist doc duoc', { skip }, async () => {
   const f = await family();
   const story = await createStory(f);

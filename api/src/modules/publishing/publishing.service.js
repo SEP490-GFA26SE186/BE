@@ -181,6 +181,14 @@ export async function createListing(user, body, narrationOptions) {
           answerEmotion: c.answerEmotion,
           hint: c.hint,
           origin: c.origin,
+          // Giu truy vet cham diem cua nguon; reviewedOk* la soat rieng cua tung ban, khong chep.
+          subSkillId: c.subSkillId,
+          templateVersionId: c.templateVersionId,
+          scored: c.scored,
+          excluded: c.excluded,
+          excludedReason: c.excludedReason,
+          excludedBy: c.excludedBy,
+          excludedAt: c.excludedAt,
           options: { create: c.options.map((o) => ({ optionOrder: o.optionOrder, text: o.text, role: o.role, isCorrect: o.isCorrect, feedback: o.feedback })) },
         },
       });

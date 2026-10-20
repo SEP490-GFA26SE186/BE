@@ -112,6 +112,32 @@ test('dang ban: thieu / trung bi danh hoac dung ten that -> 422; ban sao go ca n
   assert.equal((await call(s.token, 'GET', '/listings/mine')).body.data.listings[0].id, listing.id);
 });
 
+test('dang ban: ban sao giu subSkillId, templateVersionId, scored, excluded cua diem dung nguon (khong chep reviewedOk)', { skip }, async () => {
+  const s = await approvedSeller();
+  const version = await prisma.questionTemplateVersion.findFirstOrThrow({ include: { template: true } });
+  const spec = await createUser({ role: 'specialist' });
+  const src = await prisma.storyCheckpoint.create({
+    data: {
+      storyId: s.story.id, afterPageId: s.story.pages[1].id, type: 'reflection', question: 'Con học được gì?', origin: 'human',
+      subSkillId: version.template.subSkillId, templateVersionId: version.id, scored: true,
+      excluded: true, excludedReason: 'cau hoi mo ho', excludedBy: spec.user.id, excludedAt: new Date(),
+      reviewedOkAt: new Date(), reviewedOkBy: spec.user.id,
+    },
+  });
+  const ok = await call(s.token, 'POST', '/listings', listingBody(s));
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  const copy = await prisma.storyCheckpoint.findFirstOrThrow({ where: { storyId: ok.body.data.listing.publishedStoryId } });
+  assert.equal(copy.subSkillId, src.subSkillId);
+  assert.equal(copy.templateVersionId, src.templateVersionId);
+  assert.equal(copy.scored, true);
+  assert.equal(copy.excluded, true);
+  assert.equal(copy.excludedReason, 'cau hoi mo ho');
+  assert.equal(copy.excludedBy, spec.user.id);
+  assert.ok(copy.excludedAt);
+  assert.equal(copy.reviewedOkAt, null);
+  assert.equal(copy.reviewedOkBy, null);
+});
+
 test('duyet: nhan bai, nguoi khac khong nhan duoc; chua xem du -> 422; xem du + checklist -> published', { skip }, async () => {
   const s = await approvedSeller();
   const { listing } = (await call(s.token, 'POST', '/listings', listingBody(s))).body.data;

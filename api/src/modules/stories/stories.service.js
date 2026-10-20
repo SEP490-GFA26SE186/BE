@@ -179,9 +179,11 @@ const createStory = async (user, data, { rng = Math.random } = {}) => {
 
   const settings = await loadStorySettings(prisma);
 
-  const topic = await prisma.topic.findUnique({ where: { id: topicId }, select: TOPIC_SLOT_SELECT });
-  if (!topic) throw ApiError.notFound('Không tìm thấy chủ đề.');
-  if (!topic.isActive) throw ApiError.badRequest('Chủ đề này đã ngừng sử dụng, vui lòng chọn chủ đề khác.');
+  // Truyen AI bat buoc co topic; truyen tu viet (custom) co the khong chon bai hoc (topic_id NULL).
+  if (!topicId && length !== 'custom') throw ApiError.badRequest('Truyện AI cần chọn chủ đề.');
+  const topic = topicId ? await prisma.topic.findUnique({ where: { id: topicId }, select: TOPIC_SLOT_SELECT }) : null;
+  if (topicId && !topic) throw ApiError.notFound('Không tìm thấy chủ đề.');
+  if (topic && !topic.isActive) throw ApiError.badRequest('Chủ đề này đã ngừng sử dụng, vui lòng chọn chủ đề khác.');
 
   const storyCharacters = await resolveStoryCharacters(prisma, user.id, characters);
   const children = await loadChildren(prisma, user.id);
@@ -213,7 +215,7 @@ const createStory = async (user, data, { rng = Math.random } = {}) => {
       data: {
         ownerId: user.id,
         kind: 'private',
-        topicId,
+        topicId: topicId ?? null,
         length,
         title,
         situation: tokenizedSituation,
