@@ -29,7 +29,7 @@ async function setup() {
   const res = await api.request('POST', '/stories', {
     token,
     body: {
-      topicId: topic.id, length: 'custom', title: 'Truyen thu', useTts: false,
+      topicId: topic.id, length: 'custom', title: 'Bin va bin', useTts: false,
       characters: [{ characterId: bin.id, isMain: true }, { characterId: ba.id, isMain: false }],
     },
   });
@@ -78,10 +78,15 @@ test('soat mau: phu huynh bi 403', { skip }, async () => {
 test('soat mau: hang doi an ten that va tinh huong, thay token bang ten chung', { skip }, async () => {
   const f = await setup();
   const { token: sp } = await specialist();
+  // ten sot dang chu thuong / in hoa (khong phai token) -> van phai che
+  await prisma.storyCheckpoint.update({ where: { id: f.emo.id }, data: { question: 'bin thấy sao? BIN giận, {NV1} im.' } });
   const res = await list(sp, `?subSkillId=${f.sub.id}`);
   assert.equal(res.status, 200, JSON.stringify(res.body));
+  const emoQ = res.body.data.find((x) => x.checkpointId === f.emo.id).question;
+  assert.equal(emoQ, 'Bạn A thấy sao? Bạn A giận, Bạn A im.');
   const raw = JSON.stringify(res.body);
   assert.ok(!raw.includes('Bin'), 'khong duoc lo ten that Bin');
+  assert.ok(!/bin/i.test(raw), 'khong lo bin o bat ky dang nao (ke ca tieu de truyen)');
   assert.ok(!raw.includes('Bà'), 'khong duoc lo ten that Bà');
   assert.ok(!raw.includes(f.secret), 'khong duoc lo situation');
   assert.ok(!raw.includes('{NV'), 'khong con token');
@@ -193,4 +198,21 @@ test('soat mau: phan trang con tro; stats theo mau', { skip }, async () => {
   assert.equal(st.status, 200, JSON.stringify(st.body));
   const row = st.body.data.find((x) => x.templateId === f.tpl.id);
   assert.deepEqual(row, { templateId: f.tpl.id, title: f.tpl.title, reviewed: 2, flagged: 1 });
+});
+
+test('soat mau: ok tren diem da loai = khoi phuc + duyet; moi hanh dong tra trang thai that', { skip }, async () => {
+  const f = await setup();
+  const { token: t } = await specialist();
+  const act = (m, a, body) => api.request(m, `/checkpoint-review/${f.emo.id}/${a}`, { token: t, body });
+  assert.equal((await act('POST', 'flag', { reason: 'Ly do du dai' })).body.data.status, 'flagged');
+  const ok = await act('POST', 'ok');
+  assert.equal(ok.body.data.status, 'ok');
+  const row = await prisma.storyCheckpoint.findUnique({ where: { id: f.emo.id } });
+  assert.equal(row.excluded, false);
+  assert.equal(row.excludedReason, null);
+  assert.ok(row.reviewedOkAt);
+  // go co tren diem da on -> van on
+  assert.equal((await act('DELETE', 'flag')).body.data.status, 'ok');
+  await prisma.storyCheckpoint.update({ where: { id: f.emo.id }, data: { reviewedOkAt: null, reviewedOkBy: null } });
+  assert.equal((await act('DELETE', 'flag')).body.data.status, 'pending');
 });
