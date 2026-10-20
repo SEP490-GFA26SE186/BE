@@ -22,7 +22,7 @@ after(async () => {
  * Phu huynh + be Bin + truyen tu viet 4 trang da hoan tat, tat giong doc (san sang ngay),
  * diem dung: emotion_self (dap an: giận) sau trang 2, problem_solving sau trang 3.
  */
-async function setup({ review = true } = {}) {
+async function setup({ review = true, scored = true } = {}) {
   const { user, token } = await createParent();
   const child = await createChild(user.id, 'Bin');
   const bin = await createCharacter(user.id, 'Bin', { childId: child.id });
@@ -40,12 +40,18 @@ async function setup({ review = true } = {}) {
   for (const p of pages) {
     await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} ở trang ${p.pageOrder}.` } });
   }
+  // Truyen AI: diem dung gan phien ban mau + ky nang con (cham diem). Truyen tu viet: khong gan gi.
+  const sc = scored ? await scoringFixtures(user.id) : null;
   const emo = await prisma.storyCheckpoint.create({
-    data: { storyId: story.id, afterPageId: pages[1].id, type: 'emotion_self', question: '{NV1} thấy sao?', answerEmotion: 'angry', hint: 'Mặt {NV1} đỏ.' },
+    data: {
+      storyId: story.id, afterPageId: pages[1].id, type: 'emotion_self', question: '{NV1} thấy sao?', answerEmotion: 'angry', hint: 'Mặt {NV1} đỏ.',
+      ...(sc && { scored: true, subSkillId: sc.sub.id, templateVersionId: sc.emoVersion.id }),
+    },
   });
   const ps = await prisma.storyCheckpoint.create({
     data: {
       storyId: story.id, afterPageId: pages[2].id, type: 'problem_solving', question: '{NV1} làm gì?',
+      ...(sc && { scored: true, subSkillId: sc.sub.id, templateVersionId: sc.psVersion.id }),
       options: {
         create: [
           { optionOrder: 1, role: 'constructive', text: 'Hít thở', feedback: '{NV1} dịu lại.' },
@@ -62,7 +68,29 @@ async function setup({ review = true } = {}) {
   }
   const pin = await api.request('POST', '/auth/kid-pin/set', { token, body: { pin: '1234' } });
   assert.ok([200, 201].includes(pin.status), JSON.stringify(pin.body));
-  return { user, token, child, story, pages, emo, ps };
+  return { user, token, child, story, pages, emo, ps, sc };
+}
+
+/** Ky nang con + hai mau da ban hanh: emotion_pick va role_choice (constructive 1, avoidant 0.25, impulsive 0). */
+async function scoringFixtures(userId) {
+  const link = await prisma.topicSubSkill.findFirst({
+    where: { topicId: topic.id },
+    select: { subSkill: { select: { skillId: true, caselReferenceId: true } } },
+  });
+  const { skillId, caselReferenceId } = link.subSkill;
+  const tag = Math.random().toString(36).slice(2, 8);
+  const sub = await prisma.eqSubSkill.create({
+    data: { skillId, caselReferenceId, code: `it_kid_${tag}`, nameVi: `Kỹ năng ${tag}`, descriptionVi: 'x', createdBy: userId },
+  });
+  const version = async (answerFormat, extra = {}) => {
+    const tpl = await prisma.questionTemplate.create({ data: { subSkillId: sub.id, title: `Mẫu ${answerFormat}`, answerFormat, createdBy: userId } });
+    return prisma.questionTemplateVersion.create({
+      data: { templateId: tpl.id, version: 1, status: 'published', questionFrame: 'Khung', createdBy: userId, ...extra },
+    });
+  };
+  const emoVersion = await version('emotion_pick');
+  const psVersion = await version('role_choice', { constructiveScore: 1, avoidantScore: 0.25, impulsiveScore: 0 });
+  return { sub, skillId, emoVersion, psVersion };
 }
 
 async function enterKid(f) {
@@ -73,8 +101,8 @@ async function enterKid(f) {
 }
 
 const addToShelf = (f) => api.request('POST', '/bookshelf', { token: f.token, body: { childId: f.child.id, storyId: f.story.id } });
-const stat = (childId, code) =>
-  prisma.eqCompetencyStat.findFirst({ where: { childId, skill: { caselCode: code } } });
+const answersOf = (sessionId) =>
+  prisma.checkpointAnswer.findMany({ where: { sessionId }, orderBy: { answeredAt: 'asc' } });
 
 test('token Kid Mode bi chan o route phu huynh; token phu huynh bi chan o route be', { skip }, async () => {
   const f = await setup();
@@ -130,12 +158,19 @@ test('doc truyen: noi dung khong lo dap an; sai -> goi y -> chon lai; diem chi t
   const ps = await answer({ checkpointId: f.ps.id, optionId: avoid.id });
   assert.equal(ps.body.data.result.feedback, 'Yên hơn.');
 
-  // Tu nhan thuc: 1 cau, lan dau sai -> 0 diem; nang luc cua bai hoc: avoidant 0.5.
-  const self = await stat(f.child.id, 'self_awareness');
-  assert.deepEqual({ items: self.items, sum: Number(self.scoreSum) }, { items: 1, sum: 0 });
-  const topicSkill = await prisma.topic.findUnique({ where: { id: topic.id }, select: { skill: { select: { caselCode: true } } } });
-  const t = await stat(f.child.id, topicSkill.skill.caselCode);
-  assert.equal(Number(t.scoreSum), 0.5);
+  // Diem dong bang theo phien ban mau: cam xuc lan dau sai -> 0; avoidant theo phien ban -> 0.25.
+  const rows = await answersOf(session.id);
+  const byCp = new Map(rows.map((r) => [r.checkpointId, r]));
+  const e = byCp.get(f.emo.id);
+  assert.deepEqual(
+    { score: Number(e.score), skillId: e.skillId, subSkillId: e.subSkillId, templateVersionId: e.templateVersionId },
+    { score: 0, skillId: f.sc.skillId, subSkillId: f.sc.sub.id, templateVersionId: f.sc.emoVersion.id },
+  );
+  const p = byCp.get(f.ps.id);
+  assert.deepEqual(
+    { score: Number(p.score), skillId: p.skillId, subSkillId: p.subSkillId, templateVersionId: p.templateVersionId },
+    { score: 0.25, skillId: f.sc.skillId, subSkillId: f.sc.sub.id, templateVersionId: f.sc.psVersion.id },
+  );
 
   // Tiep tuc luot doc: cau da tra loi co san ket qua
   const resume = await api.request('POST', '/kid/sessions', { token: kid, body: { storyId: f.story.id } });
@@ -145,12 +180,42 @@ test('doc truyen: noi dung khong lo dap an; sai -> goi y -> chon lai; diem chi t
   assert.equal((await api.request('PUT', `/kid/sessions/${session.id}/progress`, { token: kid, body: { pageId: f.pages[3].id } })).status, 200);
   assert.equal((await api.request('POST', `/kid/sessions/${session.id}/complete`, { token: kid })).body.data.session.status, 'completed');
 
-  // Doc lai: luot moi, khong con la luot dau -> khong cong diem nua
+  // Doc lai: luot moi, khong con la luot dau (van luu snapshot; bao cao chi loc luot dau)
   const replay = await api.request('POST', '/kid/sessions', { token: kid, body: { storyId: f.story.id } });
   assert.notEqual(replay.body.data.session.id, session.id);
   assert.equal(replay.body.data.session.isFirstPlay, false);
   await api.request('POST', `/kid/sessions/${replay.body.data.session.id}/answers`, { token: kid, body: { checkpointId: f.emo.id, emotion: 'angry' } });
-  assert.equal((await stat(f.child.id, 'self_awareness')).items, 1);
+  const replayRows = await answersOf(replay.body.data.session.id);
+  assert.equal(replayRows.length, 1);
+  assert.equal(Number(replayRows[0].score), 1);
+  assert.equal(replayRows[0].subSkillId, f.sc.sub.id);
+});
+
+test('truyen tu viet / bi co excluded -> score, skillId null; noi dung be khong lo phien ban / diem', { skip }, async () => {
+  const f = await setup({ scored: false });
+  await addToShelf(f);
+  const kid = await enterKid(f);
+  const { session } = (await api.request('POST', '/kid/sessions', { token: kid, body: { storyId: f.story.id } })).body.data;
+  const answer = (body) => api.request('POST', `/kid/sessions/${session.id}/answers`, { token: kid, body });
+  assert.equal((await answer({ checkpointId: f.emo.id, emotion: 'angry' })).status, 200);
+  const avoid = f.ps.options.find((o) => o.role === 'avoidant');
+  assert.equal((await answer({ checkpointId: f.ps.id, optionId: avoid.id })).status, 200);
+  for (const r of await answersOf(session.id)) {
+    assert.deepEqual({ score: r.score, skillId: r.skillId, subSkillId: r.subSkillId, templateVersionId: r.templateVersionId },
+      { score: null, skillId: null, subSkillId: null, templateVersionId: null });
+  }
+
+  // Co phien ban nhung bi co "excluded" -> khong cham.
+  const g = await setup();
+  await prisma.storyCheckpoint.update({ where: { id: g.emo.id }, data: { excluded: true } });
+  await addToShelf(g);
+  const kid2 = await enterKid(g);
+  const s2 = (await api.request('POST', '/kid/sessions', { token: kid2, body: { storyId: g.story.id } })).body.data;
+  await api.request('POST', `/kid/sessions/${s2.session.id}/answers`, { token: kid2, body: { checkpointId: g.emo.id, emotion: 'angry' } });
+  const [ex] = await answersOf(s2.session.id);
+  assert.deepEqual({ score: ex.score, subSkillId: ex.subSkillId }, { score: null, subSkillId: null });
+  const raw = JSON.stringify(s2.story);
+  for (const leak of ['templateVersion', 'subSkill', 'scored', 'excluded', 'Score']) assert.ok(!raw.includes(leak), `khong duoc lo ${leak}`);
 });
 
 test('truyen khong co tren gia cua be -> 404; sai kieu lua chon -> 400', { skip }, async () => {
@@ -163,7 +228,7 @@ test('truyen khong co tren gia cua be -> 404; sai kieu lua chon -> 400', { skip 
   assert.equal(bad.status, 400);
 });
 
-test('bao cao EQ: luot doc dau vao xu huong + theo loai + gan day (ten that hien cho phu huynh); luot doc lai khong tinh', { skip }, async () => {
+test('bao cao EQ: luot doc dau vao xu huong + theo loai + gan day (ten that hien cho phu huynh); luot doc lai khong tinh', { skip: skip || 'Task 14: bao cao doc tu checkpoint_answers' }, async () => {
   const f = await setup();
   await addToShelf(f);
   const kid = await enterKid(f);

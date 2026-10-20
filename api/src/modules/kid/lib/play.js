@@ -1,29 +1,21 @@
 // Kid Mode: noi dung truyen cho be + cham diem diem dung (DBML rev8: checkpoint_answers). Ham thuan.
 //
 // Luat (DBML checkpoint_answers, docs/01):
-// - emotion_self -> Tu nhan thuc; emotion_other, perspective -> Nhan thuc xa hoi;
-//   problem_solving -> nang luc cua bai hoc (constructive 1, avoidant 0.5, impulsive 0); reflection khong cham.
-// - Chi LAN CHON DAU duoc cham (diem dong bang luc tra loi); chi lan choi dau cua be voi truyen
-//   (is_first_play) moi cong vao eq_competency_stats.
+// - Diem + ky nang con den tu PHIEN BAN MAU cua Specialist gan vao diem dung (templateVersion, subSkill);
+//   problem_solving: diem theo vai cua phien ban; dang khac dung 1 / sai 0. reflection, diem dung
+//   khong cham (scored=false), bi co (excluded), truyen tu viet / truyen cu khong co phien ban -> khong cham.
+// - Chi LAN CHON DAU duoc cham (diem dong bang luc tra loi); bao cao chi tinh luot choi dau (is_first_play).
 // - emotion_* / perspective: chon sai lan dau -> goi y, chon lai mot lan, roi bao dap an.
 //   problem_solving: chon mot lan, nghe phan hoi (khong co "sai"). reflection: tra loi tu do.
 // Dap an KHONG bao gio nam trong noi dung gui xuong may be (be khong "mo" duoc dap an).
 
 import { assetUrl } from '../../../clients/assetUrl.js';
 import { detokenize } from '../../stories/lib/narration.js';
+import { scoreFor } from '../../question-templates/lib/templateRules.js';
 
 export const EMOTIONS = ['happy', 'sad', 'angry', 'scared', 'neutral'];
-const ROLE_SCORE = { constructive: 1, avoidant: 0.5, impulsive: 0 };
 const RETRYABLE = new Set(['emotion_self', 'emotion_other', 'perspective']);
 const byKey = (key) => (a, b) => a[key] - b[key];
-
-/** caselCode cua nang luc duoc cham cho kieu diem dung; null = khong cham. */
-export function skillCodeFor(type, topicCaselCode) {
-  if (type === 'emotion_self') return 'self_awareness';
-  if (type === 'emotion_other' || type === 'perspective') return 'social_awareness';
-  if (type === 'problem_solving') return topicCaselCode;
-  return null;
-}
 
 /** Lua chon cua be cho diem dung co dung kieu khong (emotion hay optionId). Sai -> null. */
 export function readChoice(checkpoint, { emotion, optionId }) {
@@ -46,11 +38,14 @@ export function isCorrect(checkpoint, choice) {
   return true;
 }
 
-/** Diem lan chon dau (0 / 0.5 / 1), null voi reflection. */
+/** Diem lan chon dau theo phien ban mau cua diem dung; null = khong cham. */
 export function firstScore(checkpoint, choice) {
-  if (checkpoint.type === 'reflection') return null;
-  if (checkpoint.type === 'problem_solving') return ROLE_SCORE[choice.option.role] ?? 0;
-  return isCorrect(checkpoint, choice) ? 1 : 0;
+  if (!checkpoint.scored || checkpoint.excluded || checkpoint.type === 'reflection' || !checkpoint.templateVersion) return null;
+  return scoreFor(checkpoint.templateVersion, {
+    type: checkpoint.type,
+    correct: isCorrect(checkpoint, choice),
+    role: choice.option?.role,
+  });
 }
 
 /**
