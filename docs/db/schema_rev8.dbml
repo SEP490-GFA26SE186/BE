@@ -15,6 +15,8 @@
 //  - 2026-10-20 su pham CASEL: casel_references, eq_sub_skills, question_templates (+ versions),
 //    topic_sub_skills; cot truy vet tren story_checkpoints / checkpoint_answers;
 //    stories.topic_id tuy chon voi truyen custom
+//  - 2026-10-21 gop tang: ky nang con CHINH LA muc CASEL (bo casel_references; eq_sub_skills them
+//    casel_text_en + source casel/specialist)
 // =============================================================================
 
 
@@ -253,6 +255,11 @@ Enum answer_format {
   role_choice [note: '3 phuong an theo 3 vai; diem tung vai do phien ban mau quy dinh']
 }
 
+Enum sub_skill_source {
+  casel [note: 'muc goc khung CASEL (40 muc)']
+  specialist [note: 'chuyen gia su pham bo sung']
+}
+
 Enum template_status {
   draft
   published
@@ -378,28 +385,14 @@ Table topics {
   Note: 'Danh sach bai hoc do Specialist quan ly. CHECK age_min <= age_max'
 }
 
-Table casel_references {
-  id uuid [pk, default: `gen_random_uuid()`]
-  skill_id uuid [not null, note: 'nang luc CASEL chua muc nay']
-  code varchar(60) [unique, not null]
-  text_en text [not null, note: 'nguyen van tieng Anh cua khung CASEL']
-  text_vi text [note: 'ban dich tieng Viet de hien tren giao dien; text_en moi la can cu truy vet']
-  display_order int [not null, default: 0]
-
-  indexes {
-    skill_id
-  }
-
-  Note: 'Muc tham chieu CASEL (40 muc), chi doc: khong co API ghi, chi doi bang migration/seed'
-}
-
 Table eq_sub_skills {
   id uuid [pk, default: `gen_random_uuid()`]
   skill_id uuid [not null]
-  casel_reference_id uuid [not null, note: 'bat buoc; muc CASEL phai cung skill_id (kiem o service)']
   code varchar(60) [unique, not null]
   name_vi varchar(200) [not null]
   description_vi text [not null, note: 'loi cho phu huynh / AI']
+  casel_text_en text [note: 'nguyen van tieng Anh cua muc CASEL; bat buoc khi source = casel, khong sua qua API']
+  source sub_skill_source [not null, default: 'specialist', note: 'casel = 40 muc goc (seed); specialist = chuyen gia bo sung']
   age_min int [not null, default: 5]
   age_max int [not null, default: 8]
   is_active boolean [not null, default: true]
@@ -410,12 +403,13 @@ Table eq_sub_skills {
 
   indexes {
     (skill_id, is_active)
-    casel_reference_id
   }
 
   Note: '''
-  Ky nang con do Specialist CRUD; moi ky nang con tro ve dung 1 muc CASEL (dieu kien truy vet).
-  CHECK: age_min <= age_max
+  Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21).
+  source = casel: 40 muc goc CASEL (seed), khong doi skill_id / code / casel_text_en, khong xoa (chi tat).
+  source = specialist: Specialist bo sung duoi 1 nang luc, casel_text_en tuy chon; xoa duoc khi chua dung.
+  CHECK: age_min <= age_max; source <> 'casel' OR casel_text_en IS NOT NULL
   '''
 }
 
@@ -1244,9 +1238,7 @@ Ref: characters.child_id - child_profiles.id [delete: set null]
 Ref: topics.skill_id > eq_skills.id [delete: restrict]
 Ref: topics.created_by > users.id [delete: restrict]
 Ref: stories.topic_id > topics.id [delete: restrict]
-Ref: casel_references.skill_id > eq_skills.id [delete: restrict]
 Ref: eq_sub_skills.skill_id > eq_skills.id [delete: restrict]
-Ref: eq_sub_skills.casel_reference_id > casel_references.id [delete: restrict]
 Ref: eq_sub_skills.created_by > users.id [delete: restrict]
 Ref: question_templates.sub_skill_id > eq_sub_skills.id [delete: restrict]
 Ref: question_templates.created_by > users.id [delete: restrict]
@@ -1352,7 +1344,6 @@ TableGroup accounts {
 TableGroup content_library {
   eq_skills
   topics
-  casel_references
   eq_sub_skills
   question_templates
   question_template_versions

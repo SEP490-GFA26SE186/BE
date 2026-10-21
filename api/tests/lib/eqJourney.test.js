@@ -13,8 +13,8 @@ const skills = [
   { id: 'k2', caselCode: 'self_management', nameVi: 'Tự quản lý', displayOrder: 2 },
 ];
 const subSkills = [
-  { id: 'a', skillId: 'k1', nameVi: 'A', displayOrder: 1, caselReference: { textEn: 'x' } },
-  { id: 'c', skillId: 'k2', nameVi: 'C', displayOrder: 1, caselReference: { textEn: 'y' } },
+  { id: 'a', skillId: 'k1', nameVi: 'A', displayOrder: 1, caselTextEn: 'x' },
+  { id: 'c', skillId: 'k2', nameVi: 'C', displayOrder: 1, caselTextEn: 'y' },
 ];
 
 test('buildTrend: so cau cham moi tuan theo nang luc + muc cuoi tuan (tinh ca cau cac tuan truoc)', () => {

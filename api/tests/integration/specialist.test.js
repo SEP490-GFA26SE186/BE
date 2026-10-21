@@ -82,7 +82,7 @@ test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban 
 
   const old = await prisma.eqSubSkill.create({
     data: {
-      skillId: skills.self_management.id, caselReferenceId: usable.self_management[0].caselReferenceId, code: `thu_${Date.now()}`,
+      skillId: skills.self_management.id, code: `thu_${Date.now()}`,
       nameVi: `Kỹ năng thử tuổi ${Date.now()}`, descriptionVi: 'x', ageMin: 12, ageMax: 15, createdBy: mod.user.id,
     },
   });
@@ -92,7 +92,7 @@ test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban 
 
   const nameNoTpl = `Kỹ năng thử chưa mẫu ${Date.now()}`;
   const noTpl = await prisma.eqSubSkill.create({
-    data: { skillId: skills.self_management.id, caselReferenceId: usable.self_management[0].caselReferenceId, code: `thu2_${Date.now()}`, nameVi: nameNoTpl, descriptionVi: 'x', createdBy: mod.user.id },
+    data: { skillId: skills.self_management.id, code: `thu2_${Date.now()}`, nameVi: nameNoTpl, descriptionVi: 'x', createdBy: mod.user.id },
   });
   const noPub = await post({ subSkillIds: [noTpl.id] });
   assert.equal(noPub.status, 422, JSON.stringify(noPub.body));
@@ -102,11 +102,11 @@ test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban 
   const ok = await post({ subSkillIds: two });
   assert.equal(ok.status, 201, JSON.stringify(ok.body));
   assert.equal(ok.body.data.subSkills.length, 2);
-  assert.ok(ok.body.data.subSkills.every((x) => x.id && x.nameVi && x.caselReference?.textEn));
+  assert.ok(ok.body.data.subSkills.every((x) => x.id && x.nameVi && 'caselTextEn' in x && ['casel', 'specialist'].includes(x.source)));
   const pl = (await call(parent.token, 'GET', '/topics')).body.data;
   // Chi kiem bai vua tao: DB test tich luy bai hoc cua cac lan chay khac (co the chua gan ky nang con).
   const mine = pl.find((x) => x.id === ok.body.data.id);
-  assert.ok(mine && mine.subSkills.length === 2 && mine.subSkills.every((y) => y.id && y.nameVi && y.caselReference === undefined));
+  assert.ok(mine && mine.subSkills.length === 2 && mine.subSkills.every((y) => y.id && y.nameVi && y.caselTextEn === undefined && y.source === undefined));
   assert.ok(pl.every((x) => Array.isArray(x.subSkills)));
 
   // update: thay toan bo lien ket; doi nang luc ma khong gui subSkillIds -> 422; doi tuoi khong giao -> 422

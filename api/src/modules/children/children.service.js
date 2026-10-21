@@ -234,7 +234,7 @@ async function computeReport(child, rows) {
     // Ky nang con dang bat + ky nang con da tat nhung be da co cau tra loi.
     prisma.eqSubSkill.findMany({
       where: { OR: [{ isActive: true }, { id: { in: subIds } }] },
-      select: { id: true, skillId: true, nameVi: true, displayOrder: true, caselReference: { select: { textEn: true, textVi: true } } },
+      select: { id: true, skillId: true, nameVi: true, displayOrder: true, caselTextEn: true },
     }),
     prisma.topic.findMany({
       where: { isActive: true },

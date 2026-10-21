@@ -30,9 +30,9 @@ const skills = [
   { id: 'k1', caselCode: 'self_awareness', nameVi: 'Tự nhận thức', displayOrder: 1 },
 ];
 const subSkills = [
-  { id: 'a', skillId: 'k1', nameVi: 'Gọi tên cảm xúc', displayOrder: 1, caselReference: { textEn: 'Identify emotions' } },
-  { id: 'b', skillId: 'k1', nameVi: 'Nhận ra điểm mạnh', displayOrder: 2, caselReference: { textEn: 'Recognize strengths' } },
-  { id: 'c', skillId: 'k2', nameVi: 'Bình tĩnh', displayOrder: 1, caselReference: { textEn: 'Manage emotions' } },
+  { id: 'a', skillId: 'k1', nameVi: 'Gọi tên cảm xúc', displayOrder: 1, caselTextEn: 'Identify emotions' },
+  { id: 'b', skillId: 'k1', nameVi: 'Nhận ra điểm mạnh', displayOrder: 2, caselTextEn: 'Recognize strengths' },
+  { id: 'c', skillId: 'k2', nameVi: 'Bình tĩnh', displayOrder: 1, caselTextEn: 'Manage emotions' },
 ];
 const at = (i) => new Date(Date.UTC(2026, 9, 20) - i * 60_000);
 const rows = (subSkillId, scores) => scores.map((score, i) => ({ subSkillId, score, answeredAt: at(i) }));
@@ -43,8 +43,8 @@ test('buildEqLevels: nang luc = muc thap nhat cua ky nang con co muc; secure + e
   const sa = r.competencies[0];
   assert.equal(sa.level, 'emerging');
   assert.deepEqual(sa.subSkills, [
-    { id: 'a', nameVi: 'Gọi tên cảm xúc', caselTextEn: 'Identify emotions', caselTextVi: null, level: 'secure', items: 3 },
-    { id: 'b', nameVi: 'Nhận ra điểm mạnh', caselTextEn: 'Recognize strengths', caselTextVi: null, level: 'emerging', items: 3 },
+    { id: 'a', nameVi: 'Gọi tên cảm xúc', caselTextEn: 'Identify emotions', level: 'secure', items: 3 },
+    { id: 'b', nameVi: 'Nhận ra điểm mạnh', caselTextEn: 'Recognize strengths', level: 'emerging', items: 3 },
   ]);
   assert.equal(r.competencies[1].level, null, 'khong ky nang con nao co muc -> null');
   assert.equal(r.competencies[1].subSkills[0].items, 0);

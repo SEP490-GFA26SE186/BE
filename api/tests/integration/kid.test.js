@@ -75,12 +75,12 @@ async function setup({ review = true, scored = true } = {}) {
 async function scoringFixtures(userId) {
   const link = await prisma.topicSubSkill.findFirst({
     where: { topicId: topic.id },
-    select: { subSkill: { select: { skillId: true, caselReferenceId: true } } },
+    select: { subSkill: { select: { skillId: true } } },
   });
-  const { skillId, caselReferenceId } = link.subSkill;
+  const { skillId } = link.subSkill;
   const tag = Math.random().toString(36).slice(2, 8);
   const sub = await prisma.eqSubSkill.create({
-    data: { skillId, caselReferenceId, code: `it_kid_${tag}`, nameVi: `Kỹ năng ${tag}`, descriptionVi: 'x', createdBy: userId },
+    data: { skillId, code: `it_kid_${tag}`, nameVi: `Kỹ năng ${tag}`, descriptionVi: 'x', caselTextEn: 'Fixture CASEL sentence', createdBy: userId },
   });
   const version = async (answerFormat, extra = {}) => {
     const tpl = await prisma.questionTemplate.create({ data: { subSkillId: sub.id, title: `Mẫu ${answerFormat}`, answerFormat, createdBy: userId } });
@@ -280,7 +280,8 @@ test('bao cao EQ: muc theo ky nang con tu luot doc dau (luot doc lai khong tinh)
   assert.equal(r1.data.competencies.length, 5);
   assert.deepEqual({ level: r1.sub.level, items: r1.sub.items }, { level: 'developing', items: 3 });
   assert.equal(r1.comp.level, 'developing', 'cac ky nang con khac chua co muc -> muc nang luc = muc ky nang con nay');
-  assert.ok(typeof r1.sub.caselTextEn === 'string' && r1.sub.caselTextEn.length > 0);
+  assert.equal(r1.sub.caselTextEn, 'Fixture CASEL sentence');
+  assert.equal(r1.sub.caselTextVi, undefined);
   assert.ok(!JSON.stringify(r1.data.competencies).includes('score'), 'khong tra diem / % cho phu huynh');
   assert.ok(r1.data.recommendations.length >= 1 && r1.data.recommendations.length <= 3);
   assert.ok(!r1.data.recommendations.some((t) => t.id === topic.id), 'topic vua doc khong duoc goi y lai');

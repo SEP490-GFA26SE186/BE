@@ -319,6 +319,14 @@ enum AnswerFormat {
   @@map("answer_format")
 }
 
+/// Nguon goc ky nang con: muc goc CASEL hay chuyen gia bo sung
+enum SubSkillSource {
+  casel
+  specialist
+
+  @@map("sub_skill_source")
+}
+
 enum TemplateStatus {
   draft
   published
@@ -475,7 +483,6 @@ model EqSkill {
 
   // -- back-references --
   topics            Topic[]
-  caselReferences   CaselReference[]
   subSkills         EqSubSkill[]
   checkpointAnswers CheckpointAnswer[]
 
@@ -508,46 +515,29 @@ model Topic {
   @@map("topics")
 }
 
-/// @note Nguyen van khung CASEL (tieng Anh), chi doc: khong co API ghi, chi doi bang migration/seed
-model CaselReference {
-  id           String @id @default(uuid()) @db.Uuid
-  skillId      String @map("skill_id") @db.Uuid
-  code         String @unique @db.VarChar(60)
-  textEn       String  @map("text_en")
-  /// ban dich tieng Viet de hien tren giao dien (text_en moi la can cu truy vet)
-  textVi       String? @map("text_vi")
-  displayOrder Int    @default(0) @map("display_order")
-
-  skill EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
-
-  // -- back-references --
-  subSkills EqSubSkill[]
-
-  @@index([skillId])
-  @@map("casel_references")
-}
-
-/// @note Ky nang con do Specialist CRUD; moi ky nang con tro ve dung 1 muc CASEL
-/// @note casel_reference phai cung skill_id (validator tang service)
-/// @note CHECK: age_min <= age_max
+/// @note Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21):
+/// @note source=casel: 40 muc goc CASEL (seed), casel_text_en bat buoc va khong sua qua API, khong xoa (chi tat)
+/// @note source=specialist: Specialist bo sung duoi 1 nang luc, casel_text_en tuy chon
+/// @note CHECK: age_min <= age_max; source <> 'casel' OR casel_text_en IS NOT NULL
 model EqSubSkill {
-  id               String   @id @default(uuid()) @db.Uuid
-  skillId          String   @map("skill_id") @db.Uuid
-  caselReferenceId String   @map("casel_reference_id") @db.Uuid
-  code             String   @unique @db.VarChar(60)
-  nameVi           String   @map("name_vi") @db.VarChar(200)
-  descriptionVi    String   @map("description_vi")
-  ageMin           Int      @default(5) @map("age_min")
-  ageMax           Int      @default(8) @map("age_max")
-  isActive         Boolean  @default(true) @map("is_active")
-  displayOrder     Int      @default(0) @map("display_order")
-  createdBy        String   @map("created_by") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id            String         @id @default(uuid()) @db.Uuid
+  skillId       String         @map("skill_id") @db.Uuid
+  code          String         @unique @db.VarChar(60)
+  nameVi        String         @map("name_vi") @db.VarChar(200)
+  descriptionVi String         @map("description_vi")
+  /// nguyen van tieng Anh cua muc CASEL (null voi ky nang con chuyen gia bo sung khong gan cau goc)
+  caselTextEn   String?        @map("casel_text_en")
+  source        SubSkillSource @default(specialist)
+  ageMin        Int            @default(5) @map("age_min")
+  ageMax        Int            @default(8) @map("age_max")
+  isActive      Boolean        @default(true) @map("is_active")
+  displayOrder  Int            @default(0) @map("display_order")
+  createdBy     String         @map("created_by") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  skill          EqSkill        @relation(fields: [skillId], references: [id], onDelete: Restrict)
-  caselReference CaselReference @relation(fields: [caselReferenceId], references: [id], onDelete: Restrict)
-  creator        User           @relation("SubSkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  skill   EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  creator User    @relation("SubSkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
   templates         QuestionTemplate[]
@@ -556,7 +546,6 @@ model EqSubSkill {
   checkpointAnswers CheckpointAnswer[]
 
   @@index([skillId, isActive])
-  @@index([caselReferenceId])
   @@map("eq_sub_skills")
 }
 

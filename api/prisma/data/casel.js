@@ -2,8 +2,9 @@
 // 40 muc cua khung CASEL — nguyen van tieng Anh, theo dung thu tu tren trang CASEL
 // (https://casel.org/fundamentals-of-sel/what-is-the-casel-framework/), kem ban dich tieng Viet
 // de hien tren giao dien (textEn van la can cu truy vet, textVi chi de doc).
-// Bang casel_references chi doc: khong co API ghi, chi doi qua file nay (seed) hoac migration.
-// skill = casel_code cua eq_skills. code on dinh, la khoa idempotent cua seed.
+// Moi muc la 1 ky nang con source = casel (1 tang, chot 2026-10-21): textEn -> eq_sub_skills.casel_text_en
+// (khong sua qua API), textVi -> name_vi mac dinh cua 17 muc khong co ban soan o data/pedagogy.js.
+// skill = casel_code cua eq_skills. code on dinh, la ma ky nang con (tru 23 muc co ma rieng o pedagogy.js).
 // =============================================================================
 
 export const CASEL_URL = 'https://casel.org/fundamentals-of-sel/what-is-the-casel-framework/';

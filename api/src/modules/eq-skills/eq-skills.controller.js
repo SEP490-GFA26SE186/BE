@@ -17,12 +17,7 @@ const getEqSkillById = catchAsync(async (req, res) => {
   });
 });
 
-const getCaselReferences = catchAsync(async (req, res) =>
-  ApiResponse.success(res, { data: await eqSkillsService.listCaselReferences(req.query) }),
-);
-
 export default {
-  getCaselReferences,
   getEqSkills,
   getEqSkillById,
 };

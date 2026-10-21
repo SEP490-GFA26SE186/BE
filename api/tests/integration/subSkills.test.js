@@ -3,18 +3,16 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { prisma, createParent, createUser, createChild, createCharacter, getSeededTopic, startServer } from './_fixtures.js';
 
+// Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21): source casel (40 muc goc, seed)
+// hoac specialist (Specialist bo sung).
 const skip = !hasTestDb;
 let api;
 let skills;
-let refs; // caselCode -> cac muc tham chieu cua nang luc do
 
 before(async () => {
   if (skip) return;
   api = await startServer();
   skills = Object.fromEntries((await prisma.eqSkill.findMany()).map((s) => [s.caselCode, s]));
-  const all = await prisma.caselReference.findMany({ orderBy: { displayOrder: 'asc' } });
-  refs = {};
-  for (const s of Object.values(skills)) refs[s.caselCode] = all.filter((r) => r.skillId === s.id);
 });
 
 // Fixture khong don; tat cac ky nang con thu de khong lam nhieu danh sach dung that.
@@ -31,13 +29,13 @@ const call = (token, method, path, body) => api.request(method, path, { token, b
 let seq = 0;
 const body = (over = {}) => ({
   skillId: skills.self_management.id,
-  caselReferenceId: refs.self_management[0].id,
   nameVi: `Kỹ năng thử ${Date.now()}_${seq++}`,
   descriptionVi: 'Bé biết hít thở sâu khi thấy giận.',
   ageMin: 5,
   ageMax: 8,
   ...over,
 });
+const caselRow = (code = 'sa_emotion_naming') => prisma.eqSubSkill.findUnique({ where: { code } });
 
 // Gan 1 story_checkpoint dung ky nang con (qua truyen that tao bang API).
 async function attachCheckpoint(subSkillId) {
@@ -55,38 +53,72 @@ async function attachCheckpoint(subSkillId) {
   });
 }
 
-test('casel-references: can dang nhap, loc theo skillId', { skip }, async () => {
-  const parent = await createParent();
-  assert.equal((await call(undefined, 'GET', '/eq-skills/casel-references')).status, 401);
-  const all = await call(parent.token, 'GET', '/eq-skills/casel-references');
-  assert.equal(all.status, 200, JSON.stringify(all.body));
-  assert.ok(all.body.data.length >= 40);
-  const filtered = (await call(parent.token, 'GET', `/eq-skills/casel-references?skillId=${skills.self_management.id}`)).body.data;
-  assert.ok(filtered.length > 0 && filtered.every((r) => r.skillId === skills.self_management.id && r.textEn && r.code));
+test('40 muc goc CASEL la ky nang con source casel, co nguyen van tieng Anh; loc theo source', { skip }, async () => {
+  const mod = await createUser({ role: 'specialist' });
+  const list = await call(mod.token, 'GET', '/sub-skills?source=casel');
+  assert.equal(list.status, 200, JSON.stringify(list.body));
+  assert.equal(list.body.data.length, 40);
+  assert.ok(list.body.data.every((x) => x.source === 'casel' && x.caselTextEn && x.nameVi && x.skill?.caselCode));
+  const emo = list.body.data.find((x) => x.code === 'sa_emotion_naming');
+  assert.equal(emo.caselTextEn, "Identifying one's emotions");
+  const spec = (await call(mod.token, 'GET', '/sub-skills?source=specialist')).body.data;
+  assert.ok(spec.every((x) => x.source === 'specialist'));
+  assert.equal((await call(undefined, 'GET', '/eq-skills/casel-references')).status, 404);
 });
 
-test('ky nang con: phu huynh khong tao duoc; sai nang luc -> 400; tao OK -> 201 kem caselReference', { skip }, async () => {
+test('ky nang con chuyen gia: phu huynh khong tao duoc; sai nang luc -> 400; tao khong cau tieng Anh -> 201 source specialist', { skip }, async () => {
   const mod = await createUser({ role: 'specialist' });
   const parent = await createParent();
   assert.equal((await call(parent.token, 'POST', '/sub-skills', body())).status, 403);
-  const wrong = await call(mod.token, 'POST', '/sub-skills', body({ caselReferenceId: refs.self_awareness[0].id }));
+  const wrong = await call(mod.token, 'POST', '/sub-skills', body({ skillId: '00000000-0000-4000-8000-000000000000' }));
   assert.equal(wrong.status, 400, JSON.stringify(wrong.body));
   assert.equal((await call(mod.token, 'POST', '/sub-skills', body({ ageMin: 9, ageMax: 6 }))).status, 400);
 
   const ok = await call(mod.token, 'POST', '/sub-skills', body());
   assert.equal(ok.status, 201, JSON.stringify(ok.body));
   const s = ok.body.data;
-  assert.equal(s.caselReference.textEn, refs.self_management[0].textEn);
-  assert.match(s.code, /^[a-z0-9_]+$/);
-  assert.ok(s.code.startsWith(refs.self_management[0].code));
+  assert.equal(s.source, 'specialist');
+  assert.equal(s.caselTextEn, null);
+  assert.match(s.code, /^sm_[a-z0-9_]+$/);
   assert.equal(s.templatesCount, 0);
-  const again = await call(mod.token, 'POST', '/sub-skills', body());
+  const again = await call(mod.token, 'POST', '/sub-skills', body({ nameVi: s.nameVi }));
   assert.equal(again.status, 201, JSON.stringify(again.body));
   assert.notEqual(again.body.data.code, s.code);
   assert.equal((await call(mod.token, 'POST', '/sub-skills', body({ code: s.code }))).status, 409);
+
+  const withEn = await call(mod.token, 'POST', '/sub-skills', body({ caselTextEn: 'Taking a deep breath', source: 'casel' }));
+  assert.equal(withEn.status, 201, JSON.stringify(withEn.body));
+  assert.equal(withEn.body.data.caselTextEn, 'Taking a deep breath');
+  assert.equal(withEn.body.data.source, 'specialist', 'API khong tao duoc muc goc CASEL');
+  const cleared = await call(mod.token, 'PUT', `/sub-skills/${withEn.body.data.id}`, { caselTextEn: '' });
+  assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+  assert.equal(cleared.body.data.caselTextEn, null);
+  await call(mod.token, 'DELETE', `/sub-skills/${withEn.body.data.id}`);
 });
 
-test('ky nang con: phu huynh chi thay ban dang dung va khong kem count; khoa doi muc khi co checkpoint', { skip }, async () => {
+test('muc goc CASEL: khong sua cau tieng Anh / nang luc / ma (422), khong xoa (409); van sua ten va bat-tat duoc', { skip }, async () => {
+  const mod = await createUser({ role: 'specialist' });
+  const row = await caselRow();
+  const put = (b) => call(mod.token, 'PUT', `/sub-skills/${row.id}`, b);
+  assert.equal((await put({ caselTextEn: 'Something else' })).status, 422);
+  assert.equal((await put({ skillId: skills.self_management.id })).status, 422);
+  assert.equal((await put({ code: 'sa_khac_ma' })).status, 422);
+  assert.equal((await put({ caselTextEn: row.caselTextEn, nameVi: row.nameVi })).status, 200, 'gui lai dung cau cu thi khong loi');
+  const del = await call(mod.token, 'DELETE', `/sub-skills/${row.id}`);
+  assert.equal(del.status, 409, JSON.stringify(del.body));
+  assert.match(del.body.message, /Mục gốc CASEL chỉ tắt được/);
+
+  const inactive = await prisma.eqSubSkill.findFirst({ where: { source: 'casel', isActive: false } });
+  const on = await call(mod.token, 'PUT', `/sub-skills/${inactive.id}`, { isActive: true, descriptionVi: inactive.descriptionVi });
+  assert.equal(on.status, 200, JSON.stringify(on.body));
+  assert.equal(on.body.data.isActive, true);
+  assert.equal((await call(mod.token, 'PUT', `/sub-skills/${inactive.id}`, { isActive: false })).status, 200);
+  const after = await prisma.eqSubSkill.findUnique({ where: { id: inactive.id } });
+  assert.equal(after.caselTextEn, inactive.caselTextEn);
+  assert.equal(after.skillId, inactive.skillId);
+});
+
+test('ky nang con: phu huynh chi thay ban dang dung va khong kem count; khoa doi nang luc khi co checkpoint', { skip }, async () => {
   const mod = await createUser({ role: 'specialist' });
   const parent = await createParent();
   const s = (await call(mod.token, 'POST', '/sub-skills', body({ isActive: false }))).body.data;
@@ -103,11 +135,11 @@ test('ky nang con: phu huynh chi thay ban dang dung va khong kem count; khoa doi
   const upd = await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { isActive: true, nameVi: `Kỹ năng thử sửa ${Date.now()}` });
   assert.equal(upd.status, 200, JSON.stringify(upd.body));
   assert.ok((await call(parent.token, 'GET', '/sub-skills')).body.data.some((x) => x.id === s.id));
-  assert.equal((await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { caselReferenceId: refs.self_awareness[0].id })).status, 400);
-  assert.equal((await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { caselReferenceId: refs.self_management[1].id })).status, 200);
+  assert.equal((await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { skillId: '00000000-0000-4000-8000-000000000000' })).status, 400);
+  assert.equal((await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { skillId: skills.self_awareness.id })).status, 200);
 
   await attachCheckpoint(s.id);
-  const lock = await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { caselReferenceId: refs.self_management[0].id });
+  const lock = await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { skillId: skills.self_management.id });
   assert.equal(lock.status, 422, JSON.stringify(lock.body));
   assert.equal((await call(mod.token, 'PUT', `/sub-skills/${s.id}`, { nameVi: `Kỹ năng thử khoá ${Date.now()}` })).status, 200);
   const del = await call(mod.token, 'DELETE', `/sub-skills/${s.id}`);

@@ -27,6 +27,7 @@ const REMOVED = [
   ['POST', '/api/v1/subscriptions/subscribe-free'],
   ['POST', '/api/v1/subscriptions/cancel'],
   ['GET', '/api/v1/child-profiles'],
+  ['GET', '/api/v1/eq-skills/casel-references'], // gop vao eq_sub_skills (2026-10-21)
 ];
 const KEPT = [
   ['GET', '/api/v1/content-library/stats'],
@@ -34,7 +35,6 @@ const KEPT = [
   ['GET', '/api/v1/topics'],
   ['GET', '/api/v1/sub-skills'],
   ['GET', '/api/v1/question-templates'],
-  ['GET', '/api/v1/eq-skills/casel-references'],
   ['GET', '/api/v1/characters'],
   ['POST', '/api/v1/moderation/keywords/bulk'],
   ['GET', '/api/v1/kid/bookshelf'],

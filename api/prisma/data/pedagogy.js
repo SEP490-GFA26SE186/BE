@@ -1,7 +1,8 @@
 // =============================================================================
 // Ky nang con + mau cau hoi seed (spec 2026-10-20-casel-pedagogy §5.1, §5.2, Phu luc A)
 //
-// - Moi ky nang con tro ve dung 1 muc CASEL (caselCode = code trong data/casel.js), cung nang luc.
+// - Moi muc o day la ban soan cho 1 muc CASEL (caselCode = code trong data/casel.js), cung nang luc:
+//   ky nang con chinh la muc CASEL do (source = casel), dung ma/ten/mo ta/tuoi o day va bat san.
 // - Moi ky nang con co 1-2 mau; moi mau co it nhat 1 ban KHONG nhan nhan vat khac (needsTarget=false)
 //   de truyen chi co 1 nhan vat van sinh duoc.
 // - Khung cau hoi dung token {NV1} (nhan vat chinh); {NV2} chi khi needsTarget = true. Nhan vat phu

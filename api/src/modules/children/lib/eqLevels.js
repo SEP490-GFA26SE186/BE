@@ -26,7 +26,7 @@ const byOrder = (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
 
 /**
  * rows: cau tra loi luot doc dau, co score, checkpoint khong excluded, co subSkillId — MOI -> CU.
- * skills: eq_skills; subSkills: eq_sub_skills (+ caselReference.textEn) can hien.
+ * skills: eq_skills; subSkills: eq_sub_skills (+ caselTextEn) can hien.
  * Dong cua ky nang con khong co trong `subSkills` bi bo qua.
  */
 export function buildEqLevels(rows, skills, subSkills, settings) {
@@ -45,8 +45,7 @@ export function buildEqLevels(rows, skills, subSkills, settings) {
         return {
           id: s.id,
           nameVi: s.nameVi,
-          caselTextEn: s.caselReference?.textEn ?? null,
-          caselTextVi: s.caselReference?.textVi ?? null,
+          caselTextEn: s.caselTextEn ?? null,
           level: levelFor(scores, settings),
           items: Math.min(scores.length, settings.window),
         };
