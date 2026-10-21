@@ -37,7 +37,7 @@ const formatManaged = (t) => ({
   subSkills: t.subSkills.map(({ subSkill: x }) => ({
     id: x.id,
     nameVi: x.nameVi,
-    caselReference: { textEn: x.caselReference.textEn },
+    caselReference: { textEn: x.caselReference.textEn, textVi: x.caselReference.textVi },
   })),
   storiesCount: t._count.stories,
   createdAt: t.createdAt,
@@ -51,7 +51,7 @@ const MANAGED_INCLUDE = {
     orderBy: { subSkill: { displayOrder: 'asc' } },
     select: {
       subSkill: {
-        select: { id: true, nameVi: true, caselReference: { select: { textEn: true } } },
+        select: { id: true, nameVi: true, caselReference: { select: { textEn: true, textVi: true } } },
       },
     },
   },

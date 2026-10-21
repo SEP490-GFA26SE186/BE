@@ -43,8 +43,8 @@ test('buildEqLevels: nang luc = muc thap nhat cua ky nang con co muc; secure + e
   const sa = r.competencies[0];
   assert.equal(sa.level, 'emerging');
   assert.deepEqual(sa.subSkills, [
-    { id: 'a', nameVi: 'Gọi tên cảm xúc', caselTextEn: 'Identify emotions', level: 'secure', items: 3 },
-    { id: 'b', nameVi: 'Nhận ra điểm mạnh', caselTextEn: 'Recognize strengths', level: 'emerging', items: 3 },
+    { id: 'a', nameVi: 'Gọi tên cảm xúc', caselTextEn: 'Identify emotions', caselTextVi: null, level: 'secure', items: 3 },
+    { id: 'b', nameVi: 'Nhận ra điểm mạnh', caselTextEn: 'Recognize strengths', caselTextVi: null, level: 'emerging', items: 3 },
   ]);
   assert.equal(r.competencies[1].level, null, 'khong ky nang con nao co muc -> null');
   assert.equal(r.competencies[1].subSkills[0].items, 0);

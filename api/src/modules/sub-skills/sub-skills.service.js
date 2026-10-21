@@ -6,7 +6,7 @@ import ApiError from '../../utils/ApiError.js';
 const MANAGERS = new Set(['specialist', 'admin']);
 
 const SKILL_SELECT = { select: { id: true, caselCode: true, nameVi: true } };
-const REF_SELECT = { select: { id: true, code: true, textEn: true } };
+const REF_SELECT = { select: { id: true, code: true, textEn: true, textVi: true } };
 const MANAGED_INCLUDE = {
   skill: SKILL_SELECT,
   caselReference: REF_SELECT,

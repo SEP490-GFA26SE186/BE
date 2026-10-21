@@ -59,13 +59,13 @@ const getEqSkillById = async (idOrCode) => {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** GET /eq-skills/casel-references?skillId -> [{ id, skillId, code, textEn, displayOrder }] (40 muc CASEL). */
+/** GET /eq-skills/casel-references?skillId -> [{ id, skillId, code, textEn, textVi, displayOrder }] (40 muc CASEL). */
 const listCaselReferences = async ({ skillId } = {}) => {
   if (skillId && !UUID_RE.test(skillId)) throw ApiError.badRequest('skillId không hợp lệ.');
   return prisma.caselReference.findMany({
     where: skillId ? { skillId } : {},
     orderBy: [{ displayOrder: 'asc' }, { code: 'asc' }],
-    select: { id: true, skillId: true, code: true, textEn: true, displayOrder: true },
+    select: { id: true, skillId: true, code: true, textEn: true, textVi: true, displayOrder: true },
   });
 };
 

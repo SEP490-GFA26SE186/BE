@@ -46,6 +46,7 @@ export function buildEqLevels(rows, skills, subSkills, settings) {
           id: s.id,
           nameVi: s.nameVi,
           caselTextEn: s.caselReference?.textEn ?? null,
+          caselTextVi: s.caselReference?.textVi ?? null,
           level: levelFor(scores, settings),
           items: Math.min(scores.length, settings.window),
         };

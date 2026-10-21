@@ -383,6 +383,7 @@ Table casel_references {
   skill_id uuid [not null, note: 'nang luc CASEL chua muc nay']
   code varchar(60) [unique, not null]
   text_en text [not null, note: 'nguyen van tieng Anh cua khung CASEL']
+  text_vi text [note: 'ban dich tieng Viet de hien tren giao dien; text_en moi la can cu truy vet']
   display_order int [not null, default: 0]
 
   indexes {

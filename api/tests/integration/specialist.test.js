@@ -104,7 +104,10 @@ test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban 
   assert.equal(ok.body.data.subSkills.length, 2);
   assert.ok(ok.body.data.subSkills.every((x) => x.id && x.nameVi && x.caselReference?.textEn));
   const pl = (await call(parent.token, 'GET', '/topics')).body.data;
-  assert.ok(pl.length > 0 && pl.every((x) => Array.isArray(x.subSkills) && x.subSkills.length >= 1 && x.subSkills.every((y) => y.id && y.nameVi && y.caselReference === undefined)));
+  // Chi kiem bai vua tao: DB test tich luy bai hoc cua cac lan chay khac (co the chua gan ky nang con).
+  const mine = pl.find((x) => x.id === ok.body.data.id);
+  assert.ok(mine && mine.subSkills.length === 2 && mine.subSkills.every((y) => y.id && y.nameVi && y.caselReference === undefined));
+  assert.ok(pl.every((x) => Array.isArray(x.subSkills)));
 
   // update: thay toan bo lien ket; doi nang luc ma khong gui subSkillIds -> 422; doi tuoi khong giao -> 422
   const id = ok.body.data.id;

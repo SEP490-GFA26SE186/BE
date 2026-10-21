@@ -513,7 +513,9 @@ model CaselReference {
   id           String @id @default(uuid()) @db.Uuid
   skillId      String @map("skill_id") @db.Uuid
   code         String @unique @db.VarChar(60)
-  textEn       String @map("text_en")
+  textEn       String  @map("text_en")
+  /// ban dich tieng Viet de hien tren giao dien (text_en moi la can cu truy vet)
+  textVi       String? @map("text_vi")
   displayOrder Int    @default(0) @map("display_order")
 
   skill EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)

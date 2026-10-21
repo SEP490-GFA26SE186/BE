@@ -53,7 +53,7 @@ export async function seedPedagogy(prisma, { publish = false } = {}) {
   const refIdByCode = {};
   for (const ref of CASEL_REFERENCES) {
     const skillId = skillIdByCode[ref.skill];
-    const data = { skillId, textEn: ref.textEn, displayOrder: ref.order };
+    const data = { skillId, textEn: ref.textEn, textVi: ref.textVi, displayOrder: ref.order };
     const row = await prisma.caselReference.upsert({
       where: { code: ref.code },
       update: data,
