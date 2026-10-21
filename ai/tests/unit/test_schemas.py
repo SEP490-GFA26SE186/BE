@@ -9,7 +9,7 @@ from app.schemas.common import FileSafeId, ForceCode, StorageKey
 from app.schemas.images import PortraitRequest, SceneRequest
 from app.schemas.story import StoryGenerateRequest, StoryGenerateResponse
 from app.schemas.tts import TtsRequest
-from tests.fixtures.frames import make_frame, make_limits
+from tests.fixtures.frames import SUB_SKILLS, make_frame, make_guide, make_limits
 
 SAMPLES = Path(__file__).resolve().parents[2] / "docs" / "samples"
 
@@ -151,7 +151,6 @@ REFERENCE_CASES = {
     "two_checkpoints_same_page": lambda p: p["checkpoints"][1].update(after="p2"),
     "no_main": lambda p: p["characters"][0].update(is_main=False),
     "two_main": lambda p: p["characters"][1].update(is_main=True),
-    "perspective_missing_target": lambda p: p["checkpoints"][1].pop("target"),
     "emotion_other_missing_target": lambda p: p["checkpoints"][0].update(type="emotion_other"),
     "target_not_declared": lambda p: p["checkpoints"][1].update(target="{NV9}"),
     "token_NV1": lambda p: p["characters"][0].update(token="NV1"),
@@ -250,3 +249,80 @@ def test_image_and_tts_requests_validate_paths() -> None:
         }
     )
     assert scene.force_ == ForceCode.TIMEOUT
+
+
+# ---- Task 11: Specialist guides (task-10 contract), all optional ----
+
+
+def test_perspective_target_is_optional(payload: dict) -> None:
+    payload["checkpoints"][1].pop("target")
+    req = StoryGenerateRequest.model_validate(payload)
+    assert req.checkpoints[1].target is None
+
+
+def test_emotion_other_still_needs_target(payload: dict) -> None:
+    payload["checkpoints"][0]["type"] = "emotion_other"
+    with pytest.raises(ValidationError, match="k1"):
+        StoryGenerateRequest.model_validate(payload)
+
+
+def test_old_request_has_no_guides_or_ages(payload: dict) -> None:
+    req = StoryGenerateRequest.model_validate(payload)
+    assert req.topic.age_min is None and req.topic.age_max is None
+    assert req.topic.sub_skills == []
+    assert all(cp.guide is None for cp in req.checkpoints)
+
+
+def test_guided_frame_parses() -> None:
+    req = make_frame("long", guides=True)
+    assert (req.topic.age_min, req.topic.age_max) == (6, 9)
+    assert [s.name for s in req.topic.sub_skills] == [s["name"] for s in SUB_SKILLS]
+    by_type = {cp.type.value: cp for cp in req.checkpoints}
+    assert by_type["reflection"].guide is None
+    assert by_type["problem_solving"].guide.roles.impulsive
+    assert [e.value for e in by_type["emotion_other"].guide.allowed_emotions] == ["sad", "scared"]
+
+
+def _guided(payload: dict, index: int, guide: dict) -> dict:
+    p = copy.deepcopy(payload)
+    p["checkpoints"][index]["guide"] = guide
+    return p
+
+
+# sample: k1 emotion_self, k2 perspective, k3 problem_solving, k4 reflection
+GUIDE_CASES = {
+    "unknown_key": (0, make_guide("emotion_self", score=3)),
+    "unknown_role_key": (2, {**make_guide("problem_solving"), "roles": {
+        "constructive": "a", "avoidant": "b", "impulsive": "c", "rationale": "d"}}),
+    "missing_question_frame": (0, {"sub_skill": "x"}),
+    "roles_on_emotion": (0, {**make_guide("emotion_self"), "roles": make_guide(
+        "problem_solving")["roles"]}),
+    "allowed_emotions_on_perspective": (1, make_guide("perspective", allowed_emotions=["sad"])),
+    "correct_desc_on_problem_solving": (2, make_guide("problem_solving", correct_desc="x")),
+    "distractor_desc_on_emotion": (0, make_guide("emotion_self", distractor_desc="x")),
+    "guide_on_reflection": (3, make_guide("emotion_self")),
+    "unknown_emotion": (0, make_guide("emotion_self", allowed_emotions=["bored"])),
+    "hint_guidance_on_problem_solving": (2, make_guide("problem_solving", hint_guidance="x")),
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("name", list(GUIDE_CASES))
+def test_guide_failures(payload: dict, name: str) -> None:
+    index, guide = GUIDE_CASES[name]
+    cid = payload["checkpoints"][index]["id"]
+    with pytest.raises(ValidationError) as exc:
+        StoryGenerateRequest.model_validate(_guided(payload, index, guide))
+    if name not in {"unknown_key", "unknown_role_key", "missing_question_frame", "unknown_emotion"}:
+        assert cid in str(exc.value)
+
+
+def test_topic_age_range_must_be_ordered(payload: dict) -> None:
+    payload["topic"].update(age_min=9, age_max=6)
+    with pytest.raises(ValidationError, match="age_min"):
+        StoryGenerateRequest.model_validate(payload)
+
+
+def test_topic_unknown_sub_skill_key_rejected(payload: dict) -> None:
+    payload["topic"]["sub_skills"] = [{"name": "a", "description": "b", "casel_ref": "x"}]
+    with pytest.raises(ValidationError):
+        StoryGenerateRequest.model_validate(payload)

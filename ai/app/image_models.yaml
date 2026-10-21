@@ -1,0 +1,95 @@
+# Image model profiles (docs/06 "Model profiles"). A profile = which model runs on which adapter
+# (runtime), how to call it and what it can do. Adding a model on an existing runtime is a YAML
+# entry, not code. Capabilities / licenses below come from the Cloudflare model pages
+# (developers.cloudflare.com/workers-ai/models/<id>) checked 2026-10-19 — re-check the official
+# model card before choosing a model for production.
+#
+# request_style (adapter `cloudflare`):
+#   json_b64   JSON body, response {"result": {"image": <base64>}}        (FLUX.1)
+#   json_png   JSON body, response is the PNG itself                     (SDXL family)
+#   multipart  multipart/form-data, reference images as input_image_0..3 (FLUX.2), base64 response
+#
+# commercial_use=false profiles only run in scripts/compare_images.py with
+# ALLOW_NONCOMMERCIAL_MODELS=true, never through an endpoint (docs/06 "Chặn giấy phép phi thương mại").
+
+cf-sdxl-base:
+  adapter: cloudflare
+  model: "@cf/stabilityai/stable-diffusion-xl-base-1.0"
+  request_style: json_png
+  dialect: tags
+  license: openrail++
+  steps: 20
+  capabilities:
+    supports_reference_images: false
+    max_reference_images: 0
+    supports_negative_prompt: true
+    has_builtin_safety_filter: false
+    commercial_use: true
+
+cf-sdxl-lightning:
+  adapter: cloudflare
+  model: "@cf/bytedance/stable-diffusion-xl-lightning"
+  request_style: json_png
+  dialect: tags
+  license: openrail++
+  steps: 6
+  capabilities:
+    supports_reference_images: false
+    max_reference_images: 0
+    supports_negative_prompt: true
+    has_builtin_safety_filter: false
+    commercial_use: true
+
+cf-flux-1-schnell:
+  adapter: cloudflare
+  model: "@cf/black-forest-labs/flux-1-schnell"
+  request_style: json_b64
+  dialect: natural
+  license: apache-2.0
+  steps: 4            # max 8; output is always 1024x1024
+  capabilities:
+    supports_reference_images: false
+    max_reference_images: 0
+    supports_negative_prompt: false
+    has_builtin_safety_filter: false
+    commercial_use: true
+
+cf-flux-2-klein-4b:
+  adapter: cloudflare
+  model: "@cf/black-forest-labs/flux-2-klein-4b"
+  request_style: multipart
+  dialect: natural
+  license: apache-2.0
+  capabilities:
+    supports_reference_images: true
+    max_reference_images: 4      # input_image_0..3, each under 512x512
+    supports_negative_prompt: false
+    has_builtin_safety_filter: false
+    commercial_use: true
+
+cf-flux-2-klein-9b:
+  adapter: cloudflare
+  model: "@cf/black-forest-labs/flux-2-klein-9b"
+  request_style: multipart
+  dialect: natural
+  license: flux-non-commercial
+  capabilities:
+    supports_reference_images: true
+    max_reference_images: 4
+    supports_negative_prompt: false
+    has_builtin_safety_filter: false
+    commercial_use: false
+
+cf-flux-2-dev:
+  adapter: cloudflare
+  model: "@cf/black-forest-labs/flux-2-dev"
+  request_style: multipart
+  dialect: natural
+  license: flux-dev-non-commercial
+  steps: 25
+  capabilities:
+    supports_reference_images: true
+    max_reference_images: 4
+    supports_negative_prompt: false
+    has_builtin_safety_filter: false
+    commercial_use: false

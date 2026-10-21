@@ -37,7 +37,7 @@ before(async () => {
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
   await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
-  const mod = await prisma.user.findFirst({ where: { role: 'moderator' } });
+  const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => s.key.startsWith('market.'))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
@@ -154,7 +154,7 @@ test('khong mua truyen cua chinh minh; truyen chua duyet khong tim thay; chua mu
   assert.equal((await call(buyer.token, 'POST', '/market/checkout', { listingId: listing.id })).status, 404);
   const kid = await createChild(buyer.user.id, 'Mi');
   assert.equal((await call(buyer.token, 'POST', '/bookshelf', { childId: kid.id, storyId: listing.publishedStoryId })).status, 404);
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   assert.ok(mod);
 });
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 process.env.DATABASE_URL ||= 'postgresql://test:test@localhost:5432/test';
 
-const { answerOutcome, firstScore, isCorrect, kidStoryContent, readChoice, skillCodeFor } = await import(
+const { answerOutcome, firstScore, isCorrect, kidStoryContent, readChoice } = await import(
   '../../src/modules/kid/lib/play.js'
 );
 
@@ -26,14 +26,6 @@ const reflectionCp = { id: 'k4', type: 'reflection', options: [] };
 const row = (over) => ({ attempts: 1, skipped: false, firstEmotion: null, firstOptionId: null, finalEmotion: null, finalOptionId: null, ...over });
 const opts = { useTts: true };
 
-test('skillCodeFor: map kieu diem dung -> nang luc theo DBML', () => {
-  assert.equal(skillCodeFor('emotion_self', 'x'), 'self_awareness');
-  assert.equal(skillCodeFor('emotion_other', 'x'), 'social_awareness');
-  assert.equal(skillCodeFor('perspective', 'x'), 'social_awareness');
-  assert.equal(skillCodeFor('problem_solving', 'responsible_decision_making'), 'responsible_decision_making');
-  assert.equal(skillCodeFor('reflection', 'x'), null);
-});
-
 test('readChoice: sai kieu -> null (cam xuc la, phuong an cua diem dung khac)', () => {
   assert.deepEqual(readChoice(emotionCp, { emotion: 'angry' }), { emotion: 'angry' });
   assert.equal(readChoice(emotionCp, { emotion: 'furious' }), null);
@@ -42,13 +34,27 @@ test('readChoice: sai kieu -> null (cam xuc la, phuong an cua diem dung khac)', 
   assert.deepEqual(readChoice(reflectionCp, {}), {});
 });
 
-test('firstScore: cam xuc / vi tri 1 hoac 0; giai quyet tinh huong 1 / 0.5 / 0; reflection null', () => {
-  assert.equal(firstScore(emotionCp, { emotion: 'angry' }), 1);
-  assert.equal(firstScore(emotionCp, { emotion: 'sad' }), 0);
-  assert.equal(firstScore(perspectiveCp, readChoice(perspectiveCp, { optionId: 'o1' })), 1);
-  assert.deepEqual(['p1', 'p2', 'p3'].map((id) => firstScore(psCp, readChoice(psCp, { optionId: id }))), [1, 0.5, 0]);
-  assert.equal(firstScore(reflectionCp, {}), null);
+const ver = (format, extra = {}) => ({ answerFormat: format, ...extra });
+const scoredCp = (cp, templateVersion, over = {}) => ({ ...cp, scored: true, excluded: false, templateVersion, ...over });
+
+test('firstScore: dung/sai 1 hoac 0; role_choice theo diem vai cua phien ban; reflection null', () => {
+  const emo = scoredCp(emotionCp, ver('emotion_pick'));
+  assert.equal(firstScore(emo, { emotion: 'angry' }), 1);
+  assert.equal(firstScore(emo, { emotion: 'sad' }), 0);
+  const per = scoredCp(perspectiveCp, { template: { answerFormat: 'single_correct' } });
+  assert.equal(firstScore(per, readChoice(per, { optionId: 'o1' })), 1);
+  assert.equal(firstScore(per, readChoice(per, { optionId: 'o2' })), 0);
+  const ps = scoredCp(psCp, ver('role_choice', { constructiveScore: 1, avoidantScore: 0.25, impulsiveScore: 0 }));
+  assert.deepEqual(['p1', 'p2', 'p3'].map((id) => firstScore(ps, readChoice(ps, { optionId: id }))), [1, 0.25, 0]);
+  assert.equal(firstScore(scoredCp(reflectionCp, ver('emotion_pick')), {}), null);
   assert.equal(isCorrect(psCp, readChoice(psCp, { optionId: 'p3' })), true, 'giai quyet tinh huong khong co chon lai');
+});
+
+test('firstScore: scored=false, excluded, khong co phien ban -> null', () => {
+  const v = ver('emotion_pick');
+  assert.equal(firstScore({ ...emotionCp, scored: false, templateVersion: v }, { emotion: 'angry' }), null);
+  assert.equal(firstScore(scoredCp(emotionCp, v, { excluded: true }), { emotion: 'angry' }), null);
+  assert.equal(firstScore(scoredCp(emotionCp, null), { emotion: 'angry' }), null);
 });
 
 test('answerOutcome: sai lan dau -> chua xong, kem goi y da thay ten that, khong lo dap an', () => {
@@ -84,7 +90,7 @@ test('kidStoryContent: ten that, khong kem dap an / vai / phan hoi; tat giong do
     id: 's1', title: 'T', useTts: false, topic: null, storyCharacters: chars,
     pages: [{ id: 'pg2', pageOrder: 2, contentText: '{NV2} ôm {NV1}.', audioKey: 'a.mp3' }, { id: 'pg1', pageOrder: 1, contentText: '{NV1} chơi.', audioKey: null }],
     checkpoints: [
-      { ...psCp, afterPageId: 'pg2', question: '{NV1} làm gì?', questionAudioKey: 'q.mp3' },
+      { ...psCp, scored: true, excluded: false, subSkill: { skillId: 'x' }, templateVersion: { avoidantScore: 0.5 }, afterPageId: 'pg2', question: '{NV1} làm gì?', questionAudioKey: 'q.mp3' },
       { ...emotionCp, afterPageId: 'pg1', question: '{NV1} thấy sao?', questionAudioKey: null },
     ],
   };
@@ -94,7 +100,23 @@ test('kidStoryContent: ten that, khong kem dap an / vai / phan hoi; tat giong do
   assert.deepEqual(c.checkpoints.map((k) => k.id), ['k1', 'k3']);
   assert.deepEqual(c.checkpoints[0].options, []);
   const serialized = JSON.stringify(c);
-  for (const leak of ['answerEmotion', 'isCorrect', 'constructive', 'feedback', 'dịu lại']) {
+  for (const leak of ['answerEmotion', 'isCorrect', 'constructive', 'feedback', 'dịu lại', 'templateVersion', 'subSkill', 'scored', 'excluded']) {
     assert.ok(!serialized.includes(leak), `khong duoc lo ${leak}`);
+  }
+});
+
+test('firstScore: gan sai (thieu vai, diem NaN, dang khong khop kieu) -> null, khong nem loi', () => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const rc = ver('role_choice', { constructiveScore: 1, avoidantScore: 0.5, impulsiveScore: 0 });
+    const noRole = { ...psCp, options: [{ id: 'px', optionOrder: 1, role: null, text: 'x' }] };
+    assert.equal(firstScore(scoredCp(noRole, rc), readChoice(noRole, { optionId: 'px' })), null);
+    const nan = ver('role_choice', { constructiveScore: 1, avoidantScore: null, impulsiveScore: undefined });
+    assert.equal(firstScore(scoredCp(psCp, { ...nan, avoidantScore: NaN }), readChoice(psCp, { optionId: 'p2' })), null);
+    assert.equal(firstScore(scoredCp(psCp, ver('emotion_pick')), readChoice(psCp, { optionId: 'p1' })), null);
+    assert.equal(firstScore(scoredCp(emotionCp, rc), { emotion: 'angry' }), null);
+  } finally {
+    console.warn = warn;
   }
 });

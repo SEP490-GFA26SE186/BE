@@ -1,12 +1,14 @@
 // Ho so be (child_profiles) + nhan vat dai dien cua be (characters, child_id unique) — schema rev8.
-// Rev8 bo bedtime; diem EQ lay tu eq_competency_stats (cong don toan bo lich su, docs/01);
-// usage_date / duration_seconds la cot DB tu sinh. Hinh dang tra ve: lib/childFormat.js.
+// Rev8 bo bedtime; bao cao EQ theo muc do ky nang con tinh truc tiep tu checkpoint_answers (spec su pham
+// CASEL §7); usage_date / duration_seconds la cot DB tu sinh. Hinh dang tra ve: lib/childFormat.js, lib/eq*.js.
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import bookshelfService from '../bookshelf/bookshelf.service.js';
-import { EQ_MIN_ITEMS, eqSkillsFromStats, formatChild, summarizeReading, vnDate } from './lib/childFormat.js';
-import { buildEqJourney, strengths } from './lib/eqJourney.js';
-import { detokenize } from '../stories/lib/narration.js';
+import { ageOf, formatChild, summarizeReading, vnDate } from './lib/childFormat.js';
+import { buildEqLevels } from './lib/eqLevels.js';
+import { buildConversation, buildEvidence, buildTrend } from './lib/eqJourney.js';
+import { recommendTopics } from './lib/recommend.js';
+import { loadReportSettings } from '../pedagogy-settings/pedagogy-settings.service.js';
 
 // Supabase o xa: moi truy van vai tram ms, mac dinh 5 s cua Prisma khong du cho 4-5 truy van
 // (giong TX_OPTIONS cua module stories).
@@ -170,67 +172,161 @@ const getChildUsage = async (parentId, childId, dateStr) => {
   return summarizeReading(child, sessions, date);
 };
 
+// ---------------------------------------------------------------------------
+// Bao cao EQ theo muc do (spec su pham CASEL §7, §9b)
+// ---------------------------------------------------------------------------
+
+/** Gioi han an toan: so cau tra loi doc cho mot be (muc chi can `window` cau moi nhat moi ky nang con). */
+const MAX_ANSWERS = 2000;
+/** So truyen gan nhat: loai topic khoi goi y + lay goi y tro chuyen. */
+const RECENT_STORIES = 3;
+
 /**
- * Bao cao EQ chi tiet (trang "Bao cao EQ"): diem cong don 5 nang luc + xu huong theo tuan + theo loai cau hoi
- * + cau tra loi gan day. Chi luot doc dau (luot doc lai khong tinh diem — giong eq_competency_stats).
+ * Cau tra loi tinh muc: luot doc dau, co diem, checkpoint khong bi Specialist gan co, co ky nang con
+ * (cau cu khong co sub_skill_id khong vao bao cao moi) — moi -> cu.
  */
-const getChildEqJourney = async (parentId, childId, { weeks = 8 } = {}) => {
-  const { childName, skills } = await getChildEqReport(parentId, childId);
-  const [answers, sessions] = await Promise.all([
-    prisma.checkpointAnswer.findMany({
-      where: { session: { childId, isFirstPlay: true } },
-      orderBy: { answeredAt: 'desc' },
-      take: 1000,
+const scoredAnswers = (childId, select) =>
+  prisma.checkpointAnswer.findMany({
+    where: {
+      session: { childId, isFirstPlay: true },
+      score: { not: null },
+      subSkillId: { not: null },
+      checkpoint: { excluded: false },
+    },
+    orderBy: [{ answeredAt: 'desc' }, { id: 'desc' }],
+    take: MAX_ANSWERS,
+    select,
+  });
+
+const LEVEL_SELECT = { subSkillId: true, score: true, answeredAt: true };
+const STORY_NAMES = { select: { token: true, aliasName: true, character: { select: { name: true } } } };
+const EVIDENCE_SELECT = {
+  ...LEVEL_SELECT,
+  attempts: true,
+  firstEmotion: true,
+  firstOption: { select: { text: true, role: true, isCorrect: true } },
+  checkpoint: {
+    select: {
+      type: true, question: true, answerEmotion: true,
+      story: { select: { title: true, storyCharacters: STORY_NAMES } },
+    },
+  },
+};
+
+/** Luot doc gan nhat (moi -> cu), moi truyen mot lan. */
+async function recentSessions(childId, { firstPlayOnly = false } = {}) {
+  const sessions = await prisma.playSession.findMany({
+    where: { childId, ...(firstPlayOnly && { isFirstPlay: true }) },
+    orderBy: { lastActivityAt: 'desc' },
+    take: 30,
+    select: { id: true, storyId: true, story: { select: { topicId: true } } },
+  });
+  const seen = new Set();
+  return sessions.filter((s) => !seen.has(s.storyId) && seen.add(s.storyId)).slice(0, RECENT_STORIES);
+}
+
+/** Muc nang luc / ky nang con + topic goi y cho mot be tu cac cau tra loi da loc. */
+async function computeReport(child, rows) {
+  const subIds = [...new Set(rows.map((r) => r.subSkillId))];
+  const [settings, skills, subSkills, topics, recent] = await Promise.all([
+    loadReportSettings(),
+    prisma.eqSkill.findMany({ orderBy: { displayOrder: 'asc' } }),
+    // Ky nang con dang bat + ky nang con da tat nhung be da co cau tra loi.
+    prisma.eqSubSkill.findMany({
+      where: { OR: [{ isActive: true }, { id: { in: subIds } }] },
+      select: { id: true, skillId: true, nameVi: true, displayOrder: true, caselReference: { select: { textEn: true } } },
+    }),
+    prisma.topic.findMany({
+      where: { isActive: true },
       select: {
-        answeredAt: true, score: true, skipped: true, attempts: true, firstEmotion: true,
-        skill: { select: { caselCode: true } },
-        checkpoint: {
+        id: true, title: true, isActive: true, ageMin: true, ageMax: true, displayOrder: true,
+        skill: { select: { caselCode: true, nameVi: true } },
+        subSkills: { select: { subSkill: { select: { id: true, nameVi: true } } } },
+      },
+    }),
+    recentSessions(child.id),
+  ]);
+  const levels = buildEqLevels(rows, skills, subSkills, settings);
+  const recommendations = recommendTopics({
+    levels,
+    topics: topics.map((t) => ({ ...t, subSkills: t.subSkills.map((l) => l.subSkill) })),
+    childAge: ageOf(child.birthDate),
+    recentTopicIds: recent.map((s) => s.story.topicId).filter(Boolean),
+  });
+  return {
+    report: { childId: child.id, childName: child.name, settings, competencies: levels.competencies, recommendations },
+    skills,
+    subSkills,
+    settings,
+  };
+}
+
+/**
+ * GET /children/:id/eq-report — muc do 5 nang luc (thap nhat cua cac ky nang con co muc) + ky nang con
+ * + 1-3 topic goi y. Khong tra %: chi muc + so cau. Tham so (window / nguong) do Specialist dat.
+ */
+const getChildEqReport = async (parentId, childId) => {
+  const child = await findOwnChild(prisma, parentId, childId);
+  const rows = (await scoredAnswers(child.id, LEVEL_SELECT)).map((r) => ({ ...r, score: Number(r.score) }));
+  return (await computeReport(child, rows)).report;
+};
+
+/** Goi y tro chuyen: 3 truyen be doc gan nhat (luot dau, moi trang thai). */
+async function loadConversation(childId) {
+  const sessions = await recentSessions(childId, { firstPlayOnly: true });
+  if (!sessions.length) return [];
+  const [stories, reflections] = await Promise.all([
+    prisma.story.findMany({
+      where: { id: { in: sessions.map((s) => s.storyId) } },
+      select: {
+        id: true, title: true, length: true,
+        storyCharacters: STORY_NAMES,
+        checkpoints: {
+          where: { excluded: false },
           select: {
-            type: true, question: true, answerEmotion: true,
-            story: { select: { title: true, storyCharacters: { select: { token: true, aliasName: true, character: { select: { name: true } } } } } },
+            type: true, question: true, subSkillId: true,
+            afterPage: { select: { pageOrder: true } },
+            templateVersion: { select: { parentPrompts: true } },
           },
         },
       },
     }),
-    prisma.playSession.groupBy({ by: ['status'], where: { childId }, _count: { _all: true } }),
+    prisma.checkpointAnswer.findMany({
+      where: { sessionId: { in: sessions.map((s) => s.id) }, skipped: false, checkpoint: { type: 'reflection' } },
+      select: { session: { select: { storyId: true } } },
+    }),
   ]);
-  const rows = answers.map((a) => ({
-    answeredAt: a.answeredAt, score: a.score == null ? null : Number(a.score), skipped: a.skipped, attempts: a.attempts,
-    caselCode: a.skill?.caselCode ?? null, type: a.checkpoint.type,
-    answerEmotion: a.checkpoint.answerEmotion ?? null, firstEmotion: a.firstEmotion ?? null,
-  }));
-  const { trend, byType, emotions } = buildEqJourney(rows, { weeks });
-  const count = (status) => sessions.find((s) => s.status === status)?._count._all ?? 0;
-  return {
-    childId,
-    childName,
-    minItems: EQ_MIN_ITEMS,
-    skills,
-    ...strengths(skills),
-    totals: { answers: rows.filter((r) => !r.skipped).length, sessions: sessions.reduce((n, s) => n + s._count._all, 0), completed: count('completed') },
-    trend,
-    byType,
-    emotions,
-    recent: answers.slice(0, 10).map((a) => ({
-      answeredAt: a.answeredAt,
-      storyTitle: a.checkpoint.story.title,
-      type: a.checkpoint.type,
-      question: detokenize(a.checkpoint.question, a.checkpoint.story.storyCharacters),
-      caselCode: a.skill?.caselCode ?? null,
-      score: a.score == null ? null : Math.round(Number(a.score) * 100),
-      attempts: a.attempts,
-      skipped: a.skipped,
-    })),
-  };
-};
+  const answered = new Set(reflections.map((r) => r.session.storyId));
+  const byId = new Map(stories.map((s) => [s.id, s]));
+  return buildConversation(
+    sessions
+      .map((s) => byId.get(s.storyId))
+      .filter(Boolean)
+      .map((s) => ({
+        ...s,
+        answeredReflection: answered.has(s.id),
+        checkpoints: s.checkpoints.map((c) => ({ ...c, pageOrder: c.afterPage?.pageOrder ?? 0 })),
+      })),
+  );
+}
 
-const getChildEqReport = async (parentId, childId) => {
+/**
+ * GET /children/:id/eq-journey — bao cao EQ + bang chung (toi da 5 cau / ky nang con) + goi y tro chuyen
+ * + xu huong theo tuan (so cau cham, muc cuoi tuan). Ten that chi hien cho phu huynh cua be.
+ */
+const getChildEqJourney = async (parentId, childId, { weeks = 8 } = {}) => {
   const child = await findOwnChild(prisma, parentId, childId);
-  const [skills, stats] = await Promise.all([
-    prisma.eqSkill.findMany({ orderBy: { displayOrder: 'asc' } }),
-    prisma.eqCompetencyStat.findMany({ where: { childId } }),
+  const answers = (await scoredAnswers(child.id, EVIDENCE_SELECT)).map((a) => ({ ...a, score: Number(a.score) }));
+  const [{ report, skills, subSkills, settings }, conversation] = await Promise.all([
+    computeReport(child, answers),
+    loadConversation(child.id),
   ]);
-  return { childId: child.id, childName: child.name, skills: eqSkillsFromStats(skills, stats) };
+  return {
+    ...report,
+    evidence: buildEvidence(answers),
+    conversation,
+    trend: buildTrend(answers, skills, subSkills, settings, { weeks }),
+  };
 };
 
 const getChildOverview = async (parentId, childId) => {

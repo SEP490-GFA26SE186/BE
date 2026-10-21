@@ -1,4 +1,4 @@
-// Tu khoa bi chan (blocked_keywords, Moderator quan ly) cho chu KHONG do AI viet: truyen tu viet va
+// Tu khoa bi chan (blocked_keywords, Specialist quan ly) cho chu KHONG do AI viet: truyen tu viet va
 // chu phu huynh sua sau khi AI viet (nguoi dung chot 2026-10-18: `block` chan han, `warn` canh bao).
 // Khop GIONG HET validator ai/ (app/core/text_utils.py contains_phrase): nguyen tieng (chu / so khong
 // dinh lien), khong phan biet hoa thuong, giu dau, NFC hai phia. Ham thuan.

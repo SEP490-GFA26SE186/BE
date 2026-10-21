@@ -4,9 +4,9 @@ import topicsController from './topics.controller.js';
 import topicsValidation from './topics.validation.js';
 
 const router = Router();
-const managers = [auth, authorize('moderator', 'admin')];
+const managers = [auth, authorize('specialist', 'admin')];
 
-// Moi nguoi dung da dang nhap (phu huynh chon bai hoc khi tao truyen; Moderator thay ca bai ngung dung).
+// Moi nguoi dung da dang nhap (phu huynh chon bai hoc khi tao truyen; Specialist thay ca bai ngung dung).
 router.get('/', auth, validate(topicsValidation.list), topicsController.getTopics);
 router.post('/', ...managers, validate(topicsValidation.create), topicsController.createTopic);
 router.put('/:id', ...managers, validate(topicsValidation.update), topicsController.updateTopic);

@@ -1,6 +1,6 @@
 # Hướng dẫn đọc schema — rev 8
 
-45 bảng, chia 8 khối (dọn 2026-10-18: bỏ voucher, giỏ hàng, `prompt_templates`, `child_usage_sessions`; thêm `narration_clips`). Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
+50 bảng, chia 8 khối (dọn 2026-10-18: bỏ voucher, giỏ hàng, `prompt_templates`, `child_usage_sessions`; thêm `narration_clips`. 2026-10-20: thêm 5 bảng sư phạm CASEL — `casel_references`, `eq_sub_skills`, `question_templates`, `question_template_versions`, `topic_sub_skills`). Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
 và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để xem ERD.
 
 ## 1. Tám khối
@@ -8,9 +8,9 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 | Khối | Trả lời câu hỏi | Bảng chính | Bảng phụ |
 |---|---|---|---|
 | **Tài khoản** (4) | Ai dùng app, con là ai, nhà có nhân vật nào? | `users`, `child_profiles`, `characters` | `auth_tokens` |
-| **Thư viện nội dung** (6) | Moderator/Admin chuẩn bị sẵn gì? | `topics` | `eq_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
+| **Thư viện nội dung** (11) | Specialist/Admin chuẩn bị sẵn gì? | `topics`, `eq_sub_skills`, `question_templates` | `eq_skills`, `casel_references`, `question_template_versions`, `topic_sub_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
 | **Truyện** (8) | Một truyện gồm những gì? | `stories`, `story_pages`, `story_checkpoints` | `story_characters`, `story_scenes`, `checkpoint_options`, `narration_clips`, `bookshelf_items` |
-| **Học** (3) | Trẻ đã trả lời gì, điểm EQ ra sao? | `play_sessions`, `checkpoint_answers` | `eq_competency_stats` |
+| **Học** (2) | Trẻ đã trả lời gì, mức EQ ra sao? | `play_sessions`, `checkpoint_answers` | (mức độ tính trực tiếp từ `checkpoint_answers`) |
 | **AI** (1) | Đã gọi AI bao nhiêu, tốn bao nhiêu? | `ai_requests` | (prompt nằm trong dịch vụ ai/) |
 | **Chợ truyện** (6) | Truyện nào đang bán, ai đã mua, đánh giá ra sao? | `listings`, `entitlements`, `product_reviews` | `seller_profiles`, `price_tiers`, `product_review_tags` |
 | **Tiền** (10) | Ai trả bao nhiêu, ví còn bao nhiêu? | `orders`, `order_items`, `subscriptions`, `wallets`, `wallet_ledger` | `plans`, `refund_requests`, `webhook_logs`, `withdrawal_requests`, `platform_settings` |
@@ -26,9 +26,10 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
    nghiên cứu, chưa bật — schema giữ sẵn.*
 
 **Tạo truyện**
-4. Chọn bài học "Con hay nổi giận" → đọc `topics`.
+4. Chọn bài học "Con hay nổi giận" → đọc `topics`; kỹ năng con của bài → `topic_sub_skills` → `eq_sub_skills`
+   (mỗi kỹ năng con trỏ về đúng 1 mục `casel_references`).
 5. Hệ thống tạo `stories` (`private`, `length = medium`), gắn nhân vật + token `{NV1}`… →
-   `story_characters`, dựng 8 trang → `story_pages`, 4 điểm dừng → `story_checkpoints`.
+   `story_characters`, dựng 8 trang → `story_pages`, 4 điểm dừng → `story_checkpoints`; điểm dừng chấm lấy mẫu đã ban hành của kỹ năng con → ghi `sub_skill_id`, `template_version_id`, `scored = true` (truyện tự viết và câu liên hệ bản thân: `scored = false`, không kỹ năng con). Specialist có thể gắn cờ `excluded` / `reviewed_ok_*` khi soát điểm dừng.
 6. "Viết giúp tôi" → một `ai_requests` (`story_text`) → điền chữ trang, cảnh (`story_scenes`),
    câu hỏi và phương án (`checkpoint_options`).
 7. Xem lại xong → `stories.reviewed_at`; đọc giọng từng đoạn → `narration_clips` (nếu `use_tts`).
@@ -37,13 +38,13 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 
 **Bé An chơi**
 9. Mở truyện → `play_sessions` (`is_first_play = true` nếu là lần đầu).
-10. Trả lời điểm dừng → `checkpoint_answers` (lần chọn đầu, lần chọn cuối, điểm, năng lực).
-11. Cập nhật cache điểm → `eq_competency_stats`; thời gian đọc tính từ `play_sessions` (không giới hạn phút).
+10. Trả lời điểm dừng → `checkpoint_answers` (lần chọn đầu, lần chọn cuối, điểm 0–1, `skill_id`, `sub_skill_id`, `template_version_id` — chép nguyên từ điểm dừng lúc trả lời).
+11. Báo cáo EQ tính mức theo kỹ năng con trực tiếp từ `checkpoint_answers` (lượt đọc đầu, có điểm, điểm dừng không bị cờ; 5 câu gần nhất, tối thiểu 3, ngưỡng 0,5 / 0,8 do Specialist đặt trong `platform_settings`; không còn bảng thống kê riêng); thời gian đọc tính từ `play_sessions` (không giới hạn phút).
 
 **Đăng bán**
 12. Nộp đơn người bán → `seller_profiles`.
 13. Đăng bán → bản sao `stories` (`published`) + `story_characters` dùng `alias_name` → `listings`.
-14. Moderator duyệt → `moderation_reviews`, checklist → `review_checklist_results`, đã xem từng
+14. Specialist duyệt → `moderation_reviews`, checklist → `review_checklist_results`, đã xem từng
     trang → `review_page_views`.
 
 **Mẹ Hoa mua**
@@ -65,7 +66,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 - **Chữ truyện lưu kèm token** `{NVx}`; tên thật thay vào lúc hiển thị và lúc gửi giọng đọc.
 - **Sổ cái chỉ ghi thêm** (`wallet_ledger`): không UPDATE, không DELETE. Mỗi thay đổi số dư ghi
   đúng một dòng, có `idempotency_key` duy nhất.
-- **Cache + đối soát:** bộ đếm trên `listings` và `eq_competency_stats` là cache; cron hằng đêm tính
+- **Cache + đối soát:** bộ đếm trên `listings` là cache; cron hằng đêm tính
   lại từ dữ liệu gốc.
 
 ## 4. Máy trạng thái
@@ -91,20 +92,23 @@ DBML không diễn tả được; đã ghi trong `Note` của từng bảng, t�
 - `subscriptions (parent_id)` WHERE `status = active`
 - `withdrawal_requests (seller_id)` WHERE `status IN (requested, processing)`
 - `moderation_reviews (listing_id)` WHERE `decided_at IS NULL`
+- `question_template_versions (template_id)` WHERE `status = draft` (mỗi mẫu tối đa 1 bản nháp)
 - `content_reports (reporter_id, listing_id)` WHERE `listing_id IS NOT NULL`
 
 **CHECK**
-- `stories`: `kind <> published OR source_story_id IS NOT NULL`
+- `stories`: `kind <> published OR source_story_id IS NOT NULL`; `length = custom OR topic_id IS NOT NULL`
 - `story_characters`: đúng một trong `character_id`, `alias_name`
-- `story_checkpoints`: có `answer_emotion` ⇔ kiểu cảm xúc; có `target_token` ⇔ `emotion_other` hoặc `perspective`
+- `story_checkpoints`: có `answer_emotion` ⇔ kiểu cảm xúc; `emotion_other` bắt buộc có `target_token`, `perspective` có hoặc không,
+  `emotion_self` / `problem_solving` / `reflection` không có
 - `order_items`: exclusive arc theo `item_type`
 - `orders`: `total_vnd = 0 OR payos_order_code IS NOT NULL`
 - `wallets`: mọi cột ≥ 0
 - `product_reviews`: `rating BETWEEN 1 AND 5`
 - `checkpoint_answers`: `attempts BETWEEN 1 AND 2`
-- `topics`: `age_min <= age_max`
+- `topics`, `eq_sub_skills`: `age_min <= age_max`
 
 **Validator ở tầng service** (khác bảng, CHECK không làm được)
+- `eq_sub_skills`: mục `casel_references` phải cùng `skill_id`; `topic_sub_skills`: 1–3 kỹ năng con cùng năng lực với topic.
 - `checkpoint_options`: `perspective` đúng 3 phương án, đúng 1 `is_correct`; `problem_solving` đủ 3 vai.
 - Truyện `custom`: 4–20 trang, 0–6 điểm dừng có chấm, không đặt sau trang 1, `reflection` ở cuối.
 - Chỉ đưa vào giá sách khi `reviewed_at IS NOT NULL`, và phụ huynh sở hữu truyện (riêng tư hoặc có `entitlements`).
@@ -118,4 +122,4 @@ DBML không diễn tả được; đã ghi trong `Note` của từng bảng, t�
 | Chuyển doanh thu treo quá 3 ngày (`market.earning_hold_days`) sang khả dụng, trừ khoản đang chờ hoàn tiền | Mỗi 15 phút |
 | Hết hạn đơn chưa thanh toán | Mỗi vài phút |
 | Tính lại bộ đếm `listings` | Admin bấm ở trang Đối soát (chưa có cron) |
-| Chọn truyện kiểm tra ngẫu nhiên cho Moderator | Hằng tuần |
+| Chọn truyện kiểm tra ngẫu nhiên cho Specialist | Hằng tuần |

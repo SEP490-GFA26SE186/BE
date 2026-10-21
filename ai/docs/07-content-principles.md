@@ -1,6 +1,6 @@
 # 07 — Nguyên tắc nội dung
 
-Mã hoá toàn bộ vào `prompts/story.v1.md`. Viết test cho những gì kiểm tra tất định được.
+Mã hoá toàn bộ vào `prompts/story.v2.md` (v1 giữ làm lịch sử). Viết test cho những gì kiểm tra tất định được.
 
 ## Bảy nguyên tắc
 

@@ -1,12 +1,13 @@
 // =============================================================================
 // Seed: platform_settings cho luong sinh truyen (spec story-generation-node §5.1)
-// Gia tri khop BE/ai/docs/03-story-structure.md.
+// Gia tri khop BE/ai/docs/03-story-structure.md. O 'scored' dien bang mau cau hoi cua ky nang con
+// cua topic khi tao truyen (spec casel-pedagogy §6.1); 'reflection' khong cham.
 //
-// Phai chay sau seedTopics: updated_by tro vao moderator ma seedTopics tao.
+// Phai chay sau seedTopics: updated_by tro vao specialist ma seedTopics tao.
 // upsert voi update: {} — chay lai KHONG ghi de gia tri Admin da chinh.
 // =============================================================================
 
-const MODERATOR_EMAIL = 'pedagogy@storyweaver.ai';
+const SPECIALIST_EMAIL = 'pedagogy@storyweaver.ai';
 
 export const platformSettingsData = [
   {
@@ -14,9 +15,9 @@ export const platformSettingsData = [
     value: {
       pages: 6,
       checkpoints: [
-        { type: 'emotion_self', after: 2 },
-        { type: 'perspective', after: 3 },
-        { type: 'problem_solving', after: 4 },
+        { type: 'scored', after: 2 },
+        { type: 'scored', after: 3 },
+        { type: 'scored', after: 4 },
         { type: 'reflection', after: 6 },
       ],
     },
@@ -26,9 +27,9 @@ export const platformSettingsData = [
     value: {
       pages: 8,
       checkpoints: [
-        { type: 'emotion_self', after: 2 },
-        { type: 'perspective', after: 4 },
-        { type: 'problem_solving', after: 5 },
+        { type: 'scored', after: 2 },
+        { type: 'scored', after: 4 },
+        { type: 'scored', after: 5 },
         { type: 'reflection', after: 8 },
       ],
     },
@@ -38,10 +39,10 @@ export const platformSettingsData = [
     value: {
       pages: 10,
       checkpoints: [
-        { type: 'emotion_self', after: 2 },
-        { type: 'perspective', after: 4 },
-        { type: 'problem_solving', after: 6 },
-        { type: 'emotion_other', after: 8 },
+        { type: 'scored', after: 2 },
+        { type: 'scored', after: 4 },
+        { type: 'scored', after: 6 },
+        { type: 'scored', after: 8 },
         { type: 'reflection', after: 10 },
       ],
     },
@@ -59,8 +60,13 @@ export const platformSettingsData = [
   { key: 'custom_limits.min_pages', value: 4 },
   { key: 'custom_limits.max_pages', value: 20 },
   { key: 'custom_limits.max_checkpoints', value: 6 },
-  // tạm — câu hỏi mở §10.3 của spec
-  { key: 'ai_cost.story_text', value: 1 },
+  // Credit cho một lần AI viết truyện, theo độ dài (người dùng chốt 2026-10-19: giá khác nhau theo số trang).
+  { key: 'ai_cost.story_text.short', value: 1 },
+  { key: 'ai_cost.story_text.medium', value: 2 },
+  { key: 'ai_cost.story_text.long', value: 3 },
+  // Tranh AI (2026-10-19): chân dung nhân vật 1 credit (dùng lại mãi), mỗi tranh cảnh 1 credit.
+  { key: 'ai_cost.character_portrait', value: 1 },
+  { key: 'ai_cost.scene_image', value: 1 },
   // Giọng đọc kể truyện (spec TTS §5.2): preset VieNeu, Node luôn gửi tường minh. Đổi giọng làm
   // lệch vân tay mọi đoạn -> các truyện phải hoàn tất lại để đọc bằng giọng mới.
   { key: 'tts.voice', value: 'Kim Thanh' },
@@ -78,21 +84,28 @@ export const platformSettingsData = [
   { key: 'moderation.strike_limit', value: 3 },
   { key: 'moderation.strike_valid_days', value: 90 },
   { key: 'moderation.audit_per_week', value: 3 },
+  // Báo cáo EQ theo kỹ năng con (spec sư phạm CASEL §7, Specialist sửa được): xét N câu chấm gần nhất,
+  // tối thiểu min_items câu mới xếp mức; tỉ lệ < developing_from = "Đang làm quen",
+  // từ developing_from đến dưới secure_from = "Đang phát triển", từ secure_from = "Vững".
+  { key: 'eq_report.window', value: 5 },
+  { key: 'eq_report.min_items', value: 3 },
+  { key: 'eq_report.developing_from', value: 0.5 },
+  { key: 'eq_report.secure_from', value: 0.8 },
 ];
 
 export async function seedPlatformSettings(prisma) {
   console.log('🌱 Seeding platform_settings...');
 
-  const moderator = await prisma.user.findUnique({ where: { email: MODERATOR_EMAIL } });
-  if (!moderator) {
-    throw new Error(`Không thấy ${MODERATOR_EMAIL} — seedTopics phải chạy trước seedPlatformSettings.`);
+  const specialist = await prisma.user.findUnique({ where: { email: SPECIALIST_EMAIL } });
+  if (!specialist) {
+    throw new Error(`Không thấy ${SPECIALIST_EMAIL} — seedTopics phải chạy trước seedPlatformSettings.`);
   }
 
   for (const { key, value } of platformSettingsData) {
     await prisma.platformSetting.upsert({
       where: { key },
       update: {},
-      create: { key, value, updatedBy: moderator.id },
+      create: { key, value, updatedBy: specialist.id },
     });
   }
 

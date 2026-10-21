@@ -52,7 +52,7 @@ def test_sample_ok(client) -> None:
     assert r.status_code == 200, r.text
     b = r.json()
     assert b["request_id"] == "0f6c2d1e-demo"
-    assert b["prompt_version"] == "story.v1"
+    assert b["prompt_version"] == "story.v2"
     assert b["warnings"] == []
     assert list(b["pages"]) == [f"p{i}" for i in range(1, 9)]
     assert list(b["checkpoints"]) == ["k1", "k2", "k3", "k4"]

@@ -27,8 +27,8 @@ before(async () => {
   if (skip) return;
   api = await startServer();
   topic = await getSeededTopic();
-  cost = (await loadStorySettings(prisma)).storyTextCost;
-  assert.ok(cost > 0, 'ai_cost.story_text tren DB test phai > 0 de kiem giu credit');
+  cost = (await loadStorySettings(prisma)).storyTextCost.medium; // truyen trong test mac dinh 'medium'
+  assert.ok(cost > 0, 'ai_cost.story_text.medium tren DB test phai > 0 de kiem giu credit');
 });
 
 after(async () => {
@@ -107,6 +107,129 @@ const rejectsWith = (promise, statusCode) =>
   });
 
 // ---------------------------------------------------------------------------
+// Xep mau cau hoi vao o cham (spec casel-pedagogy §6.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Topic moi cung nang luc voi topic seed, gan cac ky nang con moi. `subs`: moi phan tu
+ * { isActive, templates: [{ isActive, answerFormat, needsTarget, versions: ['published'|'draft', ...] }] }
+ * (version danh so 1..n theo thu tu). Tra ve { topic, subSkills: [{ id, templates: [{ id, versionIds }] }] }.
+ */
+async function topicWithSubSkills(owner, subs) {
+  const seeded = await prisma.topicSubSkill.findFirst({
+    where: { topicId: topic.id },
+    select: { subSkill: { select: { skillId: true, caselReferenceId: true } } },
+  });
+  const { skillId, caselReferenceId } = seeded.subSkill;
+  const tag = crypto.randomUUID().slice(0, 8);
+  const t = await prisma.topic.create({
+    // displayOrder lon: khong thanh topic dau tien ma getSeededTopic chon o lan chay sau.
+    data: { title: `Topic thử ${tag}`, skillId, guidance: 'x', displayOrder: 1_000_000, createdBy: owner.id },
+  });
+  const out = [];
+  for (const [i, sub] of subs.entries()) {
+    const ss = await prisma.eqSubSkill.create({
+      data: {
+        skillId, caselReferenceId, code: `it_${tag}_${i}`, nameVi: `Kỹ năng thử ${tag} ${i}`,
+        descriptionVi: 'x', isActive: sub.isActive ?? true, displayOrder: i, createdBy: owner.id,
+      },
+    });
+    await prisma.topicSubSkill.create({ data: { topicId: t.id, subSkillId: ss.id } });
+    const templates = [];
+    for (const tpl of sub.templates) {
+      const qt = await prisma.questionTemplate.create({
+        data: { subSkillId: ss.id, title: 'Mẫu thử', answerFormat: tpl.answerFormat ?? 'emotion_pick', isActive: tpl.isActive ?? true, createdBy: owner.id },
+      });
+      const versionIds = [];
+      for (const [n, status] of tpl.versions.entries()) {
+        const ver = await prisma.questionTemplateVersion.create({
+          data: { templateId: qt.id, version: n + 1, status, questionFrame: 'Bé cảm thấy thế nào?', needsTarget: tpl.needsTarget ?? false, createdBy: owner.id },
+        });
+        versionIds.push(ver.id);
+      }
+      templates.push({ id: qt.id, versionIds });
+    }
+    out.push({ id: ss.id, templates });
+  }
+  return { topic: t, subSkills: out };
+}
+
+const postStory = (f, topicId, length = 'medium') =>
+  api.request('POST', '/stories', {
+    token: f.token,
+    body: {
+      topicId,
+      length,
+      title: 'Bin và Mít',
+      characters: [
+        { characterId: f.bin.id, isMain: true },
+        { characterId: f.mit.id, isMain: false },
+      ],
+    },
+  });
+
+const checkpointRows = (storyId) =>
+  prisma.storyCheckpoint.findMany({
+    where: { storyId },
+    orderBy: { afterPage: { pageOrder: 'asc' } },
+    include: { afterPage: { select: { pageOrder: true } }, templateVersion: { include: { template: true } } },
+  });
+
+test('tao truyen AI: topic co ky nang con ma mau da tat het -> 422, khong tao truyen, so du credit khong doi (Review Focus 1-2)', { skip }, async () => {
+  const f = await family(cost + 5);
+  const { topic: t } = await topicWithSubSkills(f.user, [
+    { templates: [{ isActive: false, versions: ['published'] }] },
+  ]);
+  const before = await balanceOf(f.user.id);
+
+  const res = await postStory(f, t.id);
+  assert.equal(res.status, 422, JSON.stringify(res.body));
+  assert.match(res.body.message, /mẫu câu hỏi/);
+  assert.equal(await balanceOf(f.user.id), before);
+  assert.equal(await prisma.story.count({ where: { ownerId: f.user.id } }), 0);
+  assert.equal(await prisma.walletLedger.count({ where: { userId: f.user.id, entryType: 'credit_hold' } }), 0);
+  await prisma.topic.update({ where: { id: t.id }, data: { isActive: false } });
+});
+
+test('tao truyen AI: o cham lay ban published moi nhat cua mau dang bat, bo ky nang con da tat; luu sub_skill/template_version/scored', { skip }, async () => {
+  const f = await family(cost + 5);
+  const { topic: t, subSkills } = await topicWithSubSkills(f.user, [
+    { templates: [{ versions: ['published', 'published', 'draft'] }] },
+    { isActive: false, templates: [{ answerFormat: 'role_choice', versions: ['published'] }] },
+  ]);
+  const res = await postStory(f, t.id);
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+
+  const rows = await checkpointRows(res.body.data.story.id);
+  assert.deepEqual(rows.map((r) => r.afterPage.pageOrder), [2, 4, 5, 8]);
+  const scored = rows.slice(0, 3);
+  assert.ok(scored.every((r) => r.scored && r.subSkillId === subSkills[0].id));
+  assert.ok(scored.every((r) => r.templateVersionId === subSkills[0].templates[0].versionIds[1]));
+  assert.ok(scored.every((r) => r.type === 'emotion_self' && r.answerEmotion === 'neutral' && r.targetToken === null));
+  assert.equal(rows[3].type, 'reflection');
+  assert.equal(rows[3].scored, false);
+  assert.equal(rows[3].subSkillId, null);
+  assert.equal(rows[3].templateVersionId, null);
+  await prisma.topic.update({ where: { id: t.id }, data: { isActive: false } });
+});
+
+test('tao truyen AI (topic seed): moi o cham thuoc ky nang con cua topic, mau dang bat, ban published', { skip }, async () => {
+  const f = await family(0);
+  const story = await createStory(f, 'long');
+  const links = await prisma.topicSubSkill.findMany({ where: { topicId: topic.id }, select: { subSkillId: true } });
+  const allowed = new Set(links.map((l) => l.subSkillId));
+  const rows = await checkpointRows(story.id);
+  const scored = rows.filter((r) => r.type !== 'reflection');
+  assert.equal(scored.length, 4);
+  for (const r of scored) {
+    assert.ok(r.scored && allowed.has(r.subSkillId), `o sau trang ${r.afterPage.pageOrder}`);
+    assert.equal(r.templateVersion.status, 'published');
+    assert.ok(r.templateVersion.template.isActive);
+    assert.equal(r.templateVersion.template.subSkillId, r.subSkillId);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // startGeneration
 // ---------------------------------------------------------------------------
 
@@ -132,6 +255,18 @@ test('startGeneration: thanh cong -> generating, ai_request queued, mot credit_h
   assert.equal(await balanceOf(f.user.id), 5);
 
   assert.deepEqual(calls, [['story_text', { ai_request_id: aiRequestId }, { jobId: aiRequestId }]]);
+});
+
+test('startGeneration: credit theo do dai truyen (ngan / dai tru dung gia cua do dai do)', { skip }, async () => {
+  const { storyTextCost } = await loadStorySettings(prisma);
+  for (const length of ['short', 'long']) {
+    const price = storyTextCost[length];
+    const f = await family(price + 1);
+    const story = await createStory(f, length);
+    const { aiRequestId } = await startGeneration(f.user, story.id, { enqueue: recorder().enqueue });
+    assert.equal((await prisma.aiRequest.findUnique({ where: { id: aiRequestId } })).creditsCharged, price, length);
+    assert.equal(await balanceOf(f.user.id), 1, length);
+  }
 });
 
 test('POST /:id/generate -> 202 { aiRequestId }', { skip }, async () => {

@@ -1,19 +1,20 @@
 // =============================================================================
-// Seed: topics (danh sach bai hoc do Moderator quan ly) — rev 8
+// Seed: topics (danh sach bai hoc do Specialist quan ly) — rev 8
 //
 // Thay cho seed_templates.js cua rev 6. rev 8 bo he thong templates/stages/slots:
 // AI viet ca truyen mot lan tu topic + situation, khung trang do story_layout
 // trong platform_settings quy dinh, khong con bang template nao.
 //
-// Phai chay sau seedEqSkills: topics.skill_id tro vao eq_skills.
+// Phai chay sau seedEqSkills (topics.skill_id) va seedPedagogy (topic_sub_skills tro vao eq_sub_skills).
+// subSkillCodes: 1-3 ky nang con cung nang luc (code trong prisma/data/pedagogy.js).
 // =============================================================================
 
 import bcrypt from 'bcryptjs';
 
-const MODERATOR_EMAIL = 'pedagogy@storyweaver.ai';
+const SPECIALIST_EMAIL = 'pedagogy@storyweaver.ai';
 
 // guidance: vai cau huong dan noi dung, gui kem cho AI khi viet truyen
-const topicsData = [
+export const topicsData = [
   {
     title: 'Tập chia sẻ đồ chơi cùng bạn',
     caselCode: 'relationship_skills',
@@ -22,6 +23,7 @@ const topicsData = [
     ageMin: 4,
     ageMax: 7,
     displayOrder: 1,
+    subSkillCodes: ['rs_playing_together', 'rs_making_up', 'rs_saying_what_i_need'],
   },
   {
     title: 'Bé dũng cảm vượt qua nỗi sợ bóng tối',
@@ -31,6 +33,7 @@ const topicsData = [
     ageMin: 4,
     ageMax: 8,
     displayOrder: 2,
+    subSkillCodes: ['sm_soothing_worries', 'sm_calming_down', 'sm_brave_first_step'],
   },
   {
     title: 'Dũng cảm nhận lỗi khi làm vỡ bình hoa',
@@ -40,6 +43,7 @@ const topicsData = [
     ageMin: 5,
     ageMax: 8,
     displayOrder: 3,
+    subSkillCodes: ['rdm_what_happens_next', 'rdm_finding_solutions', 'rdm_helping_out'],
   },
   {
     title: 'Con hay nổi giận',
@@ -49,6 +53,7 @@ const topicsData = [
     ageMin: 5,
     ageMax: 8,
     displayOrder: 4,
+    subSkillCodes: ['sa_emotion_naming', 'sa_feeling_causes'],
   },
   {
     title: 'Bạn mới trong lớp không có ai chơi cùng',
@@ -58,28 +63,54 @@ const topicsData = [
     ageMin: 5,
     ageMax: 8,
     displayOrder: 5,
+    subSkillCodes: ['soa_why_others_feel', 'soa_feeling_with_others', 'soa_kind_words'],
   },
 ];
+
+// Specialist tao du lieu su pham (topics.created_by, eq_sub_skills.created_by...). Tao neu chua co.
+export async function ensureSpecialist(prisma) {
+  let specialist = await prisma.user.findUnique({ where: { email: SPECIALIST_EMAIL } });
+  if (!specialist) {
+    const passwordHash = await bcrypt.hash('PedagogySecret2026!', 10);
+    specialist = await prisma.user.create({
+      data: {
+        email: SPECIALIST_EMAIL,
+        username: 'storyweaver_pedagogy',
+        fullName: 'Ban Sư Phạm StoryWeaver AI',
+        passwordHash,
+        role: 'specialist',
+        isActive: true,
+      },
+    });
+    console.log('  ✓ Created pedagogy specialist:', specialist.id);
+  }
+  return specialist;
+}
+
+// Gan ky nang con cho topic CHI KHI topic chua co lien ket nao: Specialist da doi danh sach thi giu nguyen.
+// Chi gan ky nang con cung nang luc voi topic hien tai (Specialist co the da doi nang luc topic, xoa ky nang con).
+async function linkSubSkills(prisma, topicRow, topic) {
+  const linked = await prisma.topicSubSkill.count({ where: { topicId: topicRow.id } });
+  if (linked > 0) return 0;
+  const subs = await prisma.eqSubSkill.findMany({ where: { code: { in: topic.subSkillCodes } } });
+  const ok = subs.filter((s) => s.skillId === topicRow.skillId);
+  if (ok.length < topic.subSkillCodes.length) {
+    const missing = topic.subSkillCodes.filter((c) => !ok.some((s) => s.code === c));
+    console.warn(`  ! "${topic.title}": khong gan ${missing.join(', ')} (chua co hoac khac nang luc).`);
+  }
+  if (ok.length === 0) return 0;
+  await prisma.topicSubSkill.createMany({
+    data: ok.map((s) => ({ topicId: topicRow.id, subSkillId: s.id })),
+    skipDuplicates: true,
+  });
+  return ok.length;
+}
 
 export async function seedTopics(prisma) {
   console.log('🌱 Seeding Topics...');
 
-  // 1. Moderator tao cac bai hoc nay (topics.created_by)
-  let moderator = await prisma.user.findUnique({ where: { email: MODERATOR_EMAIL } });
-  if (!moderator) {
-    const passwordHash = await bcrypt.hash('PedagogySecret2026!', 10);
-    moderator = await prisma.user.create({
-      data: {
-        email: MODERATOR_EMAIL,
-        username: 'storyweaver_pedagogy',
-        fullName: 'Ban Sư Phạm StoryWeaver AI',
-        passwordHash,
-        role: 'moderator',
-        isActive: true,
-      },
-    });
-    console.log('  ✓ Created pedagogy moderator:', moderator.id);
-  }
+  // 1. Specialist tao cac bai hoc nay (topics.created_by)
+  const specialist = await ensureSpecialist(prisma);
 
   const skills = await prisma.eqSkill.findMany();
   if (skills.length === 0) {
@@ -97,7 +128,8 @@ export async function seedTopics(prisma) {
 
     const existing = await prisma.topic.findFirst({ where: { title: topic.title } });
     if (existing) {
-      console.log(`  - "${topic.title}" da co (${existing.id}), bo qua.`);
+      const n = await linkSubSkills(prisma, existing, topic);
+      console.log(`  - "${topic.title}" da co (${existing.id}), bo qua${n ? `; gan ${n} ky nang con` : ''}.`);
       continue;
     }
 
@@ -109,10 +141,11 @@ export async function seedTopics(prisma) {
         ageMin: topic.ageMin,
         ageMax: topic.ageMax,
         displayOrder: topic.displayOrder,
-        createdBy: moderator.id,
+        createdBy: specialist.id,
       },
     });
-    console.log(`  ✓ "${created.title}" [${topic.caselCode}]`);
+    const n = await linkSubSkills(prisma, created, topic);
+    console.log(`  ✓ "${created.title}" [${topic.caselCode}] + ${n} ky nang con`);
   }
 
   console.log('✅ Topics done.');

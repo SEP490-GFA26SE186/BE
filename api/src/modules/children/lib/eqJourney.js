@@ -1,11 +1,14 @@
-// Bao cao EQ chi tiet cua mot be (luong 5.5-5.6). Ham thuan tren cau tra loi luot doc DAU (cung nguon voi
-// eq_competency_stats — luot doc lai khong cong diem). Diem 0..1 (checkpoint_answers.score), hien thi 0..100.
+// Bao cao EQ chi tiet cua mot be (spec su pham CASEL §7, §9b). Ham thuan tren cau tra loi luot doc DAU.
+// - trend: so cau cham moi tuan theo nang luc + muc nang luc cuoi tuan (khong %).
+// - evidence: cau hoi / truyen / lua chon dau / can goi y, toi da 5 cau moi ky nang con.
+// - conversation: goi y tro chuyen (parent_prompts cua mau) gan voi truyen be vua doc.
+// Ten that chi hien cho phu huynh cua chinh be (detokenize), khong bao gio gui AI / log.
 
-import { EQ_MIN_ITEMS } from './childFormat.js';
+import { detokenize } from '../../stories/lib/narration.js';
+import { buildEqLevels } from './eqLevels.js';
 
 const DAY_MS = 86_400_000;
 const VN_OFFSET_MS = 7 * 3_600_000;
-const pct = (sum, n) => (n ? Math.round((sum / n) * 100) : null);
 
 /** Thu Hai dau tuan (gio VN) cua `date`, dang 'YYYY-MM-DD'. */
 export function vnWeekStart(date) {
@@ -14,72 +17,111 @@ export function vnWeekStart(date) {
   return new Date(vn.getTime() - dow * DAY_MS).toISOString().slice(0, 10);
 }
 
-const EMOTIONS = ['happy', 'sad', 'angry', 'scared', 'neutral'];
-
 /**
- * rows: [{ answeredAt, score (0..1 | null), skipped, attempts, caselCode | null, type, answerEmotion?, firstEmotion? }]
- * — chi luot doc dau. Tra { trend, byType, emotions }.
- * - trend: `weeks` tuan gan nhat (cu -> moi), moi nang luc { items, score }; tuan it hon EQ_MIN_ITEMS cau
- *   van tra diem (xu huong), nhung FE ghi "it du lieu".
- * - byType.firstTryRate: % cau duoc cham dat diem toi da ngay lan chon dau (cam xuc / goc nhin chon dung,
- *   giai quyet tinh huong chon cach xay dung).
- * - emotions: diem dung nhan dien cam xuc (emotion_self / emotion_other), theo cam xuc dung: so lan gap,
- *   so lan be nhan dung ngay lan dau (y tuong tu origin/main).
+ * rows: { subSkillId, score, answeredAt } MOI -> CU (cung nguon voi buildEqLevels).
+ * Tra `weeks` tuan gan nhat (cu -> moi): { weekStart, competencies: { [caselCode]: { items, level } } };
+ * items = so cau cham trong tuan, level = muc nang luc tinh tren moi cau den het tuan do.
  */
-export function buildEqJourney(rows, { weeks = 8, now = new Date() } = {}) {
+export function buildTrend(rows, skills, subSkills, settings, { weeks = 8, now = new Date() } = {}) {
+  const skillOfSub = new Map(subSkills.map((s) => [s.id, s.skillId]));
+  const codeOfSkill = new Map(skills.map((s) => [s.id, s.caselCode]));
   const thisWeek = vnWeekStart(now);
-  const weekKeys = Array.from({ length: weeks }, (_, i) =>
-    new Date(Date.parse(`${thisWeek}T00:00:00Z`) - (weeks - 1 - i) * 7 * DAY_MS).toISOString().slice(0, 10),
-  );
-  const acc = new Map(weekKeys.map((w) => [w, new Map()]));
-  const types = new Map();
-  const emotionAcc = new Map();
-
-  for (const r of rows) {
-    const t = types.get(r.type) ?? { type: r.type, answered: 0, skipped: 0, scored: 0, scoreSum: 0, firstTry: 0 };
-    t.answered += 1;
-    if (r.skipped) t.skipped += 1;
-    if (r.score != null) {
-      t.scored += 1;
-      t.scoreSum += Number(r.score);
-      if (Number(r.score) === 1) t.firstTry += 1;
+  return Array.from({ length: weeks }, (_, i) => {
+    const weekStart = new Date(Date.parse(`${thisWeek}T00:00:00Z`) - (weeks - 1 - i) * 7 * DAY_MS).toISOString().slice(0, 10);
+    const from = Date.parse(`${weekStart}T00:00:00+07:00`);
+    const to = from + 7 * DAY_MS;
+    const upToEnd = rows.filter((r) => new Date(r.answeredAt).getTime() < to);
+    const { competencies } = buildEqLevels(upToEnd, skills, subSkills, settings);
+    const items = new Map();
+    for (const r of upToEnd) {
+      if (new Date(r.answeredAt).getTime() < from) continue;
+      const code = codeOfSkill.get(skillOfSub.get(r.subSkillId));
+      if (code) items.set(code, (items.get(code) ?? 0) + 1);
     }
-    types.set(r.type, t);
-
-    if (r.answerEmotion && !r.skipped) {
-      const e = emotionAcc.get(r.answerEmotion) ?? { emotion: r.answerEmotion, count: 0, correctFirstTry: 0 };
-      e.count += 1;
-      if (r.firstEmotion === r.answerEmotion) e.correctFirstTry += 1;
-      emotionAcc.set(r.answerEmotion, e);
-    }
-
-    const week = acc.get(vnWeekStart(r.answeredAt));
-    if (!week || r.score == null || !r.caselCode) continue;
-    const s = week.get(r.caselCode) ?? { items: 0, sum: 0 };
-    s.items += 1;
-    s.sum += Number(r.score);
-    week.set(r.caselCode, s);
-  }
-
-  return {
-    trend: weekKeys.map((weekStart) => ({
+    return {
       weekStart,
-      skills: Object.fromEntries([...acc.get(weekStart)].map(([code, s]) => [code, { items: s.items, score: pct(s.sum, s.items) }])),
-    })),
-    byType: [...types.values()].map((t) => ({
-      type: t.type,
-      answered: t.answered,
-      skipped: t.skipped,
-      avgScore: pct(t.scoreSum, t.scored),
-      firstTryRate: t.scored ? Math.round((t.firstTry / t.scored) * 100) : null,
-    })),
-    emotions: EMOTIONS.filter((e) => emotionAcc.has(e)).map((e) => emotionAcc.get(e)),
-  };
+      competencies: Object.fromEntries(competencies.map((c) => [c.caselCode, { items: items.get(c.caselCode) ?? 0, level: c.level }])),
+    };
+  });
 }
 
-/** Nang luc manh nhat / can ho tro them (chi xet nang luc da du EQ_MIN_ITEMS cau). */
-export function strengths(skills) {
-  const ranked = skills.filter((s) => s.items >= EQ_MIN_ITEMS && s.score != null).sort((a, b) => b.score - a.score);
-  if (ranked.length < 2) return { strongest: ranked[0]?.caselCode ?? null, focus: null };
-  return { strongest: ranked[0].caselCode, focus: ranked[ranked.length - 1].caselCode };
+/** Nhan cam xuc tieng Viet (khop Web constants/story.js). */
+export const EMOTION_LABELS = { happy: 'Vui', sad: 'Buồn', angry: 'Giận', scared: 'Sợ', neutral: 'Bình thường' };
+
+/** Lua chon dau dat diem toi da cua phien ban mau: cam xuc / goc nhin chon dung; tinh huong chon cach xay dung. */
+function correctFirstTry(a) {
+  const { type, answerEmotion } = a.checkpoint;
+  if (type === 'emotion_self' || type === 'emotion_other') return a.firstEmotion != null && a.firstEmotion === answerEmotion;
+  if (type === 'perspective') return a.firstOption?.isCorrect === true;
+  if (type === 'problem_solving') return a.firstOption?.role === 'constructive';
+  return Number(a.score) === 1;
+}
+
+/**
+ * answers: checkpoint_answers MOI -> CU (da loc nhu buildEqLevels) kem firstOption { text, role, isCorrect }
+ * va checkpoint { type, question, answerEmotion, story: { title, storyCharacters } }.
+ */
+export function buildEvidence(answers, { perSubSkill = 5 } = {}) {
+  const count = new Map();
+  const out = [];
+  for (const a of answers) {
+    const n = count.get(a.subSkillId) ?? 0;
+    if (n >= perSubSkill) continue;
+    count.set(a.subSkillId, n + 1);
+    const names = a.checkpoint.story.storyCharacters;
+    const real = (s) => (s == null ? null : detokenize(s, names));
+    out.push({
+      subSkillId: a.subSkillId,
+      answeredAt: a.answeredAt,
+      storyTitle: a.checkpoint.story.title,
+      question: real(a.checkpoint.question),
+      firstChoiceText: a.firstEmotion ? EMOTION_LABELS[a.firstEmotion] ?? a.firstEmotion : real(a.firstOption?.text ?? null),
+      correctFirstTry: correctFirstTry(a),
+      usedHint: a.attempts > 1,
+      source: 'ai_template',
+    });
+  }
+  return out;
+}
+
+const MAX_PROMPTS = 3;
+const hasText = (s) => typeof s === 'string' && s.trim().length > 0;
+
+/**
+ * stories: truyen be vua doc (moi -> cu): { id, title, length, storyCharacters, answeredReflection,
+ * checkpoints: [{ type, question, subSkillId, pageOrder, templateVersion: { parentPrompts } | null }] }.
+ * Truyen AI: parent_prompts cua cac phien ban mau (bo trung, toi da 3); truyen tu viet: cau hoi cua truyen.
+ * Kem cau hoi reflection (neu co). Truyen khong co gi de goi y bi bo.
+ */
+export function buildConversation(stories) {
+  const out = [];
+  for (const s of stories) {
+    const real = (t) => detokenize(t, s.storyCharacters);
+    const cps = [...s.checkpoints].sort((a, b) => (a.pageOrder ?? 0) - (b.pageOrder ?? 0));
+    const prompts = [];
+    let subSkillId = null;
+    const add = (text) => {
+      if (hasText(text) && !prompts.includes(text) && prompts.length < MAX_PROMPTS) prompts.push(text);
+    };
+    for (const c of cps) {
+      if (c.type === 'reflection') continue;
+      if (s.length === 'custom') {
+        if (hasText(c.question)) add(real(c.question));
+        continue;
+      }
+      const before = prompts.length;
+      for (const p of c.templateVersion?.parentPrompts ?? []) add(real(p));
+      if (prompts.length > before && !subSkillId) subSkillId = c.subSkillId ?? null;
+    }
+    const reflection = cps.find((c) => c.type === 'reflection' && hasText(c.question));
+    if (!prompts.length && !reflection) continue;
+    out.push({
+      storyId: s.id,
+      storyTitle: s.title,
+      subSkillId,
+      prompts,
+      ...(reflection && { reflection: { question: real(reflection.question), answered: Boolean(s.answeredReflection) } }),
+    });
+  }
+  return out;
 }

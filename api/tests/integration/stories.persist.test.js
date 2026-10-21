@@ -9,7 +9,8 @@ import {
   createWallet,
   createChild,
   createCharacter,
-  getSeededTopic,
+  createFixedSlotTopic,
+  retireTopic,
   startServer,
 } from './_fixtures.js';
 import { startGeneration } from '../../src/modules/stories/stories.generation.service.js';
@@ -33,12 +34,14 @@ const sampleResponse = () =>
 before(async () => {
   if (skip) return;
   api = await startServer();
-  topic = await getSeededTopic();
-  cost = (await loadStorySettings(prisma)).storyTextCost;
-  assert.ok(cost > 0, 'ai_cost.story_text tren DB test phai > 0 de kiem giu credit');
+  // Kieu diem dung co dinh (emotion_self, perspective, problem_solving) thay vi chon mau ngau nhien.
+  topic = await createFixedSlotTopic();
+  cost = (await loadStorySettings(prisma)).storyTextCost.medium; // truyen trong test mac dinh 'medium'
+  assert.ok(cost > 0, 'ai_cost.story_text.medium tren DB test phai > 0 de kiem giu credit');
 });
 
 after(async () => {
+  if (topic) await retireTopic(topic);
   if (api) await api.close();
   await prisma.$disconnect();
 });

@@ -3,6 +3,7 @@ import storiesService from './stories.service.js';
 import editorService from './stories.editor.service.js';
 import generationService from './stories.generation.service.js';
 import narrationService from './stories.narration.service.js';
+import imagesService from './stories.images.service.js';
 import { ApiError, ApiResponse, catchAsync } from '../../utils/index.js';
 
 const createStory = catchAsync(async (req, res) => {
@@ -107,6 +108,21 @@ const getGeneration = catchAsync(async (req, res) => {
   return ApiResponse.success(res, { data: { generation } });
 });
 
+const drawImages = catchAsync(async (req, res) => {
+  const result = await imagesService.drawStoryImages(req.user, req.params.id);
+  return ApiResponse.success(res, { statusCode: 202, message: 'Đang vẽ tranh cho truyện', data: result });
+});
+
+const redrawScene = catchAsync(async (req, res) => {
+  const result = await imagesService.redrawScene(req.user, req.params.id, req.params.sceneId);
+  return ApiResponse.success(res, { statusCode: 202, message: 'Đang vẽ lại cảnh', data: result });
+});
+
+const getAiPricing = catchAsync(async (req, res) => {
+  const pricing = await generationService.getAiPricing();
+  return ApiResponse.success(res, { data: pricing });
+});
+
 // ---------------------------------------------------------------------------
 // publish-version tra 501 lau dai (cho spec cho truyen).
 // ---------------------------------------------------------------------------
@@ -135,5 +151,8 @@ export default {
   retryNarration,
   generateStory,
   getGeneration,
+  getAiPricing,
+  drawImages,
+  redrawScene,
   publishStoryVersion,
 };

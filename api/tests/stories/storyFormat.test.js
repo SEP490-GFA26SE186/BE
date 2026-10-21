@@ -87,9 +87,13 @@ test('formatStoryDetail: chu giu dang token, khong lo cot noi bo', () => {
   assert.equal('storyId' in d.pages[0], false);
   assert.equal('checkpointId' in d.checkpoints[1].options[0], false);
   assert.deepEqual(Object.keys(d.checkpoints[0]).sort(), [
-    'afterPageId', 'afterPageOrder', 'answerEmotion', 'hint', 'id', 'options', 'origin', 'question',
-    'targetToken', 'type',
+    'afterPageId', 'afterPageOrder', 'answerEmotion', 'hint', 'id', 'locked', 'options', 'origin', 'question',
+    'scored', 'targetToken', 'type',
   ]);
+  // Truyen AI (length != custom): diem dung khoa; truyen tu viet thi khong.
+  const lengthOf = (length) => formatStoryDetail({ ...story(), length }).checkpoints.map((c) => c.locked);
+  assert.deepEqual(lengthOf('medium'), [true, true]);
+  assert.deepEqual(lengthOf('custom'), [false, false]);
 });
 
 test('formatStoryDetail: khong lam doi mang dau vao', () => {

@@ -14,7 +14,11 @@ import { adminWithdrawalsRouter, sellerMoneyRouter } from '../../modules/market/
 import { listingsRouter, moderationReviewRouter, sellersRouter } from '../../modules/publishing/publishing.routes.js';
 import { plansRouter, subscriptionsRouter } from '../../modules/plans/plans.routes.js';
 import storiesRoutes from '../../modules/stories/stories.routes.js';
+import subSkillsRoutes from '../../modules/sub-skills/sub-skills.routes.js';
+import questionTemplatesRoutes from '../../modules/question-templates/question-templates.routes.js';
 import topicsRoutes from '../../modules/topics/topics.routes.js';
+import checkpointReviewRoutes from '../../modules/checkpoint-review/checkpoint-review.routes.js';
+import pedagogySettingsRoutes from '../../modules/pedagogy-settings/pedagogy-settings.routes.js';
 
 import contentLibraryRouter, {
   backgroundsRouter,
@@ -39,6 +43,10 @@ router.use('/characters', charactersRoutes);
 router.use('/eq-skills', eqSkillsRoutes);
 router.use('/stories', storiesRoutes);
 router.use('/topics', topicsRoutes);
+router.use('/checkpoint-review', checkpointReviewRoutes);
+router.use('/pedagogy', pedagogySettingsRoutes);
+router.use('/sub-skills', subSkillsRoutes);
+router.use('/question-templates', questionTemplatesRoutes);
 router.use('/backgrounds', backgroundsRouter);
 router.use('/ui-audio-assets', uiAudioAssetsRouter);
 router.use('/checklist-items', checklistItemsRouter);

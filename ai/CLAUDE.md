@@ -40,8 +40,8 @@ service chỉ kiểm tra lại); chấm điểm EQ.
 ## Stack
 
 - Python 3.12+, FastAPI, Pydantic v2, pydantic-settings, httpx
-- Chữ: Claude qua `anthropic` (production, `LLM_PROVIDER=claude`) và `claude-agent-sdk` (chỉ dev,
-  `claude_code`) — README "Claude". Gemini (`google-genai`) giữ lại làm lựa chọn cấu hình.
+- Chữ: Claude qua `claude-agent-sdk` (`claude_code`, gói Pro/Max — dev và Docker, từ 2026-10-19) và
+  `anthropic` (`claude`, API key) — README "Claude". Gemini (`google-genai`) giữ lại làm lựa chọn cấu hình.
   Với mọi SDK: **đọc tài liệu / source SDK hiện hành** trước khi viết, không dựa vào
   trí nhớ về tên hàm
 - VieNeu-TTS 0.3B GGUF (Apache-2.0), chạy CPU — **đọc README repo VieNeu-TTS** để lấy API thật
@@ -57,7 +57,7 @@ app/
   main.py  config.py  errors.py  deps.py
   api/        health.py  v1/{story,images,tts}.py
   schemas/    common.py  story.py  llm.py  images.py  tts.py   # request/response theo endpoint
-  prompts/    story.v1.md              # image_style.v1.md: M4
+  prompts/    story.v2.md (story.v1.md: history)  image_style.v1.md
   providers/
     llm/      base.py  mock.py  gemini.py  claude.py  claude_code.py   # claude*: README "Claude"
     image/    base.py  mock.py         # M4: port.py registry.py adapters/ decorators/ safety/
@@ -104,7 +104,8 @@ bị chuyển chỗ, launcher trỏ sai đường dẫn).
 - **Không viết cứng** tên model, giá, phong cách vẽ, giới hạn độ dài — lấy từ cấu hình hoặc từ
   request.
 - **Không log** tên thật, chữ gửi vào TTS, dữ liệu ảnh, API key.
-- **Không để ảnh từ model không có bộ lọc an toàn sẵn đi ra ngoài** mà chưa qua `SafetyCheck`.
+- **Không để ảnh từ model không có bộ lọc an toàn sẵn đi ra ngoài** mà chưa qua `SafetyCheck` — ngoại lệ duy
+  nhất: `IMAGE_SAFETY=human_review` do người dùng chốt 2026-10-19 (`docs/01`), phải đặt tường minh.
 - **Không thêm database, hàng đợi hay logic tiền** vào service này.
 - Tài liệu chính thức (Anthropic / Gemini SDK, VieNeu-TTS, ComfyUI) khác với docs → **tin tài liệu chính
   thức**, ghi chú khác biệt vào README.

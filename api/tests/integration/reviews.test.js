@@ -17,7 +17,7 @@ before(async () => {
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
   await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
-  const mod = await prisma.user.findFirst({ where: { role: 'moderator' } });
+  const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => /^(market|moderation)\./.test(s.key))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
@@ -99,7 +99,7 @@ test('danh gia: chua mua / chua doc het -> 422; doc het -> danh gia, diem truyen
   assert.equal(list.distribution[2], 1);
 });
 
-test('bao cao danh gia -> Moderator thay trong hang bao cao, an danh gia -> bao cao resolved, diem tinh lai', { skip }, async () => {
+test('bao cao danh gia -> Specialist thay trong hang bao cao, an danh gia -> bao cao resolved, diem tinh lai', { skip }, async () => {
   const { listing } = await publishedListing();
   const buyer = await withPlan('FREE');
   await call(buyer.token, 'POST', '/market/checkout', { listingId: listing.id });
@@ -112,7 +112,7 @@ test('bao cao danh gia -> Moderator thay trong hang bao cao, an danh gia -> bao 
   assert.equal((await call(other.token, 'POST', `/market/reviews/${reviewId}/reports`, { category: 'other', description: 'Spam' })).status, 201);
   assert.equal((await call(other.token, 'POST', `/market/reviews/${reviewId}/reports`, { category: 'other' })).status, 409);
 
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const group = (await call(mod.token, 'GET', '/moderation/reports')).body.data.groups.find((g) => g.listing.id === listing.id);
   assert.ok(group, 'bao cao danh gia gom theo truyen');
   assert.equal(group.reports[0].review.id, reviewId);

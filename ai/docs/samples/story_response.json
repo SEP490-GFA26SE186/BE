@@ -81,7 +81,7 @@
     }
   },
   "warnings": [],
-  "prompt_version": "story.v1",
+  "prompt_version": "story.v2",
   "usage": {
     "provider": "gemini",
     "model": "<GEMINI_TEXT_MODEL>",

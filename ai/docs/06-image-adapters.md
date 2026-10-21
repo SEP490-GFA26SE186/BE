@@ -135,6 +135,11 @@ chưa phải lựa chọn). Hiện tại (M1–M3) cả hai là `mock`.
 | `comfyui` | Server ComfyUI qua HTTP (`COMFYUI_URL`) | Cách chính để chạy model mã nguồn mở. Mỗi model một workflow JSON có placeholder cho prompt, seed, ảnh tham chiếu; adapter upload ảnh, gửi workflow, poll kết quả |
 | `hf_inference` | Hugging Face Inference API | Cho model có sẵn endpoint; kiểm tra hạn mức tài khoản trước |
 | `diffusers_local` | `diffusers` trong process | **Chỉ bật khi máy có GPU.** Máy dev hiện tại không có — viết adapter nhưng không bắt buộc chạy được |
+| `cloudflare` | Cloudflare Workers AI qua REST (`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`) | **Đang dùng** (2026-10-19, `docs/01`). Model mã nguồn mở do Cloudflare chạy hộ; 3 kiểu gọi `json_b64` / `json_png` / `multipart` theo profile. `app/providers/image/cloudflare.py` |
+
+> **Chế độ an toàn đang dùng: `IMAGE_SAFETY=human_review`** (người dùng chốt 2026-10-19) — chưa có bộ phân
+> loại; xem `docs/01` mục "Ảnh — làm lại trên Cloudflare Workers AI". Mục "An toàn ảnh" dưới đây vẫn là yêu cầu
+> khi chuyển sang `IMAGE_SAFETY=classifier`.
 
 Máy dev không có GPU, nên model mã nguồn mở phải chạy trên một **server ComfyUI ở nơi khác**
 (máy có GPU của thành viên nhóm, hoặc GPU thuê theo giờ). Adapter chỉ cần `COMFYUI_URL`. Việc

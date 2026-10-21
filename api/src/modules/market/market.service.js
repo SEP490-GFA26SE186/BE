@@ -26,12 +26,15 @@ const formatCard = (l, owned = false) => ({
   id: l.id,
   title: l.title,
   description: l.description,
-  topic: {
-    title: l.publishedStory.topic.title,
-    competency: l.publishedStory.topic.skill.caselCode,
-    ageMin: l.publishedStory.topic.ageMin,
-    ageMax: l.publishedStory.topic.ageMax,
-  },
+  // topic_id tuy chon voi truyen tu viet (custom)
+  topic: l.publishedStory.topic
+    ? {
+        title: l.publishedStory.topic.title,
+        competency: l.publishedStory.topic.skill.caselCode,
+        ageMin: l.publishedStory.topic.ageMin,
+        ageMax: l.publishedStory.topic.ageMax,
+      }
+    : null,
   totalPages: l.publishedStory._count.pages,
   checkpointCount: l.publishedStory._count.checkpoints,
   priceTier: { id: l.priceTier.id, label: l.priceTier.label, priceVnd: vnd(l.priceTier.priceVnd) },

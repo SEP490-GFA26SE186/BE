@@ -7,7 +7,7 @@
 //   use_tts = false, khong anh.
 // - Ten that cua nhan vat va cua cac be tuyet doi khong duoc nam trong chu ban sao.
 //
-// Moderator chi duyet `approved` khi da xem 100% trang va tick dat du checklist (DBML moderation_reviews).
+// Specialist chi duyet `approved` khi da xem 100% trang va tick dat du checklist (DBML moderation_reviews).
 
 import { findLeftoverNames } from '../../stories/lib/names.js';
 
@@ -84,7 +84,7 @@ export function leftoverNameErrors(story, forbiddenNames, listingTitle) {
 /**
  * Tien do duyet: da xem bao nhieu trang, checklist da tick chua.
  * @param {string[]} pageIds   trang cua ban dang ban
- * @param {string[]} viewedIds trang Moderator da xem
+ * @param {string[]} viewedIds trang Specialist da xem
  * @param {string[]} itemIds   muc checklist dang dung
  * @param {{ checklistItemId: string, passed: boolean }[]} results
  */

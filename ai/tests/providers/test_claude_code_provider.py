@@ -8,6 +8,7 @@ The fake stands in for `claude_agent_sdk.query(prompt=..., options=...)` and yie
 import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 import anthropic
@@ -346,7 +347,13 @@ async def test_logs_never_contain_prompt_or_output(caplog) -> None:
 # --- startup check ----------------------------------------------------------------------
 
 
-async def test_verify_model_fails_when_cli_is_missing(monkeypatch) -> None:
+@pytest.fixture
+def no_bundled_cli(monkeypatch) -> None:
+    """The Linux/macOS wheel bundles the CLI; these tests are about the PATH fallback."""
+    monkeypatch.setattr("app.providers.llm.claude_code._bundled_cli", lambda: None)
+
+
+async def test_verify_model_fails_when_cli_is_missing(monkeypatch, no_bundled_cli) -> None:
     monkeypatch.setattr("app.providers.llm.claude_code.shutil.which", lambda name: None)
     provider, _ = provider_with(make_result())
     with pytest.raises(RuntimeError, match="LLM_CLAUDE_CLI_PATH"):
@@ -362,7 +369,7 @@ async def test_verify_model_fails_when_configured_cli_path_does_not_exist(tmp_pa
 
 
 @pytest.mark.parametrize("found", ["C:/npm/claude.CMD", "C:/npm/claude.bat"])
-async def test_verify_model_rejects_windows_batch_shim_on_path(monkeypatch, found) -> None:
+async def test_verify_model_rejects_windows_batch_shim_on_path(monkeypatch, no_bundled_cli, found) -> None:
     # The SDK refuses .cmd/.bat (cmd.exe argument injection); npm installs exactly that.
     monkeypatch.setattr("app.providers.llm.claude_code.shutil.which", lambda name: found)
     provider, _ = provider_with(make_result())
@@ -378,10 +385,36 @@ async def test_verify_model_rejects_batch_cli_path(tmp_path) -> None:
         await provider.verify_model()
 
 
-async def test_verify_model_ok_with_cli_on_path(monkeypatch) -> None:
+async def test_verify_model_ok_with_cli_on_path(monkeypatch, no_bundled_cli) -> None:
     monkeypatch.setattr(
         "app.providers.llm.claude_code.shutil.which", lambda name: "C:/tools/claude.exe"
     )
     provider, fake = provider_with(make_result())
     await provider.verify_model()
     assert fake.calls == []  # never spends a model call
+
+
+async def test_verify_model_ok_with_bundled_cli_and_nothing_on_path(monkeypatch, tmp_path) -> None:
+    # The Docker image: the wheel's own CLI, no `claude` on PATH, no LLM_CLAUDE_CLI_PATH.
+    bundled = tmp_path / "claude"
+    bundled.write_text("", encoding="utf-8")
+    monkeypatch.setattr("app.providers.llm.claude_code._bundled_cli", lambda: bundled)
+    monkeypatch.setattr("app.providers.llm.claude_code.shutil.which", lambda name: None)
+    provider, fake = provider_with(make_result())
+    await provider.verify_model()
+    assert fake.calls == []
+
+
+async def test_verify_model_drops_blank_auth_env(monkeypatch, no_bundled_cli) -> None:
+    # Compose passes `${VAR:-}`: an empty token would reach the CLI and be taken as a credential.
+    monkeypatch.setattr(
+        "app.providers.llm.claude_code.shutil.which", lambda name: "C:/tools/claude.exe"
+    )
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "  ")
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "kept-token")
+    provider, _ = provider_with(make_result())
+    await provider.verify_model()
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in os.environ
+    assert "ANTHROPIC_API_KEY" not in os.environ
+    assert os.environ["ANTHROPIC_AUTH_TOKEN"] == "kept-token"

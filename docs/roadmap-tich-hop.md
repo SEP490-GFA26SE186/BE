@@ -86,25 +86,26 @@ lên giá sách được.
 | BE | **Viết lại `reading-sessions` theo rev8** (lượt đọc, câu trả lời điểm dừng, chỉ lần chọn đầu của lần chơi đầu được chấm, điểm theo 5 năng lực CASEL); gắn cổng "sẵn sàng cho trẻ" lúc bắt đầu lượt đọc. | |
 | BE | Seed `ui_audio_assets` (đáp án cảm xúc, câu nhắc chọn lại) bằng narration. | |
 | Web | Kid reader dùng API thật: tranh (hoặc ảnh giữ chỗ), chữ, phát audio, điểm dừng theo 4 kiểu; trang báo cáo EQ cho phụ huynh. | |
+| BE + Web | **Luồng sư phạm CASEL** *(2026-10-20)*: Specialist soạn kỹ năng con + mẫu câu hỏi + bài học, đặt tham số báo cáo, soát điểm dừng; sinh truyện theo mẫu (điểm dừng khoá theo mẫu, truyện tự viết không chấm); Kid Mode chấm điểm 0–1 theo phiên bản mẫu; báo cáo EQ theo mức độ (kỹ năng con → năng lực), bằng chứng, gợi ý trò chuyện, topic gợi ý; seed demo bé Bin (`npm run db:seed:demo`). *Đã xong.* | |
 
 **Ảnh — đã chốt 2026-10-17: BỎ QUA luồng sinh ảnh** (người dùng: "bỏ qua luồng sinh ảnh đi"). Truyện
 chạy với `use_ai_image = false` và ảnh giữ chỗ; không làm M4a/M4b. Code mock ảnh hiện có giữ nguyên,
 không phát triển thêm.
 
-**Xong khi:** một bé chơi hết truyện trên Web có giọng đọc, câu trả lời được lưu, báo cáo EQ hiện điểm.
+**Xong khi:** một bé chơi hết truyện trên Web có giọng đọc, câu trả lời được lưu, báo cáo EQ hiện mức độ từng năng lực.
 
 ---
 
 ## Phase 4 — Gói, đăng bán, kiểm duyệt, mua *(tuần 4–5: 10/11–21/11)* — luồng 3, 4, 6
 
-**Mục tiêu demo:** phụ huynh mua gói → nhận credit; đăng bán một truyện → Moderator duyệt → phụ huynh
+**Mục tiêu demo:** phụ huynh mua gói → nhận credit; đăng bán một truyện → Specialist duyệt → phụ huynh
 khác mua → truyện vào giá sách của con họ.
 
 | Repo | Việc | Ai làm |
 |---|---|---|
 | BE | **Sửa `plans`** theo rev8 (gói cấp credit theo tháng, không `creditPack`); thanh toán payOS (hoặc giả lập cho demo — nhóm quyết). | |
 | BE | **Sửa `marketplace`, `moderation`, `orders`** theo rev8: gỡ cá nhân hoá khi đăng bán, bản sao để trống audio và `use_tts = false` (spec TTS mục 7), người mua dùng nguyên trạng. | |
-| Web | Trang gói / ví; luồng đăng bán; Moderator duyệt bằng API thật; Marketplace mua. | |
+| Web | Trang gói / ví; luồng đăng bán; Specialist duyệt bằng API thật; Marketplace mua. | |
 
 **Xong khi:** chạy trọn chuỗi mua gói → đăng bán → duyệt → mua → đọc, không mock.
 
@@ -115,8 +116,8 @@ khác mua → truyện vào giá sách của con họ.
 | Repo | Việc | Ai làm |
 |---|---|---|
 | AI + BE + Web | **Ảnh** nếu Phase 3 chốt có GPU: lớp adapter (M4a) + profile ComfyUI, chân dung nhân vật, tranh cảnh, safety checker. | |
-| BE + Web | **Moderator — nội dung:** soạn bài học (CRUD; bài đã có truyện thì khoá năng lực CASEL, xoá thành ngưng dùng), quản lý từ khoá chặn (`block` chặn hẳn cả chữ AI lẫn chữ phụ huynh tự viết / sửa, `warn` chỉ cảnh báo). *Đã xong.* | |
-| BE + Web | **Moderator — giám sát (luồng 7):** báo cáo vi phạm (đủ 3 người / 24 giờ → tự tạm gỡ), hậu kiểm giữ / gỡ hẳn, cảnh cáo tác giả (3 cảnh cáo → khoá bán) + kháng nghị (Admin xét), kiểm tra ngẫu nhiên hằng tuần. *Đã xong.* | |
+| BE + Web | **Specialist — nội dung:** soạn bài học (CRUD; bài đã có truyện thì khoá năng lực CASEL, xoá thành ngưng dùng), quản lý từ khoá chặn (`block` chặn hẳn cả chữ AI lẫn chữ phụ huynh tự viết / sửa, `warn` chỉ cảnh báo). *Đã xong.* | |
+| BE + Web | **Specialist — giám sát (luồng 7):** báo cáo vi phạm (đủ 3 người / 24 giờ → tự tạm gỡ), hậu kiểm giữ / gỡ hẳn, cảnh cáo tác giả (3 cảnh cáo → khoá bán) + kháng nghị (Admin xét), kiểm tra ngẫu nhiên hằng tuần. *Đã xong.* | |
 | BE + Web | **Admin:** tài khoản (khoá, tạo KDV), gói + bậc giá, cấu hình (chi phí AI, chợ, giám sát), hoàn tiền (chuyển trả thủ công), báo cáo doanh thu / chi phí AI / lãi lỗ, đối soát sổ cái, nhật ký. *Đã xong.* | |
 | Chung | Deploy bản demo, kiểm NFR, sửa lỗi, tài liệu báo cáo cuối, dự phòng ~1 tuần. | |
 

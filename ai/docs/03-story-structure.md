@@ -19,7 +19,31 @@ Người viết tự quyết số trang và đặt điểm dừng. Backend kiể
 dừng có chấm; tối đa 1 điểm dừng mỗi trang; không đặt sau trang 1; `reflection` chỉ ở cuối.
 Truyện tự viết không gọi AI viết chữ, nên service chỉ gặp nó ở bước vẽ tranh và giọng đọc.
 
+## Mẫu câu hỏi của Chuyên gia (`guide`, từ story.v2)
+
+Từ 2026-10-20, Node điền **mỗi điểm dừng có chấm** từ một mẫu câu hỏi do Chuyên gia soạn và gửi
+kèm `guide` (docs 05). Khung (số trang, kiểu, vị trí điểm dừng) vẫn do backend quyết; `guide`
+quyết **nội dung** từng điểm dừng:
+
+- Các dòng mẫu là **mô tả ý định**, viết cho người lớn và dùng lại cho nhiều truyện: AI **không
+  chép nguyên văn**, mà viết lời vừa tầm trẻ, gắn với nhân vật (token), đồ vật, sự việc của truyện này.
+- `question` đúng ý `question_frame`; `hint` đúng ý `hint_guidance` (không dùng cho `problem_solving`).
+- Trang ngay trước điểm dừng làm đúng ý `page_setup`; guide thiếu `page_setup` thì dùng quy tắc mặc
+  định theo kiểu ở mục dưới.
+- `emotion_*`: `answer` chọn trong `allowed_emotions` (validator `EMOTION_NOT_ALLOWED`).
+- `perspective`: phương án đúng đúng ý `correct_desc`, hai phương án nhiễu đúng ý `distractor_desc`.
+- `problem_solving`: `text` của mỗi vai là hành động cụ thể đúng ý `roles.<vai>`; ba vai vẫn cố định.
+- Topic có `age_min` / `age_max` → prompt viết cho "trẻ {min}–{max} tuổi"; có `sub_skills` → liệt kê
+  kỹ năng con của bài học.
+
+Hình dạng output **không đổi**. Điểm dừng không có `guide` (caller cũ) dùng quy tắc mặc định dưới.
+Quy tắc "sau `problem_solving` đi theo hướng làm lành" áp dụng cho mọi khung.
+
 ## Nội dung mỗi trang phải phục vụ điểm dừng ngay sau nó
+
+*Mặc định khi điểm dừng không có `guide`; có `guide` thì `page_setup` thay chỗ.* Riêng quy tắc
+không nói thẳng tên cảm xúc trước `emotion_*` và quy tắc làm lành sau `problem_solving` luôn áp dụng.
+
 
 - Trang ngay trước `emotion_self` / `emotion_other`: lời kể phải có **dấu hiệu cảm xúc cụ thể**
   (mặt đỏ, tay nắm chặt, giọng run…) để câu gợi ý nhắc lại được. Không nói thẳng tên cảm xúc
@@ -35,7 +59,7 @@ Truyện tự viết không gọi AI viết chữ, nên service chỉ gặp nó 
 |---|---|---|
 | `emotion_self` | `question`, `answer` (1 trong 5 cảm xúc), `hint` | AI đề xuất, người xác nhận |
 | `emotion_other` | như trên, về nhân vật `target` | như trên |
-| `perspective` | `question`, 3 `options`, `answer` (id phương án), `hint` | như trên |
+| `perspective` | `question`, 3 `options`, `answer` (id phương án), `hint`; `target` tuỳ chọn | như trên |
 | `problem_solving` | `question`, 3 phương án **theo đúng 3 vai**, mỗi phương án có `text` + `feedback` | Không có đáp án đúng; vai do khung quy định |
 | `reflection` | `question` | Không có |
 

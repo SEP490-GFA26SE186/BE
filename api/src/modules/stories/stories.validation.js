@@ -38,15 +38,18 @@ const characters = z
   });
 
 const createStory = z.object({
-  body: z.object({
-    topicId: uuid('ID chủ đề'),
-    length: z.enum(STORY_LENGTHS, { error: 'Độ dài truyện phải là short, medium, long hoặc custom' }),
-    title,
-    situation: situation.optional(),
-    characters,
-    useAiImage: z.boolean().default(false),
-    useTts: z.boolean().default(true),
-  }),
+  body: z
+    .object({
+      // Chi truyen tu viet (custom) duoc bo trong topic; truyen AI van bat buoc.
+      topicId: uuid('ID chủ đề').optional(),
+      length: z.enum(STORY_LENGTHS, { error: 'Độ dài truyện phải là short, medium, long hoặc custom' }),
+      title,
+      situation: situation.optional(),
+      characters,
+      useAiImage: z.boolean().default(false),
+      useTts: z.boolean().default(true),
+    })
+    .refine((b) => b.length === 'custom' || b.topicId, { path: ['topicId'], message: 'Truyện AI cần chọn chủ đề' }),
 });
 
 const getStories = z.object({
@@ -146,6 +149,7 @@ const reviewStory = z.object({ params: storyParams });
 
 // Route sinh chu / publish-version: Task 9 bo sung body khi cai handler that.
 const storyOnly = z.object({ params: storyParams });
+const sceneOnly = z.object({ params: storyParams.extend({ sceneId: z.string().uuid('Mã cảnh không hợp lệ') }) });
 
 export default {
   createStory,
@@ -162,4 +166,5 @@ export default {
   deleteCheckpoint,
   reviewStory,
   storyOnly,
+  sceneOnly,
 };

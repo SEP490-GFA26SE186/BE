@@ -7,7 +7,8 @@ import {
   createUser,
   createChild,
   createCharacter,
-  getSeededTopic,
+  createFixedSlotTopic,
+  retireTopic,
   startServer,
 } from './_fixtures.js';
 
@@ -18,10 +19,12 @@ let topic;
 before(async () => {
   if (skip) return;
   api = await startServer();
-  topic = await getSeededTopic();
+  // Kieu diem dung co dinh (emotion_self, perspective, problem_solving) thay vi chon mau ngau nhien.
+  topic = await createFixedSlotTopic();
 });
 
 after(async () => {
+  if (topic) await retireTopic(topic);
   if (api) await api.close();
   await prisma.$disconnect();
 });
@@ -142,7 +145,21 @@ test('POST /stories custom -> 4 trang, 0 diem dung', { skip }, async () => {
   assert.equal(story.checkpoints.length, 0);
 });
 
-test('GET /stories/:id: nguoi khac -> 404; moderator doc duoc', { skip }, async () => {
+test('POST /stories custom khong topicId -> 201, topic null; AI khong topicId -> 400', { skip }, async () => {
+  const f = await family();
+  const chars = [{ characterId: f.bin.id, isMain: true }];
+  const noTopic = (over) => ({ ...createBody(f, { characters: chars, ...over }), topicId: undefined });
+  const ok = await api.request('POST', '/stories', { token: f.token, body: noTopic({ length: 'custom' }) });
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  assert.equal(ok.body.data.story.topicId, null);
+  assert.equal(ok.body.data.story.topic, null);
+  const list = await api.request('GET', '/stories', { token: f.token });
+  assert.equal(list.status, 200);
+  const bad = await api.request('POST', '/stories', { token: f.token, body: noTopic({ length: 'short' }) });
+  assert.equal(bad.status, 400);
+});
+
+test('GET /stories/:id: nguoi khac -> 404; specialist doc duoc', { skip }, async () => {
   const f = await family();
   const story = await createStory(f);
 
@@ -150,7 +167,7 @@ test('GET /stories/:id: nguoi khac -> 404; moderator doc duoc', { skip }, async 
   const res = await api.request('GET', `/stories/${story.id}`, { token: other.token });
   assert.equal(res.status, 404);
 
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const res2 = await api.request('GET', `/stories/${story.id}`, { token: mod.token });
   assert.equal(res2.status, 200);
   assert.equal(res2.body.data.story.id, story.id);
@@ -224,6 +241,27 @@ test('PUT /stories/:id/characters: chua co chu -> thay token, targetToken ve nha
 
   const rows = await prisma.storyCharacter.findMany({ where: { storyId: story.id } });
   assert.equal(rows.length, 3);
+});
+
+test('PUT /stories/:id/characters: o role_choice can target (luu khong target) -> bo nhan vat phu bi 422, khong doi gi', { skip }, async () => {
+  const f = await family();
+  const roleTopic = await createFixedSlotTopic({ formats: [['role_choice', true]] });
+  try {
+    const story = await createStory(f, { topicId: roleTopic.id });
+    const rows = await prisma.storyCheckpoint.findMany({ where: { storyId: story.id, scored: true } });
+    assert.ok(rows.length > 0 && rows.every((r) => r.type === 'problem_solving' && r.targetToken === null));
+
+    const res = await api.request('PUT', `/stories/${story.id}/characters`, {
+      token: f.token,
+      body: { characters: [{ characterId: f.bin.id, isMain: true }] },
+    });
+    assert.equal(res.status, 422, JSON.stringify(res.body));
+    assert.match(res.body.message, /nhân vật phụ/);
+    const chars = await prisma.storyCharacter.findMany({ where: { storyId: story.id }, orderBy: { token: 'asc' } });
+    assert.deepEqual(chars.map((c) => [c.token, c.characterId]), [['{NV1}', f.bin.id], ['{NV2}', f.mit.id]]);
+  } finally {
+    await retireTopic(roleTopic);
+  }
 });
 
 test('DELETE /stories/:id -> xoa mem; GET sau do -> 404', { skip }, async () => {

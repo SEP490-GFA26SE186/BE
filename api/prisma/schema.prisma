@@ -1,6 +1,6 @@
 // =============================================================================
 // StoryWeaver AI – Prisma Schema (PostgreSQL)
-// SEP490 / SE186 – revision 8 – 50 models, 32 enums
+// SEP490 / SE186 – revision 8 – 50 models, 33 enums
 //
 // Nguon su that: ai/StoryWeaver-docs/StoryWeaver-docs/db/schema_rev8.dbml
 // Sai khac co y so voi DBML:
@@ -32,7 +32,7 @@ datasource db {
 
 enum UserRole {
   admin
-  moderator
+  specialist
   parent
 
   @@map("user_role")
@@ -310,6 +310,22 @@ enum CaselCompetency {
   @@map("casel_competency")
 }
 
+/// Dang tra loi cua mau cau hoi (khop 3 giao dien tre da ho tro)
+enum AnswerFormat {
+  emotion_pick
+  single_correct
+  role_choice
+
+  @@map("answer_format")
+}
+
+enum TemplateStatus {
+  draft
+  published
+
+  @@map("template_status")
+}
+
 // =============================================================================
 // 1. ACCOUNTS
 // =============================================================================
@@ -335,29 +351,35 @@ model User {
   authTokens                AuthToken[]
   childProfiles             ChildProfile[]
   characters                Character[]
-  topicsCreated             Topic[]             @relation("TopicCreator")
-  backgroundsCreated        Background[]        @relation("BackgroundCreator")
-  blockedKeywordsCreated    BlockedKeyword[]    @relation("KeywordCreator")
+  topicsCreated             Topic[]                   @relation("TopicCreator")
+  subSkillsCreated          EqSubSkill[]              @relation("SubSkillCreator")
+  templatesCreated          QuestionTemplate[]        @relation("TemplateCreator")
+  templateVersionsCreated   QuestionTemplateVersion[] @relation("TemplateVersionCreator")
+  templateVersionsPublished QuestionTemplateVersion[] @relation("TemplateVersionPublisher")
+  checkpointsExcluded       StoryCheckpoint[]         @relation("CheckpointExcluder")
+  checkpointsReviewedOk     StoryCheckpoint[]         @relation("CheckpointReviewer")
+  backgroundsCreated        Background[]              @relation("BackgroundCreator")
+  blockedKeywordsCreated    BlockedKeyword[]          @relation("KeywordCreator")
   stories                   Story[]
   aiRequests                AiRequest[]
-  sellerProfile             SellerProfile?      @relation("SellerUser")
-  sellerProfilesReviewed    SellerProfile[]     @relation("SellerReviewer")
+  sellerProfile             SellerProfile?            @relation("SellerUser")
+  sellerProfilesReviewed    SellerProfile[]           @relation("SellerReviewer")
   entitlements              Entitlement[]
-  productReviews            ProductReview[]     @relation("ReviewAuthor")
-  hiddenReviews             ProductReview[]     @relation("ReviewHiddenBy")
+  productReviews            ProductReview[]           @relation("ReviewAuthor")
+  hiddenReviews             ProductReview[]           @relation("ReviewHiddenBy")
   subscriptions             Subscription[]
   orders                    Order[]
-  refundRequestsMade        RefundRequest[]     @relation("RefundRequester")
-  refundRequestsHandled     RefundRequest[]     @relation("RefundHandler")
+  refundRequestsMade        RefundRequest[]           @relation("RefundRequester")
+  refundRequestsHandled     RefundRequest[]           @relation("RefundHandler")
   wallet                    Wallet?
   walletLedgerEntries       WalletLedger[]
-  withdrawalRequestsHandled WithdrawalRequest[] @relation("WithdrawalHandler")
-  platformSettingsUpdated   PlatformSetting[]   @relation("SettingUpdater")
-  moderationReviews         ModerationReview[]  @relation("ModReviewModerator")
-  contentReportsFiled       ContentReport[]     @relation("ReportReporter")
-  contentReportsHandled     ContentReport[]     @relation("ReportHandler")
-  creatorStrikesIssued      CreatorStrike[]     @relation("StrikeIssuer")
-  strikeAppealsDecided      StrikeAppeal[]      @relation("AppealDecider")
+  withdrawalRequestsHandled WithdrawalRequest[]       @relation("WithdrawalHandler")
+  platformSettingsUpdated   PlatformSetting[]         @relation("SettingUpdater")
+  moderationReviews         ModerationReview[]        @relation("ModReviewModerator")
+  contentReportsFiled       ContentReport[]           @relation("ReportReporter")
+  contentReportsHandled     ContentReport[]           @relation("ReportHandler")
+  creatorStrikesIssued      CreatorStrike[]           @relation("StrikeIssuer")
+  strikeAppealsDecided      StrikeAppeal[]            @relation("AppealDecider")
   auditLogs                 AdminAuditLog[]
 
   @@index([role])
@@ -403,11 +425,10 @@ model ChildProfile {
   parent User @relation(fields: [parentId], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  authTokens        AuthToken[]
-  character         Character?
-  bookshelfItems    BookshelfItem[]
-  playSessions      PlaySession[]
-  eqCompetencyStats EqCompetencyStat[]
+  authTokens     AuthToken[]
+  character      Character?
+  bookshelfItems BookshelfItem[]
+  playSessions   PlaySession[]
 
   @@index([parentId])
   @@map("child_profiles")
@@ -441,7 +462,7 @@ model Character {
 }
 
 // =============================================================================
-// 2. CONTENT LIBRARY (Moderator quan ly)
+// 2. CONTENT LIBRARY (Specialist quan ly)
 // =============================================================================
 
 model EqSkill {
@@ -454,13 +475,14 @@ model EqSkill {
 
   // -- back-references --
   topics            Topic[]
+  caselReferences   CaselReference[]
+  subSkills         EqSubSkill[]
   checkpointAnswers CheckpointAnswer[]
-  eqCompetencyStats EqCompetencyStat[]
 
   @@map("eq_skills")
 }
 
-/// @note Danh sach bai hoc do Moderator quan ly
+/// @note Danh sach bai hoc do Specialist quan ly
 /// @note CHECK: age_min <= age_max
 model Topic {
   id           String   @id @default(uuid()) @db.Uuid
@@ -479,10 +501,137 @@ model Topic {
   creator User    @relation("TopicCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
-  stories Story[]
+  stories   Story[]
+  subSkills TopicSubSkill[]
 
   @@index([isActive, skillId])
   @@map("topics")
+}
+
+/// @note Nguyen van khung CASEL (tieng Anh), chi doc: khong co API ghi, chi doi bang migration/seed
+model CaselReference {
+  id           String @id @default(uuid()) @db.Uuid
+  skillId      String @map("skill_id") @db.Uuid
+  code         String @unique @db.VarChar(60)
+  textEn       String @map("text_en")
+  displayOrder Int    @default(0) @map("display_order")
+
+  skill EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  // -- back-references --
+  subSkills EqSubSkill[]
+
+  @@index([skillId])
+  @@map("casel_references")
+}
+
+/// @note Ky nang con do Specialist CRUD; moi ky nang con tro ve dung 1 muc CASEL
+/// @note casel_reference phai cung skill_id (validator tang service)
+/// @note CHECK: age_min <= age_max
+model EqSubSkill {
+  id               String   @id @default(uuid()) @db.Uuid
+  skillId          String   @map("skill_id") @db.Uuid
+  caselReferenceId String   @map("casel_reference_id") @db.Uuid
+  code             String   @unique @db.VarChar(60)
+  nameVi           String   @map("name_vi") @db.VarChar(200)
+  descriptionVi    String   @map("description_vi")
+  ageMin           Int      @default(5) @map("age_min")
+  ageMax           Int      @default(8) @map("age_max")
+  isActive         Boolean  @default(true) @map("is_active")
+  displayOrder     Int      @default(0) @map("display_order")
+  createdBy        String   @map("created_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  skill          EqSkill        @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  caselReference CaselReference @relation(fields: [caselReferenceId], references: [id], onDelete: Restrict)
+  creator        User           @relation("SubSkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  // -- back-references --
+  templates         QuestionTemplate[]
+  topics            TopicSubSkill[]
+  checkpoints       StoryCheckpoint[]
+  checkpointAnswers CheckpointAnswer[]
+
+  @@index([skillId, isActive])
+  @@index([caselReferenceId])
+  @@map("eq_sub_skills")
+}
+
+/// @note Dinh danh mau cau hoi; noi dung + diem nam o question_template_versions
+model QuestionTemplate {
+  id           String       @id @default(uuid()) @db.Uuid
+  subSkillId   String       @map("sub_skill_id") @db.Uuid
+  title        String       @db.VarChar(200)
+  answerFormat AnswerFormat @map("answer_format")
+  isActive     Boolean      @default(true) @map("is_active")
+  createdBy    String       @map("created_by") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  subSkill EqSubSkill @relation(fields: [subSkillId], references: [id], onDelete: Restrict)
+  creator  User       @relation("TemplateCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  // -- back-references --
+  versions QuestionTemplateVersion[]
+
+  @@index([subSkillId, isActive])
+  @@map("question_templates")
+}
+
+/// @note Bat bien sau khi ban hanh; sua mau = tao phien ban moi. Sinh truyen dung ban published moi nhat
+/// @note allowed_emotions: chi emotion_pick, rong = ca 5 cam xuc
+/// @note correct_desc / distractor_desc: single_correct; *_desc + *_score theo vai: role_choice
+/// @note Partial unique: UNIQUE (template_id) WHERE status = 'draft' (toi da 1 ban nhap moi mau)
+model QuestionTemplateVersion {
+  id                String         @id @default(uuid()) @db.Uuid
+  templateId        String         @map("template_id") @db.Uuid
+  version           Int
+  status            TemplateStatus @default(draft)
+  questionFrame     String         @map("question_frame")
+  pageSetup         String?        @map("page_setup")
+  needsTarget       Boolean        @default(false) @map("needs_target")
+  allowedEmotions   Emotion[]      @default([]) @map("allowed_emotions")
+  correctDesc       String?        @map("correct_desc")
+  distractorDesc    String?        @map("distractor_desc")
+  constructiveDesc  String?        @map("constructive_desc")
+  avoidantDesc      String?        @map("avoidant_desc")
+  impulsiveDesc     String?        @map("impulsive_desc")
+  constructiveScore Decimal?       @map("constructive_score") @db.Decimal(3, 2)
+  avoidantScore     Decimal?       @map("avoidant_score") @db.Decimal(3, 2)
+  impulsiveScore    Decimal?       @map("impulsive_score") @db.Decimal(3, 2)
+  hintGuidance      String?        @map("hint_guidance")
+  parentPrompts     String[]       @default([]) @map("parent_prompts")
+  rationale         String?
+  referenceUrl      String?        @map("reference_url") @db.VarChar(500)
+  createdBy         String         @map("created_by") @db.Uuid
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  publishedBy       String?        @map("published_by") @db.Uuid
+  publishedAt       DateTime?      @map("published_at") @db.Timestamptz()
+
+  template  QuestionTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  creator   User             @relation("TemplateVersionCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  publisher User?            @relation("TemplateVersionPublisher", fields: [publishedBy], references: [id], onDelete: Restrict)
+
+  // -- back-references --
+  checkpoints       StoryCheckpoint[]
+  checkpointAnswers CheckpointAnswer[]
+
+  @@unique([templateId, version])
+  @@map("question_template_versions")
+}
+
+/// @note 1-3 ky nang con cung nang luc voi topic (validator tang service)
+model TopicSubSkill {
+  topicId    String @map("topic_id") @db.Uuid
+  subSkillId String @map("sub_skill_id") @db.Uuid
+
+  topic    Topic      @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  subSkill EqSubSkill @relation(fields: [subSkillId], references: [id], onDelete: Restrict)
+
+  @@id([topicId, subSkillId])
+  @@index([subSkillId])
+  @@map("topic_sub_skills")
 }
 
 /// @note Thu vien nen mac dinh, dung khi stories.use_ai_image = false
@@ -548,6 +697,7 @@ model ChecklistItem {
 /// @note private  : truyen phu huynh tao cho con minh, sua tu do
 /// @note published: ban sao da go ca nhan hoa de ban; dong bang sau khi duyet
 /// @note CHECK: kind <> 'published' OR source_story_id IS NOT NULL
+/// @note CHECK: length = 'custom' OR topic_id IS NOT NULL (topic tuy chon voi truyen tu viet)
 /// @note Chi dua vao gia sach khi reviewed_at IS NOT NULL (validator tang service)
 /// @note Truyen custom (validator khi luu): 4-20 trang, 0-6 diem dung co cham,
 ///       khong dat sau trang 1, reflection chi o cuoi
@@ -556,7 +706,7 @@ model Story {
   ownerId       String      @map("owner_id") @db.Uuid
   kind          StoryKind   @default(private)
   sourceStoryId String?     @map("source_story_id") @db.Uuid
-  topicId       String      @map("topic_id") @db.Uuid
+  topicId       String?     @map("topic_id") @db.Uuid
   length        StoryLength @default(medium)
   title         String      @db.VarChar(200)
   situation     String?
@@ -570,7 +720,7 @@ model Story {
 
   owner       User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: Restrict)
-  topic       Topic  @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  topic       Topic? @relation(fields: [topicId], references: [id], onDelete: Restrict)
 
   // -- back-references --
   narrationClips  NarrationClip[]
@@ -661,22 +811,38 @@ model StoryPage {
 /// @note short/medium/long: kieu va vi tri do he thong dat; custom: nguoi viet tu dat
 /// @note after_page_id unique: moi trang toi da 1 diem dung ngay sau no
 /// @note CHECK: (type IN ('emotion_self','emotion_other')) = (answer_emotion IS NOT NULL)
-/// @note CHECK: (type IN ('emotion_other','perspective')) = (target_token IS NOT NULL)
+/// @note CHECK: (type = 'emotion_other') <= (target_token IS NOT NULL)  -- emotion_other bat buoc co
+/// @note CHECK: type NOT IN ('emotion_self','problem_solving','reflection') OR target_token IS NULL
+/// @note sub_skill_id / template_version_id: truy vet o cham sinh tu mau nao (NULL voi reflection, truyen tu viet)
+/// @note excluded: Specialist gan co loai khoi thong ke; reviewed_ok_*: Specialist da soat, khong van de
 model StoryCheckpoint {
-  id               String         @id @default(uuid()) @db.Uuid
-  storyId          String         @map("story_id") @db.Uuid
-  afterPageId      String         @unique @map("after_page_id") @db.Uuid
-  type             CheckpointType
-  targetToken      String?        @map("target_token") @db.VarChar(10)
-  question         String?
-  answerEmotion    Emotion?       @map("answer_emotion")
-  hint             String?
-  origin           ContentOrigin  @default(human)
-  questionAudioKey String?        @map("question_audio_key") @db.VarChar(300)
-  hintAudioKey     String?        @map("hint_audio_key") @db.VarChar(300)
+  id                String         @id @default(uuid()) @db.Uuid
+  storyId           String         @map("story_id") @db.Uuid
+  afterPageId       String         @unique @map("after_page_id") @db.Uuid
+  type              CheckpointType
+  targetToken       String?        @map("target_token") @db.VarChar(10)
+  question          String?
+  answerEmotion     Emotion?       @map("answer_emotion")
+  hint              String?
+  origin            ContentOrigin  @default(human)
+  questionAudioKey  String?        @map("question_audio_key") @db.VarChar(300)
+  hintAudioKey      String?        @map("hint_audio_key") @db.VarChar(300)
+  subSkillId        String?        @map("sub_skill_id") @db.Uuid
+  templateVersionId String?        @map("template_version_id") @db.Uuid
+  scored            Boolean        @default(false)
+  excluded          Boolean        @default(false)
+  excludedReason    String?        @map("excluded_reason")
+  excludedBy        String?        @map("excluded_by") @db.Uuid
+  excludedAt        DateTime?      @map("excluded_at") @db.Timestamptz()
+  reviewedOkAt      DateTime?      @map("reviewed_ok_at") @db.Timestamptz()
+  reviewedOkBy      String?        @map("reviewed_ok_by") @db.Uuid
 
-  story     Story     @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  afterPage StoryPage @relation(fields: [afterPageId], references: [id], onDelete: Cascade)
+  story           Story                    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  afterPage       StoryPage                @relation(fields: [afterPageId], references: [id], onDelete: Cascade)
+  subSkill        EqSubSkill?              @relation(fields: [subSkillId], references: [id], onDelete: Restrict)
+  templateVersion QuestionTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  excluder        User?                    @relation("CheckpointExcluder", fields: [excludedBy], references: [id], onDelete: Restrict)
+  reviewer        User?                    @relation("CheckpointReviewer", fields: [reviewedOkBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
   options    CheckpointOption[]
@@ -684,6 +850,8 @@ model StoryCheckpoint {
   aiRequests AiRequest[]
 
   @@index([storyId])
+  @@index([subSkillId])
+  @@index([templateVersionId])
   @@map("story_checkpoints")
 }
 
@@ -779,50 +947,38 @@ model PlaySession {
 /// @note skill_id / score tinh ngay luc tra loi va dong bang (SNAPSHOT):
 ///       emotion_self -> Tu nhan thuc; emotion_other, perspective -> Nhan thuc xa hoi;
 ///       problem_solving -> nang luc cua topic (constructive 1, avoidant 0.5, impulsive 0)
+/// @note sub_skill_id / template_version_id: SNAPSHOT tu checkpoint luc tra loi (truy vet)
 /// @note Doi topic hay doi cach cham ve sau khong lam thay doi lich su
 /// @note CHECK: attempts BETWEEN 1 AND 2
 model CheckpointAnswer {
-  id              BigInt   @id @default(autoincrement())
-  sessionId       String   @map("session_id") @db.Uuid
-  checkpointId    String   @map("checkpoint_id") @db.Uuid
-  firstEmotion    Emotion? @map("first_emotion")
-  firstOptionId   String?  @map("first_option_id") @db.Uuid
-  finalEmotion    Emotion? @map("final_emotion")
-  finalOptionId   String?  @map("final_option_id") @db.Uuid
-  attempts        Int      @default(1)
-  skipped         Boolean  @default(false)
-  timeToFirstMs   Int?     @map("time_to_first_ms")
-  questionReplays Int      @default(0) @map("question_replays")
-  skillId         String?  @map("skill_id") @db.Uuid
-  score           Decimal? @db.Decimal(3, 2)
-  answeredAt      DateTime @default(now()) @map("answered_at") @db.Timestamptz()
+  id                BigInt   @id @default(autoincrement())
+  sessionId         String   @map("session_id") @db.Uuid
+  checkpointId      String   @map("checkpoint_id") @db.Uuid
+  firstEmotion      Emotion? @map("first_emotion")
+  firstOptionId     String?  @map("first_option_id") @db.Uuid
+  finalEmotion      Emotion? @map("final_emotion")
+  finalOptionId     String?  @map("final_option_id") @db.Uuid
+  attempts          Int      @default(1)
+  skipped           Boolean  @default(false)
+  timeToFirstMs     Int?     @map("time_to_first_ms")
+  questionReplays   Int      @default(0) @map("question_replays")
+  skillId           String?  @map("skill_id") @db.Uuid
+  score             Decimal? @db.Decimal(3, 2)
+  subSkillId        String?  @map("sub_skill_id") @db.Uuid
+  templateVersionId String?  @map("template_version_id") @db.Uuid
+  answeredAt        DateTime @default(now()) @map("answered_at") @db.Timestamptz()
 
-  session     PlaySession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  checkpoint  StoryCheckpoint   @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
-  firstOption CheckpointOption? @relation("AnswerFirstOption", fields: [firstOptionId], references: [id], onDelete: Restrict)
-  finalOption CheckpointOption? @relation("AnswerFinalOption", fields: [finalOptionId], references: [id], onDelete: Restrict)
-  skill       EqSkill?          @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  session         PlaySession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  checkpoint      StoryCheckpoint          @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  firstOption     CheckpointOption?        @relation("AnswerFirstOption", fields: [firstOptionId], references: [id], onDelete: Restrict)
+  finalOption     CheckpointOption?        @relation("AnswerFinalOption", fields: [finalOptionId], references: [id], onDelete: Restrict)
+  skill           EqSkill?                 @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  subSkill        EqSubSkill?              @relation(fields: [subSkillId], references: [id], onDelete: Restrict)
+  templateVersion QuestionTemplateVersion? @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, checkpointId])
+  @@index([subSkillId])
   @@map("checkpoint_answers")
-}
-
-/// @note CACHE toan bo lich su, chi tinh tu checkpoint_answers cua lan choi dau, khong skipped
-/// @note Diem = score_sum / items * 100; hien "chua du du lieu" khi items < 5
-/// @note Bieu do theo thang: truy van truc tiep checkpoint_answers theo answered_at
-/// @note Cron doi soat hang dem tinh lai tu du lieu goc
-model EqCompetencyStat {
-  childId   String   @map("child_id") @db.Uuid
-  skillId   String   @map("skill_id") @db.Uuid
-  items     Int      @default(0)
-  scoreSum  Decimal  @default(0) @map("score_sum") @db.Decimal(8, 2)
-  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz()
-
-  child ChildProfile @relation(fields: [childId], references: [id], onDelete: Cascade)
-  skill EqSkill      @relation(fields: [skillId], references: [id], onDelete: Restrict)
-
-  @@id([childId, skillId])
-  @@map("eq_competency_stats")
 }
 
 // =============================================================================
@@ -1214,7 +1370,7 @@ model WithdrawalRequest {
 }
 
 /// @note key: commission_rate | holding_days | min_withdrawal | report_threshold |
-///       ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*
+///       ai_cost.<type>[.<length>] (credit; ai_cost.story_text.short|medium|long) | limits.* | story_layout.<length> | custom_limits.*
 model PlatformSetting {
   key       String   @id @db.VarChar(60)
   value     Json     @db.JsonB

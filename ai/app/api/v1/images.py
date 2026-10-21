@@ -11,6 +11,7 @@ from app.deps import (
     reject_force_unless_mock,
 )
 from app.providers.image.base import ImageProvider
+from app.providers.image.cloudflare import image_format
 from app.schemas.common import Usage
 from app.schemas.images import PortraitRequest, PortraitResponse, SceneRequest, SceneResponse
 from app.storage import Storage, build_key
@@ -38,12 +39,10 @@ async def portrait(
     reject_force_unless_mock(req.force_, provider.name)
     assert_no_forbidden_terms({"description": req.description}, req.forbidden_terms)
     images = await provider.generate_portraits(req)
-    keys = [
-        await storage.upload(
-            build_key(req.storage_prefix, req.request_id, n, "png"), data, "image/png"
-        )
-        for n, data in enumerate(images, start=1)
-    ]
+    keys = []
+    for n, data in enumerate(images, start=1):
+        ext, content_type = image_format(data)
+        keys.append(await storage.upload(build_key(req.storage_prefix, req.request_id, n, ext), data, content_type))
     return PortraitResponse(
         request_id=req.request_id,
         portrait_keys=keys,
@@ -63,12 +62,12 @@ async def scene(req: SceneRequest, provider: ImageDep, storage: StorageDep) -> S
         await storage.download(c.portrait_key) for c in req.characters if c.portrait_key
     ]
     data = await provider.generate_scene(req, references)
-    key = await storage.upload(
-        build_key(req.storage_prefix, req.request_id, 1, "png"), data, "image/png"
-    )
+    ext, content_type = image_format(data)
+    key = await storage.upload(build_key(req.storage_prefix, req.request_id, 1, ext), data, content_type)
     return SceneResponse(
         request_id=req.request_id,
         image_key=key,
-        reference_used=bool(references),
+        # A model without reference support only got the appearance text (docs/06: must be truthful)
+        reference_used=bool(references) and getattr(provider, "accepts_references", True),
         usage=_usage(provider, 1, started),
     )

@@ -55,7 +55,7 @@ async function seller({ plan = 'FAMILY_MONTH' } = {}) {
 
 async function approvedSeller(opts) {
   const s = await seller(opts);
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   assert.equal((await call(s.token, 'POST', '/sellers/apply', { displayName: 'Mẹ Lan' })).status, 201);
   const ok = await call(mod.token, 'POST', `/moderation/sellers/${s.user.id}/decision`, { approve: true });
   assert.equal(ok.status, 200, JSON.stringify(ok.body));
@@ -80,7 +80,7 @@ test('nguoi ban: goi Mien phi khong nop duoc; goi Gia dinh nop -> cho duyet -> d
   assert.equal((await call(s.token, 'POST', '/sellers/apply', { displayName: 'Mẹ Lan' })).status, 201);
   assert.equal((await call(s.token, 'POST', '/sellers/apply', { displayName: 'Mẹ Lan' })).status, 409);
   assert.equal((await call(s.token, 'POST', '/listings', listingBody(s))).status, 403, 'chua duyet thi chua dang ban');
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const pending = await call(mod.token, 'GET', '/moderation/sellers');
   assert.ok(pending.body.data.sellers.some((x) => x.userId === s.user.id));
   await call(mod.token, 'POST', `/moderation/sellers/${s.user.id}/decision`, { approve: true });
@@ -112,11 +112,37 @@ test('dang ban: thieu / trung bi danh hoac dung ten that -> 422; ban sao go ca n
   assert.equal((await call(s.token, 'GET', '/listings/mine')).body.data.listings[0].id, listing.id);
 });
 
+test('dang ban: ban sao giu subSkillId, templateVersionId, scored, excluded cua diem dung nguon (khong chep reviewedOk)', { skip }, async () => {
+  const s = await approvedSeller();
+  const version = await prisma.questionTemplateVersion.findFirstOrThrow({ include: { template: true } });
+  const spec = await createUser({ role: 'specialist' });
+  const src = await prisma.storyCheckpoint.create({
+    data: {
+      storyId: s.story.id, afterPageId: s.story.pages[1].id, type: 'reflection', question: 'Con học được gì?', origin: 'human',
+      subSkillId: version.template.subSkillId, templateVersionId: version.id, scored: true,
+      excluded: true, excludedReason: 'cau hoi mo ho', excludedBy: spec.user.id, excludedAt: new Date(),
+      reviewedOkAt: new Date(), reviewedOkBy: spec.user.id,
+    },
+  });
+  const ok = await call(s.token, 'POST', '/listings', listingBody(s));
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  const copy = await prisma.storyCheckpoint.findFirstOrThrow({ where: { storyId: ok.body.data.listing.publishedStoryId } });
+  assert.equal(copy.subSkillId, src.subSkillId);
+  assert.equal(copy.templateVersionId, src.templateVersionId);
+  assert.equal(copy.scored, true);
+  assert.equal(copy.excluded, true);
+  assert.equal(copy.excludedReason, 'cau hoi mo ho');
+  assert.equal(copy.excludedBy, spec.user.id);
+  assert.ok(copy.excludedAt);
+  assert.equal(copy.reviewedOkAt, null);
+  assert.equal(copy.reviewedOkBy, null);
+});
+
 test('duyet: nhan bai, nguoi khac khong nhan duoc; chua xem du -> 422; xem du + checklist -> published', { skip }, async () => {
   const s = await approvedSeller();
   const { listing } = (await call(s.token, 'POST', '/listings', listingBody(s))).body.data;
   const mod = s.mod;
-  const other = await createUser({ role: 'moderator' });
+  const other = await createUser({ role: 'specialist' });
 
   const queue = await call(mod.token, 'GET', '/moderation/submissions');
   const item = queue.body.data.queue.find((q) => q.listingId === listing.id);
@@ -162,7 +188,7 @@ test('yeu cau sua: bat buoc nhan xet; nguoi ban thay quyet dinh + nhan xet', { s
   assert.equal(mine.lastDecision.comment, 'Trang 3 đang giảng đạo lý.');
 });
 
-test('ban dang ban co giong doc: sinh lai bang ten chung; Moderator chi nhan duyet khi doc xong; Cho hien badge', { skip }, async () => {
+test('ban dang ban co giong doc: sinh lai bang ten chung; Specialist chi nhan duyet khi doc xong; Cho hien badge', { skip }, async () => {
   const s = await approvedSeller();
   await prisma.story.update({ where: { id: s.story.id }, data: { useTts: true } }); // tac gia bat giong doc
   const publishing = await import('../../src/modules/publishing/publishing.service.js');
@@ -193,7 +219,7 @@ test('ban dang ban co giong doc: sinh lai bang ten chung; Moderator chi nhan duy
   }
   const claim = await call(s.mod.token, 'POST', `/moderation/submissions/${review.id}/claim`);
   assert.equal(claim.status, 200, JSON.stringify(claim.body));
-  assert.ok(claim.body.data.story.pages.every((p) => p.audioKey), 'Moderator nghe duoc tung trang (URL ky Cloudinary — test khong co cau hinh)');
+  assert.ok(claim.body.data.story.pages.every((p) => p.audioKey), 'Specialist nghe duoc tung trang (URL ky Cloudinary — test khong co cau hinh)');
 
   await prisma.listing.update({ where: { id: listing.id }, data: { status: 'published', publishedAt: new Date() } });
   const buyer = await createParent();

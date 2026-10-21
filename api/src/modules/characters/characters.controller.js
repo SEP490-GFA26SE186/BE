@@ -1,4 +1,5 @@
 import charactersService from './characters.service.js';
+import imagesService from '../stories/stories.images.service.js';
 import { ApiResponse, catchAsync } from '../../utils/index.js';
 
 const createCharacter = catchAsync(async (req, res) => {
@@ -43,12 +44,14 @@ const deleteCharacter = catchAsync(async (req, res) => {
   });
 });
 
+// Chan dung AI (1 anh, lam anh tham chieu cho tranh canh): giu credit, xep hang, tra 202.
 const generatePortrait = catchAsync(async (req, res) => {
-  const character = await charactersService.requestPortraitGeneration(req.user.id, req.params.id, req.body);
-
+  const { aiRequestId } = await imagesService.startPortrait(req.user, req.params.id);
+  const character = await charactersService.getCharacterById(req.user.id, req.params.id);
   return ApiResponse.success(res, {
-    message: 'Yêu cầu tạo chân dung nhân vật đã được đưa vào hàng đợi',
-    data: { character },
+    statusCode: 202,
+    message: 'Đang vẽ chân dung nhân vật',
+    data: { character, aiRequestId },
   });
 });
 

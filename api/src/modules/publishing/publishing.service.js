@@ -115,7 +115,7 @@ async function forbiddenNamesOf(userId) {
  * POST /listings { storyId, title, description?, priceTierId, aliases: [{ token, aliasName }] }
  * Truyen rieng da hoan tat -> ban sao `published` (go ca nhan hoa) + listing `submitted` + luot duyet.
  * Ban rieng bat giong doc -> ban sao cung bat va SINH LAI giong doc bang ten chung (audio cu chua ten that,
- * khong dung lai duoc). Moderator chi nhan duyet khi giong doc xong (claimReview).
+ * khong dung lai duoc). Specialist chi nhan duyet khi giong doc xong (claimReview).
  */
 export async function createListing(user, body, narrationOptions) {
   const seller = await prisma.sellerProfile.findUnique({ where: { userId: user.id } });
@@ -150,7 +150,7 @@ export async function createListing(user, body, narrationOptions) {
         length: story.length,
         title: body.title.trim(),
         situation: null, // chuyen that cua gia dinh khong theo ban dang ban
-        useAiImage: false,
+        useAiImage: story.useAiImage, // tranh ve tu mo ta ngoai hinh, khong co ten -> theo sang ban dang ban
         useTts: story.useTts, // theo lua chon cua tac gia; audio sinh lai bang ten chung ben duoi
         status: 'ready',
         reviewedAt: new Date(),
@@ -159,7 +159,8 @@ export async function createListing(user, body, narrationOptions) {
     });
     const sceneId = new Map();
     for (const s of story.scenes) {
-      const created = await tx.storyScene.create({ data: { storyId: copy.id, sceneOrder: s.sceneOrder, description: s.description } });
+      const ready = s.imageStatus === 'ready' && s.imageKey;
+      const created = await tx.storyScene.create({ data: { storyId: copy.id, sceneOrder: s.sceneOrder, description: s.description, imageKey: ready ? s.imageKey : null, imageStatus: ready ? 'ready' : 'none' } });
       sceneId.set(s.id, created.id);
     }
     const pageId = new Map();
@@ -180,6 +181,14 @@ export async function createListing(user, body, narrationOptions) {
           answerEmotion: c.answerEmotion,
           hint: c.hint,
           origin: c.origin,
+          // Giu truy vet cham diem cua nguon; reviewedOk* la soat rieng cua tung ban, khong chep.
+          subSkillId: c.subSkillId,
+          templateVersionId: c.templateVersionId,
+          scored: c.scored,
+          excluded: c.excluded,
+          excludedReason: c.excludedReason,
+          excludedBy: c.excludedBy,
+          excludedAt: c.excludedAt,
           options: { create: c.options.map((o) => ({ optionOrder: o.optionOrder, text: o.text, role: o.role, isCorrect: o.isCorrect, feedback: o.feedback })) },
         },
       });
@@ -205,7 +214,7 @@ export async function createListing(user, body, narrationOptions) {
   return { listing: await withNarration(formatListing(listing)) };
 }
 
-/** Tien do giong doc cua ban dang ban (nguoi ban + Moderator thay; Moderator chi duyet khi xong). */
+/** Tien do giong doc cua ban dang ban (nguoi ban + Specialist thay; Specialist chi duyet khi xong). */
 async function withNarration(listing) {
   if (!listing.hasNarration) return { ...listing, narration: null };
   const check = await loadReadiness(prisma, listing.publishedStoryId);
@@ -254,8 +263,8 @@ export async function getQueue(moderator, { now = new Date() } = {}) {
     title: r.listing.title,
     seller: r.listing.seller.displayName,
     priceVnd: vnd(r.listing.priceTier.priceVnd),
-    topic: r.listing.publishedStory.topic.title,
-    competency: r.listing.publishedStory.topic.skill.caselCode,
+    topic: r.listing.publishedStory.topic?.title ?? null,
+    competency: r.listing.publishedStory.topic?.skill.caselCode ?? null,
     pageCount: r.listing.publishedStory._count.pages,
     hasAiContent: r.listing.hasAiContent,
     listingStatus: r.listing.status,
@@ -281,7 +290,7 @@ export async function claimReview(moderator, reviewId, { now = new Date() } = {}
     await tx.$queryRaw`SELECT id FROM moderation_reviews WHERE id = ${reviewId}::uuid FOR UPDATE`;
     const review = await loadReview(reviewId, tx);
     if (review.decidedAt) throw new ApiError(StatusCodes.CONFLICT, 'Bài này đã được quyết định.');
-    if (claimedByOther(review, moderator.id, now)) throw new ApiError(StatusCodes.CONFLICT, 'Moderator khác đang duyệt bài này.');
+    if (claimedByOther(review, moderator.id, now)) throw new ApiError(StatusCodes.CONFLICT, 'Specialist khác đang duyệt bài này.');
     await assertNarrationReady(tx, review.listing.publishedStoryId);
     await tx.moderationReview.update({
       where: { id: reviewId },
@@ -292,7 +301,7 @@ export async function claimReview(moderator, reviewId, { now = new Date() } = {}
   return getReview(moderator, reviewId, { now });
 }
 
-/** Truyen bat giong doc: phai doc xong moi duyet (Moderator nghe khi duyet; nguoi mua nhan truyen co san audio). */
+/** Truyen bat giong doc: phai doc xong moi duyet (Specialist nghe khi duyet; nguoi mua nhan truyen co san audio). */
 async function assertNarrationReady(db, storyId) {
   const check = await loadReadiness(db, storyId);
   const n = check?.narration;

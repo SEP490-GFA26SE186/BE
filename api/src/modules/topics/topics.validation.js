@@ -11,6 +11,12 @@ const body = {
   isActive: z.boolean(),
 };
 
+const subSkillIds = z
+  .array(z.string().uuid('Kỹ năng con không hợp lệ'))
+  .min(1, 'Chọn ít nhất 1 kỹ năng con')
+  .max(3, 'Chọn tối đa 3 kỹ năng con')
+  .refine((a) => new Set(a).size === a.length, 'Kỹ năng con bị trùng');
+
 const list = z.object({
   query: z.object({
     skillId: z.string().uuid().optional(),
@@ -21,11 +27,24 @@ const list = z.object({
 });
 const id = z.object({ id: z.string().uuid('id không hợp lệ') });
 const create = z.object({
-  body: z.object({ ...body, ageMin: age.optional(), ageMax: age.optional(), displayOrder: body.displayOrder.optional(), isActive: body.isActive.optional() }),
+  body: z.object({
+    ...body,
+    subSkillIds,
+    ageMin: age.optional(),
+    ageMax: age.optional(),
+    displayOrder: body.displayOrder.optional(),
+    isActive: body.isActive.optional(),
+  }),
 });
 const update = z.object({
   params: id,
-  body: z.object(Object.fromEntries(Object.entries(body).map(([k, v]) => [k, v.optional()]))).refine((b) => Object.keys(b).length > 0, 'Không có gì để sửa'),
+  body: z
+    .object(
+      Object.fromEntries(
+        Object.entries({ ...body, subSkillIds }).map(([k, v]) => [k, v.optional()]),
+      ),
+    )
+    .refine((b) => Object.keys(b).length > 0, 'Không có gì để sửa'),
 });
 const remove = z.object({ params: id });
 

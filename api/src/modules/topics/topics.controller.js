@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes';
 import { ApiResponse, catchAsync } from '../../utils/index.js';
 import topicsService from './topics.service.js';
 
-// data la mang (GET), khop Web topicService.getTopics (dung chung cho phu huynh va Moderator).
+// data la mang (GET), khop Web topicService.getTopics (dung chung cho phu huynh va Specialist).
 const getTopics = catchAsync(async (req, res) => ApiResponse.success(res, { data: await topicsService.listTopics(req.user, req.query) }));
 const createTopic = catchAsync(async (req, res) =>
   ApiResponse.success(res, { statusCode: StatusCodes.CREATED, message: 'Đã tạo bài học', data: await topicsService.createTopic(req.user, req.body) }),

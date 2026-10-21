@@ -1,8 +1,10 @@
 import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../utils/ApiError.js';
+import { checkpointTypeFor } from '../../question-templates/lib/templateRules.js';
 
-const NEEDS_TARGET = new Set(['emotion_other', 'perspective']);
 const EMOTION_TYPES = new Set(['emotion_self', 'emotion_other']);
+// CHECK DB: chi emotion_other / perspective duoc co target_token.
+const TARGET_TYPES = new Set(['emotion_other', 'perspective']);
 const CUSTOM_DEFAULT_PAGES = 4;
 
 /**
@@ -24,10 +26,11 @@ export function defaultTarget(storyCharacters) {
 }
 
 /**
- * Dung khung truyen tu layout. `answerEmotion = 'neutral'` la gia tri tam cho kieu cam xuc
- * (CHECK trong DB bat buoc NOT NULL); "da viet" xac dinh bang `question`.
+ * Dung khung truyen tu layout + `plan` (planSlots: moi o `scored` mot phien ban mau). Kieu
+ * checkpoint suy tu dang tra loi cua mau. `answerEmotion = 'neutral'` la gia tri tam cho kieu cam
+ * xuc (CHECK trong DB bat buoc NOT NULL); "da viet" xac dinh bang `question`. O `reflection` khong cham.
  */
-export function buildSkeleton({ length, layouts, customLimits, storyCharacters }) {
+export function buildSkeleton({ length, layouts, customLimits, storyCharacters, plan = [] }) {
   if (length === 'custom') {
     const pageCount = Math.min(Math.max(CUSTOM_DEFAULT_PAGES, customLimits.minPages), customLimits.maxPages);
     return { pageCount, checkpoints: [] };
@@ -39,20 +42,37 @@ export function buildSkeleton({ length, layouts, customLimits, storyCharacters }
   }
 
   const target = defaultTarget(storyCharacters);
-  if (!target && layout.checkpoints.some((c) => NEEDS_TARGET.has(c.type))) {
-    throw new ApiError(
-      StatusCodes.UNPROCESSABLE_ENTITY,
-      'Truyện độ dài này có câu hỏi về nhân vật khác, cần thêm ít nhất một nhân vật phụ.',
-    );
-  }
+  const planByAfter = new Map(plan.map((p) => [p.afterPageOrder, p]));
 
-  return {
-    pageCount: layout.pages,
-    checkpoints: layout.checkpoints.map((c) => ({
-      type: c.type,
+  const checkpoints = layout.checkpoints.map((c) => {
+    if (c.type === 'reflection') {
+      return {
+        type: 'reflection', afterPageOrder: c.after, targetToken: null, answerEmotion: null,
+        subSkillId: null, templateVersionId: null, templateVersion: null, scored: false,
+      };
+    }
+    const slot = planByAfter.get(c.after);
+    if (!slot) throw new Error(`buildSkeleton: thieu phien ban mau cho o sau trang ${c.after}`);
+    const version = slot.templateVersion;
+    const format = version.answerFormat ?? version.template?.answerFormat;
+    const type = checkpointTypeFor(format, version.needsTarget);
+    if (version.needsTarget && !target) {
+      throw new ApiError(
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        'Truyện độ dài này có câu hỏi về nhân vật khác, cần thêm ít nhất một nhân vật phụ.',
+      );
+    }
+    return {
+      type,
       afterPageOrder: c.after,
-      targetToken: NEEDS_TARGET.has(c.type) ? target : null,
-      answerEmotion: EMOTION_TYPES.has(c.type) ? 'neutral' : null,
-    })),
-  };
+      targetToken: version.needsTarget && TARGET_TYPES.has(type) ? target : null,
+      answerEmotion: EMOTION_TYPES.has(type) ? 'neutral' : null,
+      subSkillId: slot.subSkillId,
+      templateVersionId: version.id,
+      templateVersion: version,
+      scored: true,
+    };
+  });
+
+  return { pageCount: layout.pages, checkpoints };
 }

@@ -92,19 +92,7 @@ const generatePortrait = z.object({
   params: z.object({
     id: z.string().uuid('Mã nhân vật không hợp lệ'),
   }),
-  body: z.object({
-    style: z
-      .enum(['pixar_3d', 'watercolor', 'anime', 'storybook_illustration', 'claymation'], {
-        errorMap: () => ({
-          message: 'Invalid art style (allowed: pixar_3d, watercolor, anime, storybook_illustration, claymation)',
-        }),
-      })
-      .optional(),
-    customPrompt: z
-      .string()
-      .max(500, 'Custom prompt must not exceed 500 characters')
-      .optional(),
-  }),
+  // Phong cach ve co dinh o ai/ (prompts/image_style.v1.md); khong nhan prompt tu client.
 });
 
 export default {

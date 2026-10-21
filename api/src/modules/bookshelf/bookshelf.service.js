@@ -15,8 +15,8 @@ const verifyChildAccess = async (user, childId) => {
     throw ApiError.badRequest('Child ID is required');
   }
 
-  // Admin and Moderator have system-wide access
-  const isElevated = ['admin', 'moderator'].includes(user.role);
+  // Admin and Specialist have system-wide access
+  const isElevated = ['admin', 'specialist'].includes(user.role);
 
   const child = await prisma.childProfile.findFirst({
     where: {
@@ -83,7 +83,8 @@ const getBookshelf = async (user, query) => {
       totalPages,
       useTts: story.useTts,
       useAiImage: story.useAiImage,
-      topic: { title: story.topic.title, competency: story.topic.skill.caselCode },
+      // topic_id tuy chon voi truyen tu viet (custom)
+      topic: story.topic ? { title: story.topic.title, competency: story.topic.skill.caselCode } : null,
       addedAt,
       readingProgress: readingProgress(
         session && { ...session, currentPageOrder: session.currentPage?.pageOrder ?? null },

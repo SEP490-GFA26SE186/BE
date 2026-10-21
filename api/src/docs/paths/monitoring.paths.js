@@ -28,19 +28,19 @@ export default {
   '/moderation/reports': {
     get: {
       tags: ['Moderation'],
-      summary: '[Moderator] Báo cáo vi phạm, gom theo truyện',
+      summary: '[Specialist] Báo cáo vi phạm, gom theo truyện',
       security: bearer,
       parameters: [{ name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'resolved', 'dismissed', 'all'], default: 'open' } }],
       responses: { 200: { description: '{ groups: [{ listing, openReview, reports: [{ id, category, description, status, reporter, pageOrder, createdAt }] }] }' } },
     },
   },
   '/moderation/reports/{reportId}/dismiss': {
-    post: { tags: ['Moderation'], summary: '[Moderator] Bác báo cáo (không vi phạm)', security: bearer, parameters: [path('reportId')], responses: { 200: { description: '{ reportId, status }' }, 409: { description: 'Đã xử lý' } } },
+    post: { tags: ['Moderation'], summary: '[Specialist] Bác báo cáo (không vi phạm)', security: bearer, parameters: [path('reportId')], responses: { 200: { description: '{ reportId, status }' }, 409: { description: 'Đã xử lý' } } },
   },
   '/moderation/listings': {
     get: {
       tags: ['Moderation'],
-      summary: '[Moderator] Truyện đang tạm gỡ / đã gỡ hẳn',
+      summary: '[Specialist] Truyện đang tạm gỡ / đã gỡ hẳn',
       security: bearer,
       parameters: [{ name: 'status', in: 'query', schema: { type: 'string', enum: ['suspended', 'archived'], default: 'suspended' } }],
       responses: { 200: { description: '{ listings: [{ id, title, seller, reportsCount, buyersCount, review }] }' } },
@@ -49,7 +49,7 @@ export default {
   '/moderation/listings/{listingId}/suspend': {
     post: {
       tags: ['Moderation'],
-      summary: '[Moderator] Tạm gỡ truyện đang bán',
+      summary: '[Specialist] Tạm gỡ truyện đang bán',
       description: 'Ẩn khỏi chợ, không mua được, bé đã mua tạm không đọc được. Tạo lượt hậu kiểm để quyết giữ / gỡ hẳn trong không gian duyệt.',
       security: bearer,
       parameters: [path('listingId')],
@@ -60,7 +60,7 @@ export default {
   '/moderation/strikes': {
     get: {
       tags: ['Moderation'],
-      summary: '[Moderator] Danh sách cảnh cáo',
+      summary: '[Specialist] Danh sách cảnh cáo',
       security: bearer,
       parameters: [
         { name: 'sellerId', in: 'query', schema: { type: 'string', format: 'uuid' } },
@@ -70,7 +70,7 @@ export default {
     },
     post: {
       tags: ['Moderation'],
-      summary: '[Moderator] Cảnh cáo tác giả',
+      summary: '[Specialist] Cảnh cáo tác giả',
       description: 'Hiệu lực 90 ngày. Đủ 3 cảnh cáo còn hiệu lực → khoá tài khoản bán (ẩn mọi truyện khỏi chợ, không đăng bán mới).',
       security: bearer,
       requestBody: json({
@@ -84,7 +84,7 @@ export default {
   '/moderation/audits': {
     get: {
       tags: ['Moderation'],
-      summary: '[Moderator] Lượt kiểm tra ngẫu nhiên',
+      summary: '[Specialist] Lượt kiểm tra ngẫu nhiên',
       security: bearer,
       parameters: [{ name: 'open', in: 'query', schema: { type: 'boolean' } }],
       responses: { 200: { description: '{ audits: [{ reviewId, listing, createdAt, decidedAt, decision, moderator }] }' } },
@@ -93,7 +93,7 @@ export default {
   '/moderation/audits/run': {
     post: {
       tags: ['Moderation'],
-      summary: '[Moderator] Chọn ngay một đợt kiểm tra ngẫu nhiên',
+      summary: '[Specialist] Chọn ngay một đợt kiểm tra ngẫu nhiên',
       description: 'Worker tự chọn mỗi tuần `moderation.audit_per_week` truyện; nút này chọn ngay. Ưu tiên truyện lâu chưa kiểm, bỏ truyện đang có lượt duyệt mở.',
       security: bearer,
       requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 20 } } } } } },
@@ -104,7 +104,7 @@ export default {
   '/moderation/ai-flags': {
     get: {
       tags: ['Moderation'],
-      summary: '[Moderator] Cảnh báo AI: phụ huynh có nhiều lượt AI bị chặn',
+      summary: '[Specialist] Cảnh báo AI: phụ huynh có nhiều lượt AI bị chặn',
       description: 'Luồng 7.6. Bị chặn = ai_requests.status blocked (guardrail). Kèm phụ huynh đang bị khoá quyền dùng AI.',
       security: bearer,
       parameters: [
@@ -117,7 +117,7 @@ export default {
   '/moderation/ai-flags/{userId}/block': {
     post: {
       tags: ['Moderation'],
-      summary: '[Moderator] Tạm khoá / mở khoá quyền dùng AI',
+      summary: '[Specialist] Tạm khoá / mở khoá quyền dùng AI',
       description: 'days > 0: khoá đến now + days (sinh truyện bằng AI trả 403; vẫn đọc / tự viết được). days = 0: mở khoá. Ghi nhật ký.',
       security: bearer,
       parameters: [path('userId')],

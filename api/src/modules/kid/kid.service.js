@@ -6,15 +6,21 @@ import ApiError from '../../utils/ApiError.js';
 import { assetUrl } from '../../clients/assetUrl.js';
 import { loadReadiness, notReadyMessage } from '../stories/stories.narration.store.js';
 import { readingProgress } from '../bookshelf/lib/shelf.js';
-import { answerOutcome, firstScore, isCorrect, kidStoryContent, readChoice, skillCodeFor } from './lib/play.js';
+import { answerOutcome, firstScore, isCorrect, kidStoryContent, readChoice } from './lib/play.js';
 
 const TX = { timeout: 20000 };
 
 const PLAY_STORY_INCLUDE = {
   topic: { select: { title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { name: true } } } },
-  pages: { select: { id: true, pageOrder: true, contentText: true, audioKey: true } },
-  checkpoints: { include: { options: true } },
+  pages: { select: { id: true, pageOrder: true, contentText: true, audioKey: true, scene: { select: { imageKey: true, imageStatus: true } } } },
+  checkpoints: {
+    include: {
+      options: true,
+      templateVersion: { include: { template: { select: { answerFormat: true } } } },
+      subSkill: { select: { skillId: true } },
+    },
+  },
 };
 
 const notFound = () => ApiError.notFound('Không tìm thấy truyện trên giá sách của bé.');
@@ -142,7 +148,7 @@ const saveProgress = async (kid, sessionId, pageId) => {
 
 /**
  * Be tra loi mot diem dung. body: { checkpointId, emotion? | optionId?, skipped?, timeToFirstMs?, questionReplays? }.
- * Lan dau: luu lan chon dau + diem (dong bang), cong eq_competency_stats neu la luot doc dau.
+ * Lan dau: luu lan chon dau + diem (dong bang) + ky nang con / phien ban mau (khong con ghi eq_competency_stats).
  * Sai lan dau (emotion / perspective): tra goi y; lan thu hai: luu lan chon cuoi, bao dap an.
  * Da xong -> tra lai ket qua cu (bam lai khong doi diem).
  */
@@ -176,8 +182,6 @@ const answer = async (kid, sessionId, body) =>
       return outcome(row);
     }
 
-    const code = skillCodeFor(checkpoint.type, story.topic?.skill?.caselCode);
-    const skill = code ? await tx.eqSkill.findUnique({ where: { caselCode: code }, select: { id: true } }) : null;
     const score = skipped ? null : firstScore(checkpoint, choice);
     const finished = skipped || isCorrect(checkpoint, choice); // dung ngay (hoac khong co chon lai)
     const row = await tx.checkpointAnswer.create({
@@ -192,19 +196,13 @@ const answer = async (kid, sessionId, body) =>
         skipped,
         timeToFirstMs: Number.isInteger(body.timeToFirstMs) ? body.timeToFirstMs : null,
         questionReplays: Number.isInteger(body.questionReplays) ? body.questionReplays : 0,
-        skillId: score == null ? null : skill?.id ?? null,
+        skillId: score == null ? null : checkpoint.subSkill?.skillId ?? null,
+        subSkillId: score == null ? null : checkpoint.subSkillId ?? null,
+        templateVersionId: score == null ? null : checkpoint.templateVersionId ?? null,
         score,
       },
     });
 
-    // Chi luot doc dau, khong bo qua, co nang luc + diem (DBML eq_competency_stats).
-    if (session.isFirstPlay && score != null && skill) {
-      await tx.eqCompetencyStat.upsert({
-        where: { childId_skillId: { childId: kid.childId, skillId: skill.id } },
-        create: { childId: kid.childId, skillId: skill.id, items: 1, scoreSum: score },
-        update: { items: { increment: 1 }, scoreSum: { increment: score }, updatedAt: new Date() },
-      });
-    }
     await tx.playSession.update({ where: { id: sessionId }, data: { lastActivityAt: new Date() } });
     return outcome(row);
   }, TX);

@@ -35,6 +35,7 @@ EXPECTED = [
     ("SCENE_COUNT_EXCEEDED", S.RETRY),
     ("SCENE_DESCRIPTION_MISSING", S.RETRY),
     ("EMOTION_ANSWER_INVALID", S.RETRY),
+    ("EMOTION_NOT_ALLOWED", S.RETRY),
     ("EMOTION_HINT_MISSING", S.RETRY),
     ("PERSPECTIVE_OPTIONS_INVALID", S.RETRY),
     ("PERSPECTIVE_ANSWER_INVALID", S.RETRY),
@@ -81,7 +82,7 @@ def test_rule_codes_unique() -> None:
 
 
 def test_registry_matches_spec_table() -> None:
-    assert len(RULES) == 22
+    assert len(RULES) == 23
     assert [(r.code, r.severity) for r in RULES] == EXPECTED
 
 

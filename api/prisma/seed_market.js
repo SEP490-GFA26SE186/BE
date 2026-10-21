@@ -1,7 +1,7 @@
 // =============================================================================
-// Seed: bac gia dang ban (price_tiers) + checklist Moderator duyet truyen (checklist_items).
+// Seed: bac gia dang ban (price_tiers) + checklist Specialist duyet truyen (checklist_items).
 // Checklist = 7 nguyen tac noi dung (BE/ai/docs/07-content-principles.md). upsert, update: {} —
-// chay lai KHONG ghi de noi dung Admin / Moderator da chinh.
+// chay lai KHONG ghi de noi dung Admin / Specialist da chinh.
 // =============================================================================
 
 export const priceTiersData = [

@@ -1,14 +1,14 @@
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 
-const ELEVATED_ROLES = new Set(['moderator', 'admin']);
+const ELEVATED_ROLES = new Set(['specialist', 'admin']);
 
 const notFound = () => ApiError.notFound('Không tìm thấy truyện.');
 
 const findStory = (db, storyId) => db.story.findFirst({ where: { id: storyId, deletedAt: null } });
 
 /**
- * Doc truyen: chu truyen, hoac moderator/admin. Nguoi khac thay 404 (khong lo truyen ton tai).
+ * Doc truyen: chu truyen, hoac specialist/admin. Nguoi khac thay 404 (khong lo truyen ton tai).
  * `db` la prisma hoac transaction client.
  */
 export async function loadStoryForRead(user, storyId, db = prisma) {

@@ -115,7 +115,11 @@ const updatePage = (user, storyId, pageId, { contentText }) =>
 
 const updateCheckpoint = (user, storyId, checkpointId, body) =>
   inTransaction(async (tx) => {
-    await lockForWrite(tx, user, storyId);
+    const story = await lockForWrite(tx, user, storyId);
+    // Cau hoi truyen AI do khung cua Specialist quyet dinh (co cham diem): khong sua, truoc moi lenh ghi.
+    if (story.length !== 'custom') {
+      throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'Câu hỏi của truyện AI theo khung của chuyên gia, không sửa được.');
+    }
     const checkpoint = await findCheckpoint(tx, storyId, checkpointId);
     checkCheckpointEdit(checkpoint.type, body);
     const nameContext = await loadNameContextForStory(tx, storyId);

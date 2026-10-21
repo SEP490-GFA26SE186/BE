@@ -15,7 +15,7 @@ listingsRouter.post('/', auth, authorize('parent'), validate(v.createListing), c
 
 // Gan TRUOC router /moderation cu (keywords / reports giu lai cho Phase 5); duong dan khong trung.
 export const moderationReviewRouter = Router();
-const mod = [auth, authorize('moderator', 'admin')];
+const mod = [auth, authorize('specialist', 'admin')];
 moderationReviewRouter.get('/sellers', ...mod, validate(v.sellerList), c.listSellerApplications);
 moderationReviewRouter.post('/sellers/:userId/decision', ...mod, validate(v.sellerDecision), c.decideSeller);
 moderationReviewRouter.get('/submissions', ...mod, c.getQueue);

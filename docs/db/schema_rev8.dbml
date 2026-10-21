@@ -12,6 +12,9 @@
 //  - review_visibility -> hidden_at; plan_period -> duration_months
 //  - Bo bedtime, bo notifications
 //  - users.username: them lai (auth dung de dang nhap), full_name thanh nullable
+//  - 2026-10-20 su pham CASEL: casel_references, eq_sub_skills, question_templates (+ versions),
+//    topic_sub_skills; cot truy vet tren story_checkpoints / checkpoint_answers;
+//    stories.topic_id tuy chon voi truyen custom
 // =============================================================================
 
 
@@ -21,7 +24,7 @@
 
 Enum user_role {
   admin
-  moderator
+  specialist
   parent
 }
 
@@ -244,6 +247,17 @@ Enum casel_competency {
   responsible_decision_making
 }
 
+Enum answer_format {
+  emotion_pick [note: 'chon 1 trong 5 cam xuc; dung 1 / sai 0']
+  single_correct [note: '3 phuong an, 1 dung; dung 1 / sai 0']
+  role_choice [note: '3 phuong an theo 3 vai; diem tung vai do phien ban mau quy dinh']
+}
+
+Enum template_status {
+  draft
+  published
+}
+
 
 // ---------------------------------------------------------------------------
 // 1. ACCOUNTS
@@ -261,7 +275,7 @@ Table users {
   email_verified_at timestamptz
   last_login_at timestamptz
   is_active boolean [not null, default: true]
-  ai_blocked_until timestamptz [note: 'Moderator tam khoa quyen dung AI (luong 7.6); NULL = khong khoa (2026-10-18)']
+  ai_blocked_until timestamptz [note: 'Specialist tam khoa quyen dung AI (luong 7.6); NULL = khong khoa (2026-10-18)']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
   deleted_at timestamptz [note: 'soft delete']
@@ -332,7 +346,7 @@ Table characters {
 
 
 // ---------------------------------------------------------------------------
-// 2. CONTENT LIBRARY (Moderator quan ly)
+// 2. CONTENT LIBRARY (Specialist quan ly)
 // ---------------------------------------------------------------------------
 
 Table eq_skills {
@@ -353,7 +367,7 @@ Table topics {
   age_max int [not null, default: 8]
   display_order int [not null, default: 0]
   is_active boolean [not null, default: true]
-  created_by uuid [not null, note: 'moderator']
+  created_by uuid [not null, note: 'specialist']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
@@ -361,7 +375,113 @@ Table topics {
     (is_active, skill_id)
   }
 
-  Note: 'Danh sach bai hoc do Moderator quan ly. CHECK age_min <= age_max'
+  Note: 'Danh sach bai hoc do Specialist quan ly. CHECK age_min <= age_max'
+}
+
+Table casel_references {
+  id uuid [pk, default: `gen_random_uuid()`]
+  skill_id uuid [not null, note: 'nang luc CASEL chua muc nay']
+  code varchar(60) [unique, not null]
+  text_en text [not null, note: 'nguyen van tieng Anh cua khung CASEL']
+  display_order int [not null, default: 0]
+
+  indexes {
+    skill_id
+  }
+
+  Note: 'Muc tham chieu CASEL (40 muc), chi doc: khong co API ghi, chi doi bang migration/seed'
+}
+
+Table eq_sub_skills {
+  id uuid [pk, default: `gen_random_uuid()`]
+  skill_id uuid [not null]
+  casel_reference_id uuid [not null, note: 'bat buoc; muc CASEL phai cung skill_id (kiem o service)']
+  code varchar(60) [unique, not null]
+  name_vi varchar(200) [not null]
+  description_vi text [not null, note: 'loi cho phu huynh / AI']
+  age_min int [not null, default: 5]
+  age_max int [not null, default: 8]
+  is_active boolean [not null, default: true]
+  display_order int [not null, default: 0]
+  created_by uuid [not null, note: 'specialist']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (skill_id, is_active)
+    casel_reference_id
+  }
+
+  Note: '''
+  Ky nang con do Specialist CRUD; moi ky nang con tro ve dung 1 muc CASEL (dieu kien truy vet).
+  CHECK: age_min <= age_max
+  '''
+}
+
+Table question_templates {
+  id uuid [pk, default: `gen_random_uuid()`]
+  sub_skill_id uuid [not null]
+  title varchar(200) [not null, note: 'ten noi bo']
+  answer_format answer_format [not null]
+  is_active boolean [not null, default: true]
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (sub_skill_id, is_active)
+  }
+
+  Note: 'Dinh danh mau cau hoi; noi dung + diem nam o question_template_versions'
+}
+
+Table question_template_versions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  template_id uuid [not null]
+  version int [not null]
+  status template_status [not null, default: 'draft']
+  question_frame text [not null, note: 'khung cau hoi, vd {NV1} co the lam gi de binh tinh lai?']
+  page_setup text [note: 'trang ngay truoc checkpoint phai dung gi']
+  needs_target boolean [not null, default: false, note: 'cau hoi nham mot nhan vat khac']
+  allowed_emotions emotion[] [default: `ARRAY[]::emotion[]`, note: 'chi emotion_pick; rong = ca 5']
+  correct_desc text [note: 'single_correct: mo ta phuong an dung']
+  distractor_desc text [note: 'single_correct: mo ta phuong an nhieu']
+  constructive_desc text [note: 'role_choice']
+  avoidant_desc text [note: 'role_choice']
+  impulsive_desc text [note: 'role_choice']
+  constructive_score numeric(3,2) [note: 'role_choice, mac dinh 1']
+  avoidant_score numeric(3,2) [note: 'role_choice, mac dinh 0.5']
+  impulsive_score numeric(3,2) [note: 'role_choice, mac dinh 0']
+  hint_guidance text [note: 'emotion_pick, single_correct']
+  parent_prompts text[] [default: `ARRAY[]::text[]`, note: '2-3 cau goi y phu huynh hoi con (bao cao)']
+  rationale text [note: 'vi sao cau nay do ky nang con nay']
+  reference_url varchar(500)
+  created_by uuid [not null]
+  created_at timestamptz [not null, default: `now()`]
+  published_by uuid
+  published_at timestamptz
+
+  indexes {
+    (template_id, version) [unique]
+  }
+
+  Note: '''
+  Bat bien sau khi ban hanh; sua mau = tao phien ban moi, checkpoint da sinh giu phien ban cu.
+  Sinh truyen dung phien ban published moi nhat cua moi mau.
+  Partial unique: UNIQUE (template_id) WHERE status = draft (toi da 1 ban nhap moi mau)
+  '''
+}
+
+Table topic_sub_skills {
+  topic_id uuid [not null]
+  sub_skill_id uuid [not null]
+
+  indexes {
+    (topic_id, sub_skill_id) [pk]
+    sub_skill_id
+  }
+
+  Note: '1-3 ky nang con cung nang luc voi topic, dang bat va co mau dang bat (kiem o service)'
 }
 
 Table backgrounds {
@@ -415,7 +535,7 @@ Table stories {
   owner_id uuid [not null]
   kind story_kind [not null, default: 'private']
   source_story_id uuid [note: 'published: truyen rieng goc']
-  topic_id uuid [not null]
+  topic_id uuid [note: 'bat buoc voi short/medium/long; tuy chon voi custom']
   length story_length [not null, default: 'medium', note: 'short/medium/long: AI viet, he thong dat khung; custom: tu viet, cau truc tu do']
   title varchar(200) [not null]
   situation text [note: 'chuyen that phu huynh ke, luu dang token {NVx}']
@@ -436,6 +556,7 @@ Table stories {
   private  : truyen phu huynh tao cho con minh, sua tu do
   published: ban sao da go ca nhan hoa de ban; dong bang sau khi duyet
   CHECK: kind <> published OR source_story_id IS NOT NULL
+  CHECK: length = custom OR topic_id IS NOT NULL
   Chi dua vao gia sach khi reviewed_at IS NOT NULL
   Truyen custom (validator khi luu): 4-20 trang, 0-6 diem dung co cham,
     khong dat sau trang 1, reflection chi o cuoi
@@ -500,23 +621,35 @@ Table story_checkpoints {
   story_id uuid [not null]
   after_page_id uuid [not null]
   type checkpoint_type [not null]
-  target_token varchar(10) [note: 'bat buoc voi emotion_other, perspective']
+  target_token varchar(10) [note: 'bat buoc voi emotion_other; tuy chon voi perspective']
   question text
   answer_emotion emotion [note: 'chi emotion_self / emotion_other']
   hint text [note: 'noi khi tre chon sai lan dau; khong co voi problem_solving, reflection']
   origin content_origin [not null, default: 'human']
   question_audio_key varchar(300)
   hint_audio_key varchar(300)
+  sub_skill_id uuid [note: 'truy vet: ky nang con cua o cham; NULL voi reflection, truyen tu viet']
+  template_version_id uuid [note: 'truy vet: phien ban mau sinh ra o cham']
+  scored boolean [not null, default: false, note: 'o co cham']
+  excluded boolean [not null, default: false, note: 'Specialist gan co loai khoi thong ke']
+  excluded_reason text
+  excluded_by uuid
+  excluded_at timestamptz
+  reviewed_ok_at timestamptz [note: 'Specialist da soat, khong van de']
+  reviewed_ok_by uuid
 
   indexes {
     after_page_id [unique, note: 'moi trang toi da 1 diem dung ngay sau no']
     story_id
+    sub_skill_id
+    template_version_id
   }
 
   Note: '''
   short/medium/long: kieu va vi tri do he thong dat; custom: nguoi viet tu dat.
   CHECK: type IN (emotion_self, emotion_other) = (answer_emotion IS NOT NULL)
-  CHECK: type IN (emotion_other, perspective) = (target_token IS NOT NULL)
+  CHECK: (type = emotion_other) <= (target_token IS NOT NULL)
+  CHECK: type NOT IN (emotion_self, problem_solving, reflection) OR target_token IS NULL
   '''
 }
 
@@ -616,10 +749,13 @@ Table checkpoint_answers {
   question_replays int [not null, default: 0]
   skill_id uuid [note: 'SNAPSHOT nang luc tinh diem; NULL voi reflection']
   score numeric(3,2) [note: 'SNAPSHOT diem lan chon dau: 0 / 0.5 / 1; NULL neu skipped hoac reflection']
+  sub_skill_id uuid [note: 'SNAPSHOT tu checkpoint (truy vet)']
+  template_version_id uuid [note: 'SNAPSHOT tu checkpoint (truy vet)']
   answered_at timestamptz [not null, default: `now()`]
 
   indexes {
     (session_id, checkpoint_id) [unique]
+    sub_skill_id
   }
 
   Note: '''
@@ -629,26 +765,6 @@ Table checkpoint_answers {
   Doi topic hay doi cach cham ve sau khong lam thay doi lich su.
   '''
 }
-
-Table eq_competency_stats {
-  child_id uuid [not null]
-  skill_id uuid [not null]
-  items int [not null, default: 0]
-  score_sum numeric(8,2) [not null, default: 0]
-  updated_at timestamptz [not null, default: `now()`]
-
-  indexes {
-    (child_id, skill_id) [pk]
-  }
-
-  Note: '''
-  CACHE toan bo lich su, chi tinh tu checkpoint_answers cua lan choi dau, khong skipped.
-  Diem = score_sum / items * 100; hien "chua du du lieu" khi items < 5.
-  Bieu do theo thang: truy van truc tiep checkpoint_answers theo answered_at.
-  Cron doi soat hang dem tinh lai tu du lieu goc.
-  '''
-}
-
 
 // ---------------------------------------------------------------------------
 // 5. AI
@@ -980,7 +1096,7 @@ Table withdrawal_requests {
 }
 
 Table platform_settings {
-  key varchar(60) [pk, note: 'market.* (seller_share_rate, earning_hold_days, min_withdrawal_vnd) | moderation.* (report_threshold, strike_limit, strike_valid_days, audit_per_week) | ai_cost.<type> (credit) | limits.* | story_layout.<length> | custom_limits.*']
+  key varchar(60) [pk, note: 'market.* (seller_share_rate, earning_hold_days, min_withdrawal_vnd) | moderation.* (report_threshold, strike_limit, strike_valid_days, audit_per_week) | ai_cost.<type>[.<length>] (credit; story_text theo do dai: ai_cost.story_text.short|medium|long) | limits.* | story_layout.<length> | custom_limits.*']
   value jsonb [not null]
   updated_by uuid [not null]
   updated_at timestamptz [not null, default: `now()`]
@@ -1127,6 +1243,17 @@ Ref: characters.child_id - child_profiles.id [delete: set null]
 Ref: topics.skill_id > eq_skills.id [delete: restrict]
 Ref: topics.created_by > users.id [delete: restrict]
 Ref: stories.topic_id > topics.id [delete: restrict]
+Ref: casel_references.skill_id > eq_skills.id [delete: restrict]
+Ref: eq_sub_skills.skill_id > eq_skills.id [delete: restrict]
+Ref: eq_sub_skills.casel_reference_id > casel_references.id [delete: restrict]
+Ref: eq_sub_skills.created_by > users.id [delete: restrict]
+Ref: question_templates.sub_skill_id > eq_sub_skills.id [delete: restrict]
+Ref: question_templates.created_by > users.id [delete: restrict]
+Ref: question_template_versions.template_id > question_templates.id [delete: restrict]
+Ref: question_template_versions.created_by > users.id [delete: restrict]
+Ref: question_template_versions.published_by > users.id [delete: restrict]
+Ref: topic_sub_skills.topic_id > topics.id [delete: restrict]
+Ref: topic_sub_skills.sub_skill_id > eq_sub_skills.id [delete: restrict]
 Ref: story_characters.story_id > stories.id [delete: cascade]
 Ref: story_characters.character_id > characters.id [delete: restrict]
 Ref: story_scenes.story_id > stories.id [delete: cascade]
@@ -1136,14 +1263,18 @@ Ref: story_pages.scene_id > story_scenes.id [delete: restrict]
 Ref: story_checkpoints.story_id > stories.id [delete: cascade]
 Ref: story_checkpoints.after_page_id - story_pages.id [delete: cascade]
 Ref: checkpoint_options.checkpoint_id > story_checkpoints.id [delete: cascade]
+Ref: story_checkpoints.sub_skill_id > eq_sub_skills.id [delete: restrict]
+Ref: story_checkpoints.template_version_id > question_template_versions.id [delete: restrict]
+Ref: story_checkpoints.excluded_by > users.id [delete: restrict]
+Ref: story_checkpoints.reviewed_ok_by > users.id [delete: restrict]
 Ref: narration_clips.story_id > stories.id [delete: cascade]
 Ref: checkpoint_answers.session_id > play_sessions.id [delete: cascade]
 Ref: checkpoint_answers.checkpoint_id > story_checkpoints.id [delete: restrict]
 Ref: checkpoint_answers.first_option_id > checkpoint_options.id [delete: restrict]
 Ref: checkpoint_answers.final_option_id > checkpoint_options.id [delete: restrict]
 Ref: checkpoint_answers.skill_id > eq_skills.id [delete: restrict]
-Ref: eq_competency_stats.child_id > child_profiles.id [delete: cascade]
-Ref: eq_competency_stats.skill_id > eq_skills.id [delete: restrict]
+Ref: checkpoint_answers.sub_skill_id > eq_sub_skills.id [delete: restrict]
+Ref: checkpoint_answers.template_version_id > question_template_versions.id [delete: restrict]
 Ref: ai_requests.checkpoint_id > story_checkpoints.id [delete: set null]
 Ref: ai_requests.scene_id > story_scenes.id [delete: set null]
 Ref: bookshelf_items.child_id > child_profiles.id [delete: cascade]
@@ -1220,6 +1351,11 @@ TableGroup accounts {
 TableGroup content_library {
   eq_skills
   topics
+  casel_references
+  eq_sub_skills
+  question_templates
+  question_template_versions
+  topic_sub_skills
   backgrounds
   ui_audio_assets
   blocked_keywords
@@ -1239,7 +1375,6 @@ TableGroup stories_group {
 TableGroup learning {
   play_sessions
   checkpoint_answers
-  eq_competency_stats
 }
 
 TableGroup ai {

@@ -165,9 +165,9 @@ const storiesPaths = {
   '/stories/{id}': {
     get: {
       tags: ['Stories'],
-      summary: '[Parent | Moderator | Admin] Chi tiết truyện',
+      summary: '[Parent | Specialist | Admin] Chi tiết truyện',
       description:
-        '**Quyền truy cập:** phụ huynh sở hữu truyện; `moderator`, `admin` được đọc.\n' +
+        '**Quyền truy cập:** phụ huynh sở hữu truyện; `specialist`, `admin` được đọc.\n' +
         'Trả trang, cảnh, điểm dừng, phương án và nhân vật. Chữ truyện **giữ dạng token** `{NV1}`, `{NV2}`…; ' +
         'frontend thay token bằng tên khi hiển thị, dùng bảng `characters` (`token → name`).',
       security: bearer,
@@ -448,7 +448,7 @@ const storiesPaths = {
       tags: ['Stories'],
       summary: '[Parent] Nhờ AI viết chữ cho truyện',
       description:
-        `${OWNER}\nGiữ credit (\`ai_cost.story_text\`), đặt truyện \`generating\`, đẩy job vào queue và trả ngay \`202\`. ` +
+        `${OWNER}\nGiữ credit theo độ dài (\`ai_cost.story_text.<length>\`), đặt truyện \`generating\`, đẩy job vào queue và trả ngay \`202\`. ` +
         'Frontend gọi `GET /stories/{id}/generation` mỗi 2–3 giây tới khi `succeeded` / `failed` / `blocked`. ' +
         'Thành công: credit được tính, truyện `ready`, chữ, điểm dừng và phương án được ghi vào DB. Thất bại: credit được hoàn, truyện về trạng thái tính lại từ các trang.\n\n' +
         'Mã lỗi: `402` không đủ credit · `409` truyện đang sinh, hoặc đã có bé đọc (không viết lại được) · `422` truyện `custom` · ' +
@@ -472,6 +472,66 @@ const storiesPaths = {
     },
   },
 
+  '/stories/{id}/images': {
+    post: {
+      tags: ['Stories'],
+      summary: '[Parent] Bật tranh AI và vẽ mọi cảnh còn thiếu',
+      description:
+        `${OWNER}
+Đặt \`useAiImage = true\`, vẽ chân dung cho nhân vật chưa có (\`ai_cost.character_portrait\`), rồi mỗi cảnh có mô tả một job \`scene_image\` (\`ai_cost.scene_image\`). Cảnh có nhân vật đang vẽ chân dung thì chờ (\`imageStatus = queued\`) và tự chạy khi chân dung xong. Truyện AI viết xong chữ thì worker tự gọi bước này khi truyện bật tranh.
+
+Trả 202 \`{ portraits, scenes, waiting, insufficientCredit }\`. 409 khi AI đang viết chữ; 402 khi không đủ credit cho ảnh nào.`,
+      security: bearer,
+      parameters: [idParam],
+      responses: {
+        202: resp('Đã xếp hàng', { success: true, data: { portraits: 1, scenes: 0, waiting: 3, insufficientCredit: false } }),
+        402: err('Không đủ credit'),
+        404: err('Không tìm thấy truyện'),
+        409: err('AI đang viết truyện'),
+      },
+    },
+  },
+  '/stories/{id}/scenes/{sceneId}/image': {
+    post: {
+      tags: ['Stories'],
+      summary: '[Parent] Vẽ lại tranh một cảnh',
+      description: `${OWNER}
+Giữ \`ai_cost.scene_image\` credit và vẽ lại cảnh (kể cả đã có tranh). 409 đang vẽ; 422 cảnh chưa có mô tả (truyện tự viết).`,
+      security: bearer,
+      parameters: [idParam, { name: 'sceneId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: {
+        202: resp('Đã xếp hàng', { success: true, data: { portraits: 0, scenes: 1, waiting: 0, insufficientCredit: false } }),
+        402: err('Không đủ credit'),
+        409: err('Cảnh đang được vẽ'),
+        422: err('Cảnh chưa có mô tả'),
+      },
+    },
+  },
+  '/stories/ai-pricing': {
+    get: {
+      tags: ['Stories'],
+      summary: '[Parent] Bảng giá AI viết truyện theo độ dài',
+      description:
+        'Mỗi độ dài truyện AI (`short` / `medium` / `long`): số trang, số điểm dừng (`story_layout.<length>`) và ' +
+        'số credit bị trừ khi bắt đầu viết (`ai_cost.story_text.<length>`, Admin chỉnh ở Cấu hình AI). ' +
+        'Trang tạo truyện dùng để báo giá trước cho ba mẹ.',
+      security: bearer,
+      responses: {
+        200: resp('Bảng giá', {
+          success: true,
+          data: {
+            images: { characterPortrait: 1, scene: 1, maxScenes: 4 },
+            lengths: [
+              { length: 'short', pages: 6, checkpoints: 3, credits: 1 },
+              { length: 'medium', pages: 8, checkpoints: 4, credits: 2 },
+              { length: 'long', pages: 10, checkpoints: 5, credits: 3 },
+            ],
+          },
+        }),
+        401: err('Chưa đăng nhập'),
+      },
+    },
+  },
   '/stories/{id}/generation': {
     get: {
       tags: ['Stories'],

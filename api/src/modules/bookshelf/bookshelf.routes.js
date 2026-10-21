@@ -5,7 +5,7 @@ import { auth, validate } from '../../middlewares/index.js';
 
 const router = Router();
 
-// All bookshelf operations require authenticated user (parent, kid session, moderator, admin)
+// All bookshelf operations require authenticated user (parent, kid session, specialist, admin)
 router.use(auth);
 
 router.get('/', validate(bookshelfValidation.getBookshelf), bookshelfController.getBookshelf);

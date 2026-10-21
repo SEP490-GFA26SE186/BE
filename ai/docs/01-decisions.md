@@ -102,9 +102,11 @@ dùng sinh ảnh (spec §2.1).
   mục tiêu 40–60. Validator M2 chỉ cưỡng chế min/max; prompt có thể cần nhấn mục tiêu.
 
 **Chữ — Claude là provider chính** *(2026-10-15, người dùng chốt; thay Gemini)*
-- **Production: `LLM_PROVIDER=claude`** (Anthropic API, `ANTHROPIC_API_KEY` trong container, tính tiền
-  theo token). **Máy dev: `claude_code`** (CLI `claude` đang đăng nhập qua `claude-agent-sdk`) — không
-  bao giờ phục vụ phụ huynh thật (gói subscription cho dùng cá nhân); image Docker không cài SDK.
+- **`LLM_PROVIDER=claude_code` cho cả máy dev lẫn bản deploy** *(2026-10-19, người dùng chốt; thay
+  "production dùng API key")*: đồ án cá nhân, không thương mại, chạy trên gói Pro/Max của chính người
+  làm. Container xác thực bằng `CLAUDE_CODE_OAUTH_TOKEN` (từ `claude setup-token`); image cài SDK khi
+  build với `AI_EXTRAS=claude-code` (wheel Linux kèm sẵn CLI). Theo khuôn `d:/crawler_flatform`.
+  Adapter `claude` (Anthropic API) giữ lại làm lựa chọn cấu hình.
 - `GeminiLLMProvider` **giữ lại** trong code như một lựa chọn cấu hình, không còn là hướng chính.
   Không có dự phòng tự động giữa hai provider (quyết định riêng nếu cần).
 - **Cấu hình đã đo được** (`claude_code`, alias `sonnet` -> `claude-sonnet-5-5`):
@@ -175,9 +177,22 @@ số mục trong ngoặc là số mục của spec đó)*
   `public_id` = `CLOUDINARY_FOLDER` + key, bỏ đuôi với ảnh / audio. Audio vào `resource_type=video`.
 - DB dev chuyển sang Postgres local (`docker-compose.localdb.yml`), Supabase vẫn là DB dùng chung.
 
-**Ảnh — bỏ qua** *(2026-10-17, người dùng chốt: "bỏ qua luồng sinh ảnh đi")*
-- Không làm M4a / M4b. Truyện dùng `use_ai_image = false` + ảnh giữ chỗ. Endpoint ảnh mock và
-  `docs/06` giữ lại làm tài liệu, không phát triển thêm. Các mục "Đang mở" về ảnh dưới đây đóng băng.
+**Ảnh — làm lại trên Cloudflare Workers AI** *(2026-10-19, người dùng chốt sau khi xem thử; thay mục
+"Ảnh — bỏ qua" 2026-10-17)*
+- Runtime: **Cloudflare Workers AI qua REST** (adapter `cloudflare`, gọi từ máy chạy service, không
+  deploy gì lên Cloudflare). Model: profile `cf-flux-2-klein-4b` (FLUX.2 [klein] 4B, Apache-2.0, nhận tối đa
+  4 ảnh tham chiếu `input_image_0..3`, mỗi ảnh dưới 512x512) cho **cả chân dung lẫn cảnh**. Chọn sau một lượt
+  thử thật (`scripts/compare_images.py`, `out/compare/20261019-204922`): giữ nhân vật nhất quán qua 4 cảnh.
+- **Chân dung: 1 ảnh** (không còn "sinh 2 chọn 1"), vẽ ở **496x496 trên nền trắng trơn**: dùng thẳng làm ảnh
+  tham chiếu (dưới giới hạn 512) và tránh lỗi model chép cả căn phòng sau lưng chân dung vào mọi cảnh.
+  Phụ huynh bấm tạo ở trang Nhân vật; truyện bật tranh tự tạo chân dung còn thiếu.
+- **Cảnh: tối đa 4 mỗi truyện**, tự xếp hàng sau khi AI viết xong chữ (Node làm), mỗi cảnh gửi chân dung các
+  nhân vật làm tham chiếu.
+- **Giá:** chân dung 1 credit, mỗi cảnh 1 credit (Node: `ai_cost.character_portrait`, `ai_cost.scene_image`).
+- **An toàn ảnh: dựa vào người duyệt** — **không** có bộ phân loại. Profile không có bộ lọc sẵn chỉ chạy khi
+  `IMAGE_SAFETY=human_review` (đặt tường minh, mặc định là `classifier` và sẽ từ chối khởi động). Lý do người
+  dùng chấp nhận: ảnh chỉ tới tay trẻ sau khi phụ huynh bấm hoàn tất truyện, và kiểm duyệt viên xem từng trang
+  trước khi bản đăng bán lên chợ. Thay quy tắc "SafetyCheck bắt buộc" của `docs/06` cho chế độ này.
 
 **Chi phí** *(backend làm)*
 - Chỉ bán gói; mỗi gói cấp credit theo tháng. Mỗi loại `ai_request_type` có đơn giá credit.
@@ -186,6 +201,32 @@ số mục trong ngoặc là số mục của spec đó)*
 **EQ** *(backend làm, service chỉ cần biết để không lấn sân)*
 - Chấm theo 5 năng lực CASEL; chỉ lần chọn đầu của lần chơi đầu; tính trên toàn bộ lịch sử.
 - Service **không** nhận, không tính, không trả điểm.
+- **Mẫu câu hỏi do Chuyên gia soạn, AI viết theo mẫu, không bao giờ chấm** *(2026-10-20, spec
+  `docs/superpowers/specs/2026-10-20-casel-pedagogy-design.md`)*: mỗi bài học có 1–3 kỹ năng con
+  cùng năng lực; Node chọn mẫu cho từng điểm dừng có chấm và gửi `guide` (khung câu hỏi, việc trang
+  trước phải làm, gợi ý, cảm xúc cho phép, mô tả đúng / nhiễu, mô tả ba vai) — **không gửi điểm,
+  không gửi `rationale`**. Service chỉ viết chữ theo mẫu (prompt `story.v2`); output không đổi hình
+  dạng. `answer` cảm xúc ngoài `allowed_emotions` là lỗi thử lại (`EMOTION_NOT_ALLOWED`), Node kiểm
+  lại lần nữa khi lưu. Mọi trường mới là tuỳ chọn: request không có `guide` viết như story.v1.
+  Topic có `age_min` / `age_max` thì prompt dùng độ tuổi đó, thiếu thì "5–8". `target` của
+  `perspective` thành tuỳ chọn.
+- **Luồng sư phạm CASEL — phía backend** *(2026-10-20; service `ai` không đụng tới các điểm này)*:
+  - **Specialist** (vai `specialist`, trước là `moderator`) soạn **kỹ năng con** và **mẫu câu hỏi**; mẫu bất biến sau
+    khi ban hành, sửa = tạo phiên bản mới, sinh truyện dùng phiên bản đã ban hành mới nhất. Specialist còn đặt
+    tham số báo cáo (cửa sổ, số câu tối thiểu, hai ngưỡng) và soát từng điểm dừng đã sinh (ẩn tên, gắn cờ loại
+    khỏi thống kê, xác nhận không vấn đề).
+  - **Điểm dừng khoá theo mẫu:** điểm dừng có chấm mang `sub_skill_id`, `template_version_id`, `scored = true`.
+    Phụ huynh sửa chữ, gợi ý, đáp án cảm xúc, phương án; **không** đổi kiểu, vai, đáp án đúng/sai của phương án đã khoá
+    theo mẫu, không thêm / xoá điểm dừng chấm. Câu liên hệ bản thân (`reflection`) không chấm.
+  - **Truyện tự viết (`custom`) không chấm:** không bài học, không mẫu, không điểm dừng chấm; vẫn đọc được ở Kid Mode.
+  - **Điểm 0–1, không còn 0–100 hay bảng `eq_competency_stats`:** điểm lấy từ phiên bản mẫu (đúng/sai 1/0; chọn vai
+    theo điểm của phiên bản, mặc định 1 / 0,5 / 0), chỉ lần chọn đầu, đóng băng cùng `sub_skill_id` /
+    `template_version_id` lúc trả lời.
+  - **Mức độ (báo cáo EQ):** tính theo từng kỹ năng con trên **N = 5** câu chấm gần nhất của **lượt đọc đầu**, điểm dừng
+    không bị gắn cờ loại; cần tối thiểu **3** câu, chưa đủ = "chưa đủ dữ liệu". Trung bình < 0,5 "Đang làm quen",
+    0,5–0,79 "Đang phát triển", ≥ 0,8 "Vững" (so sánh sau khi làm tròn 6 chữ số để 0,8 / 0,5 không rơi do sai số
+    dấu phẩy động). Mức **năng lực** = mức **thấp nhất** trong các kỹ năng con đã có mức. Phụ huynh chỉ thấy mức + số
+    câu, không thấy % hay điểm.
 
 ## Đang mở — dừng lại hỏi nếu đụng tới
 
@@ -195,7 +236,7 @@ số mục trong ngoặc là số mục của spec đó)*
   Link **không hết hạn** (hết hạn cần token auth — gói trả phí); muốn có hạn thì đổi sang
   `private_download_url` có `expires_at` (đi qua API, không qua CDN).
 
-- **Adapter `claude` (API) chưa chạy thật lần nào** — việc kế tiếp: đo 20 trang với
+- **Adapter `claude` (API) chưa chạy thật lần nào** (không còn là hướng chính từ 2026-10-19) — nếu dùng lại: đo 20 trang với
   `LLM_CLAUDE_THINKING=between_tools` để quyết có hạ timeout 150s / 320s không. (chưa có key / profile `ant auth login`). Số đo ở
   trên là của `claude_code`; API có thể khác (tắt thinking được bằng `between_tools`, tốc độ, giá).
 

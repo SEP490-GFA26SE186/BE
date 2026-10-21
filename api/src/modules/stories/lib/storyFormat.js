@@ -99,6 +99,9 @@ export function formatStoryDetail(story, { voice = '' } = {}) {
         answerEmotion: c.answerEmotion,
         hint: c.hint,
         origin: c.origin,
+        scored: c.scored ?? false,
+        // Truyen AI: cau hoi theo khung chuyen gia, phu huynh/nguoi ban khong sua; chi truyen tu viet sua duoc.
+        locked: story.length !== 'custom',
         options: [...(c.options ?? [])].sort(byKey('optionOrder')).map((o) => ({
           id: o.id,
           optionOrder: o.optionOrder,

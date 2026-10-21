@@ -31,7 +31,7 @@ before(async () => {
   earnings = await import('../../src/modules/wallets/earningLedger.js');
   ({ setPayosPayoutClient } = await import('../../src/clients/payos.js'));
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
-  const mod = await prisma.user.findFirst({ where: { role: 'moderator' } });
+  const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => s.key.startsWith('market.'))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }

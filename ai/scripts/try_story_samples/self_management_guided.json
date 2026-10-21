@@ -1,0 +1,73 @@
+{
+  "request_id": "try-self-management-guided",
+  "topic": {
+    "title": "Khi con giận dữ",
+    "competency": "self_management",
+    "guidance": "Giúp trẻ nhận ra cơn giận trong cơ thể và dừng lại trước khi làm đau người khác.",
+    "age_min": 6,
+    "age_max": 9,
+    "sub_skills": [
+      {"name": "Nhận ra cơn giận trong cơ thể", "description": "Trẻ nhận ra các dấu hiệu cơ thể khi cơn giận đến: mặt nóng, tim đập nhanh, tay nắm chặt."},
+      {"name": "Dừng lại và hạ nhiệt", "description": "Trẻ biết dừng lại, hít thở sâu hoặc đếm chậm trước khi phản ứng."}
+    ]
+  },
+  "characters": [
+    {"token": "{NV1}", "description": "bé trai 7 tuổi, tóc ngắn, áo xanh", "is_main": true},
+    {"token": "{NV2}", "description": "em gái 4 tuổi, buộc tóc hai bên", "is_main": false},
+    {"token": "{NV3}", "description": "bà nội", "is_main": false}
+  ],
+  "situation": "{NV1} đang xếp tháp gỗ thật cao thì {NV2} chạy qua làm đổ. {NV1} hét lên và định đẩy em.",
+  "tone": "gentle",
+  "pages": ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"],
+  "checkpoints": [
+    {
+      "id": "k1", "type": "emotion_self", "after": "p2",
+      "guide": {
+        "sub_skill": "Nhận ra cơn giận trong cơ thể",
+        "question_frame": "Hỏi trẻ: khi tháp đổ, cơ thể nhân vật chính báo hiệu cảm xúc gì?",
+        "page_setup": "Tả tháp đổ và cơ thể nhân vật chính: mặt nóng bừng, tay nắm chặt, thở nhanh; không gọi tên cảm xúc.",
+        "hint_guidance": "Nhắc lại mặt nóng bừng và đôi tay nắm chặt của nhân vật chính.",
+        "allowed_emotions": ["angry"]
+      }
+    },
+    {
+      "id": "k2", "type": "perspective", "after": "p4",
+      "guide": {
+        "sub_skill": "Nhận ra cơn giận trong cơ thể",
+        "question_frame": "Hỏi trẻ vì sao em gái đứng im và ôm chặt con gấu sau khi anh hét.",
+        "page_setup": "Nhân vật chính hét to; em gái giật mình lùi lại, ôm chặt con gấu.",
+        "hint_guidance": "Nhắc lại tiếng hét to ngay trước đó.",
+        "correct_desc": "Em giật mình vì tiếng hét to của anh.",
+        "distractor_desc": "Lý do nghe có vẻ hợp lý nhưng không khớp với việc vừa xảy ra (em buồn ngủ, em muốn ăn bánh)."
+      }
+    },
+    {
+      "id": "k3", "type": "problem_solving", "after": "p5",
+      "guide": {
+        "sub_skill": "Dừng lại và hạ nhiệt",
+        "question_frame": "Hỏi trẻ: nếu là nhân vật chính, đang rất bực, con sẽ làm gì ngay lúc này?",
+        "page_setup": "Cao trào: nhân vật chính giơ tay định đẩy em thì nghe bà gọi; nhân vật chính đứng trước lựa chọn.",
+        "roles": {
+          "constructive": "Dừng lại, hít thở sâu và đếm chậm đến năm.",
+          "avoidant": "Chạy vào phòng đóng cửa, không nói gì với ai.",
+          "impulsive": "Gạt hết số gỗ còn lại xuống sàn."
+        }
+      }
+    },
+    {"id": "k4", "type": "reflection", "after": "p8"}
+  ],
+  "limits": {
+    "page_min_words": 20,
+    "page_max_words": 70,
+    "page_target_min_words": 40,
+    "page_target_max_words": 60,
+    "sentence_max_words": 15,
+    "question_max_words": 15,
+    "option_max_words": 12,
+    "hint_max_words": 20,
+    "feedback_max_words": 25,
+    "max_scenes": 4
+  },
+  "forbidden_terms": ["An", "Bin"],
+  "blocked_keywords": [{"keyword": "đánh", "severity": "warn"}]
+}

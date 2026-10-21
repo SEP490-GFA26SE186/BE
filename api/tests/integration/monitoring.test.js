@@ -17,7 +17,7 @@ before(async () => {
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
   await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
-  const mod = await prisma.user.findFirst({ where: { role: 'moderator' } });
+  const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => /^(market|moderation)\./.test(s.key))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
@@ -63,7 +63,7 @@ async function publishedListing(existingSeller) {
   return { seller: s, listing };
 }
 
-/** Moderator nhan luot duyet, xem het trang, tick du checklist, quyet dinh. */
+/** Specialist nhan luot duyet, xem het trang, tick du checklist, quyet dinh. */
 async function decideReview(mod, reviewId, body) {
   const claim = await call(mod.token, 'POST', `/moderation/submissions/${reviewId}/claim`);
   assert.equal(claim.status, 200, JSON.stringify(claim.body));
@@ -100,7 +100,7 @@ test('bao cao: trung -> 409, tu bao cao truyen minh -> 422; du 3 nguoi khac nhau
   assert.equal(blocked.status, 422);
   assert.match(blocked.body.message, /tạm gỡ/);
 
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const groups = (await call(mod.token, 'GET', '/moderation/reports')).body.data.groups;
   const g = groups.find((x) => x.listing.id === listing.id);
   assert.equal(g.reports.length, 3);
@@ -111,7 +111,7 @@ test('bao cao: trung -> 409, tu bao cao truyen minh -> 422; du 3 nguoi khac nhau
 });
 
 test('hau kiem: go han -> archived + bao cao resolved + tu canh cao; giu -> ban lai + bao cao dismissed', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const { seller, listing } = await publishedListing();
   for (let i = 0; i < 3; i++) await report((await createParent()).token, listing.id);
   const review = await prisma.moderationReview.findFirst({ where: { listingId: listing.id, decidedAt: null } });
@@ -131,7 +131,7 @@ test('hau kiem: go han -> archived + bao cao resolved + tu canh cao; giu -> ban 
   assert.equal(mine.strikes[0].source, 'takedown');
   assert.equal(mine.strikes[0].issuer, undefined, 'nguoi ban khong thay ten kiem duyet vien');
 
-  // Moderator chu dong tam go truyen khac, xem lai thay on -> giu
+  // Specialist chu dong tam go truyen khac, xem lai thay on -> giu
   const other = await publishedListing();
   assert.equal((await call(mod.token, 'POST', `/moderation/listings/${other.listing.id}/suspend`, { reason: 'Kiểm tra lại' })).status, 200);
   assert.equal((await call(mod.token, 'POST', `/moderation/listings/${other.listing.id}/suspend`, { reason: 'Kiểm tra lại' })).status, 409);
@@ -145,7 +145,7 @@ test('hau kiem: go han -> archived + bao cao resolved + tu canh cao; giu -> ban 
 });
 
 test('canh cao: du 3 -> khoa tai khoan ban (an truyen khoi cho); khang nghi -> Admin khac nguoi ra canh cao xet; chap thuan -> mo lai', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const admin = await createUser({ role: 'admin' });
   const { seller, listing } = await publishedListing();
   const buyer = await createParent();
@@ -165,7 +165,7 @@ test('canh cao: du 3 -> khoa tai khoan ban (an truyen khoi cho); khang nghi -> A
   const ap = await call(seller.token, 'POST', `/sellers/me/strikes/${target.id}/appeal`, { reason: 'Truyện đã được sửa, cảnh này không có ý gây sợ cho bé.' });
   assert.equal(ap.status, 201, JSON.stringify(ap.body));
   assert.equal((await call(seller.token, 'POST', `/sellers/me/strikes/${target.id}/appeal`, { reason: 'Truyện đã được sửa, cảnh này không có ý gây sợ cho bé.' })).status, 409);
-  assert.equal((await call(mod.token, 'GET', '/admin/appeals')).status, 403, 'Moderator khong xet khang nghi');
+  assert.equal((await call(mod.token, 'GET', '/admin/appeals')).status, 403, 'Specialist khong xet khang nghi');
 
   const pending = (await call(admin.token, 'GET', '/admin/appeals')).body.data.appeals;
   assert.ok(pending.some((a) => a.id === ap.body.data.appealId && a.strike.seller.id === seller.user.id));
@@ -183,8 +183,8 @@ test('canh cao: du 3 -> khoa tai khoan ban (an truyen khoi cho); khang nghi -> A
   assert.ok((await prisma.adminAuditLog.count({ where: { targetType: 'strike_appeal', targetId: ap.body.data.appealId } })) >= 1);
 });
 
-test('kiem tra ngau nhien: Moderator tao dot -> luot random_audit tren truyen dang ban, khong trung luot dang mo', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+test('kiem tra ngau nhien: Specialist tao dot -> luot random_audit tren truyen dang ban, khong trung luot dang mo', { skip }, async () => {
+  const mod = await createUser({ role: 'specialist' });
   await publishedListing();
   const run = await call(mod.token, 'POST', '/moderation/audits/run', { count: 2 });
   assert.equal(run.status, 201, JSON.stringify(run.body));
@@ -201,7 +201,7 @@ test('kiem tra ngau nhien: Moderator tao dot -> luot random_audit tren truyen da
 });
 
 test('canh bao AI: phu huynh nhieu luot bi chan -> gan co; tam khoa quyen dung AI -> sinh truyen 403; mo khoa', { skip }, async () => {
-  const mod = await createUser({ role: 'moderator' });
+  const mod = await createUser({ role: 'specialist' });
   const parent = await withPlan('FAMILY_MONTH');
   const child = await createChild(parent.user.id, 'Bin');
   const bin = await createCharacter(parent.user.id, 'Bin', { childId: child.id });

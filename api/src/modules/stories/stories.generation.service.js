@@ -7,6 +7,7 @@ import ApiError from '../../utils/ApiError.js';
 import { AI_JOB } from '../../queues/ai.jobs.js';
 import { holdCredit } from '../wallets/creditLedger.js';
 import { loadStorySettings } from './lib/storySettings.js';
+import { loadImageCosts } from './stories.images.store.js';
 import { STALE_AFTER_MS, isStaleRequest, parseErrorMessage, withTimeout } from './lib/generationStatus.js';
 import { findGenerationNameIssues } from './lib/preflight.js';
 import { loadOwnedStory, loadStoryForRead } from './stories.access.js';
@@ -104,7 +105,7 @@ export async function startGeneration(
       'Truyện tự viết không dùng được AI viết chữ. Hãy chỉnh sửa trực tiếp các trang.',
     );
   }
-  // Luong 7.6: Moderator tam khoa quyen dung AI (van doc truyen / tu viet duoc)
+  // Luong 7.6: Specialist tam khoa quyen dung AI (van doc truyen / tu viet duoc)
   const { aiBlockedUntil } = await prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { aiBlockedUntil: true } });
   if (aiBlockedUntil && aiBlockedUntil > new Date()) {
     throw ApiError.forbidden(
@@ -112,7 +113,8 @@ export async function startGeneration(
     );
   }
   await assertNoLeftoverNames(storyId);
-  const { storyTextCost: cost } = await loadStorySettings(prisma);
+  const { storyTextCost } = await loadStorySettings(prisma);
+  const cost = storyTextCost[story.length];
   const aiRequestId = randomUUID();
 
   await prisma.$transaction(async (tx) => {
@@ -220,4 +222,19 @@ export async function getGeneration(user, storyId, { now = new Date() } = {}) {
   return toGeneration(request);
 }
 
-export default { startGeneration, getGeneration };
+/** Bang gia AI viet truyen cho trang tao truyen: moi do dai -> so trang, so diem dung, credit. */
+export async function getAiPricing() {
+  const [{ layouts, storyTextCost }, imageCosts] = await Promise.all([loadStorySettings(prisma), loadImageCosts(prisma)]);
+  return {
+    // Tranh AI: moi canh (toi da 4) + chan dung con thieu cua nhan vat trong truyen.
+    images: { characterPortrait: imageCosts[AI_JOB.CHARACTER_PORTRAIT], scene: imageCosts[AI_JOB.SCENE_IMAGE], maxScenes: 4 },
+    lengths: Object.entries(layouts).map(([length, layout]) => ({
+      length,
+      pages: layout.pages,
+      checkpoints: layout.checkpoints.length,
+      credits: storyTextCost[length],
+    })),
+  };
+}
+
+export default { startGeneration, getGeneration, getAiPricing };

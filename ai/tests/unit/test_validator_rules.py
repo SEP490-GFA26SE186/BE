@@ -577,3 +577,32 @@ def test_docs_sample_has_no_retry_issue() -> None:
     )
     issues = validate(ValidationContext(frame=frame, output=output, attempt=1))
     assert [i for i in issues if i.severity is Severity.RETRY] == [], issues
+
+
+# ---- Task 11: EMOTION_NOT_ALLOWED (guide.allowed_emotions) ----
+
+
+def test_emotion_not_allowed_by_guide() -> None:
+    code = "EMOTION_NOT_ALLOWED"
+    frame = make_frame("long", guides=True)  # k4 emotion_other allows sad, scared
+    good = lo.set_checkpoint_field(valid_output(frame), "k4", "answer", "sad")
+    good = lo.set_checkpoint_field(good, "k1", "answer", "angry")
+    assert run(frame, good, code) == []
+    bad = lo.set_checkpoint_field(good, "k4", "answer", "angry")
+    assert_one(run(frame, bad, code), code, "k4", "k4", "angry", "sad, scared", count=1)
+
+
+def test_emotion_not_allowed_skips_unguided_empty_and_invalid() -> None:
+    code = "EMOTION_NOT_ALLOWED"
+    plain = make_frame("long")
+    assert run(plain, lo.set_checkpoint_field(valid_output(plain), "k4", "answer", "angry"), code) == []
+    guided = make_frame("long", guides=True)
+    out = lo.set_checkpoint_field(valid_output(guided), "k1", "answer", "angry")
+    out = lo.set_checkpoint_field(out, "k4", "answer", "tired")  # #7's business
+    assert run(guided, out, code) == []
+    payload = guided.model_dump(mode="json", by_alias=True)
+    payload["checkpoints"][3]["guide"]["allowed_emotions"] = []
+    payload["checkpoints"][0]["guide"]["allowed_emotions"] = None
+    empty = StoryGenerateRequest.model_validate(payload)
+    happy = lo.set_checkpoint_field(valid_output(empty), "k4", "answer", "happy")
+    assert run(empty, happy, code) == []

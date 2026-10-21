@@ -6,7 +6,8 @@ import {
   createParent,
   createChild,
   createCharacter,
-  getSeededTopic,
+  createFixedSlotTopic,
+  retireTopic,
   startServer,
 } from './_fixtures.js';
 
@@ -17,10 +18,12 @@ let topic;
 before(async () => {
   if (skip) return;
   api = await startServer();
-  topic = await getSeededTopic();
+  // Kieu diem dung co dinh (emotion_self, perspective, problem_solving) thay vi chon mau ngau nhien.
+  topic = await createFixedSlotTopic();
 });
 
 after(async () => {
+  if (topic) await retireTopic(topic);
   if (api) await api.close();
   await prisma.$disconnect();
 });
@@ -141,20 +144,58 @@ test('trang thai: truyen ready xoa trang mot trang -> draft, reviewedAt giu nguy
 
 // ---------------------------------------------------------------------------
 // PUT /:id/checkpoints/:cpId
+// Truyen AI: cau hoi theo khung chuyen gia -> khoa (422). Truyen custom: sua tu do.
 // ---------------------------------------------------------------------------
 
-test('updateCheckpoint: kieu cam xuc gui question thieu answerEmotion -> 400', { skip }, async () => {
+/** Truyen tu viet + 1 diem dung `type` sau trang 3. */
+async function customCp(f, type) {
+  const story = await createStory(f, 'custom');
+  const add = await call(f, 'POST', `/stories/${story.id}/checkpoints`, {
+    type,
+    afterPageId: story.pages[type === 'reflection' ? story.pages.length - 1 : 2].id,
+  });
+  assert.equal(add.status, 201, JSON.stringify(add.body));
+  return { story, cp: add.body.data.story.checkpoints[0] };
+}
+
+test('updateCheckpoint: truyen AI -> 422, cau hoi trong DB khong doi', { skip }, async () => {
   const f = await family();
   const story = await createStory(f);
   const cp = cpOf(story, 'emotion_self');
+  assert.equal(cp.locked, true);
+  await prisma.storyCheckpoint.update({ where: { id: cp.id }, data: { question: 'Câu của chuyên gia' } });
+  const res = await call(f, 'PUT', `/stories/${story.id}/checkpoints/${cp.id}`, {
+    question: 'Bin thấy sao?',
+    answerEmotion: 'sad',
+  });
+  assert.equal(res.status, 422);
+  assert.equal(res.body.message, 'Câu hỏi của truyện AI theo khung của chuyên gia, không sửa được.');
+  const row = await prisma.storyCheckpoint.findUnique({ where: { id: cp.id } });
+  assert.equal(row.question, 'Câu của chuyên gia');
+  assert.equal(row.origin, 'human');
+
+});
+
+test('updateCheckpoint: truyen custom -> 200, locked=false, scored van false', { skip }, async () => {
+  const f = await family();
+  const { story, cp } = await customCp(f, 'reflection');
+  assert.equal(cp.locked, false);
+  assert.equal(cp.scored, false);
+  const res = await call(f, 'PUT', `/stories/${story.id}/checkpoints/${cp.id}`, { question: 'Con học được gì?' });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal((await prisma.storyCheckpoint.findUnique({ where: { id: cp.id } })).scored, false);
+});
+
+test('updateCheckpoint: kieu cam xuc gui question thieu answerEmotion -> 400', { skip }, async () => {
+  const f = await family();
+  const { story, cp } = await customCp(f, 'emotion_self');
   const res = await call(f, 'PUT', `/stories/${story.id}/checkpoints/${cp.id}`, { question: 'Bin thấy sao?' });
   assert.equal(res.status, 400);
 });
 
 test('updateCheckpoint: perspective 2 phuong an hoac 2 dap an dung -> 400', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f);
-  const cp = cpOf(story, 'perspective');
+  const { story, cp } = await customCp(f, 'perspective');
   const url = `/stories/${story.id}/checkpoints/${cp.id}`;
   const two = await call(f, 'PUT', url, {
     options: [{ text: 'A', isCorrect: true }, { text: 'B', isCorrect: false }],
@@ -168,8 +209,7 @@ test('updateCheckpoint: perspective 2 phuong an hoac 2 dap an dung -> 400', { sk
 
 test('updateCheckpoint: problem_solving thieu vai -> 400', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f);
-  const cp = cpOf(story, 'problem_solving');
+  const { story, cp } = await customCp(f, 'problem_solving');
   const res = await call(f, 'PUT', `/stories/${story.id}/checkpoints/${cp.id}`, {
     options: [
       { text: 'A', role: 'constructive', feedback: 'fa' },
@@ -182,8 +222,7 @@ test('updateCheckpoint: problem_solving thieu vai -> 400', { skip }, async () =>
 
 test('updateCheckpoint: reflection gui options -> 400', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f);
-  const cp = cpOf(story, 'reflection');
+  const { story, cp } = await customCp(f, 'reflection');
   const res = await call(f, 'PUT', `/stories/${story.id}/checkpoints/${cp.id}`, {
     question: 'Con học được gì?',
     options: [{ text: 'A', isCorrect: true }],
@@ -193,8 +232,7 @@ test('updateCheckpoint: reflection gui options -> 400', { skip }, async () => {
 
 test('updateCheckpoint: chu -> token, ai -> ai_edited, xoa audio cau hoi/goi y/phuong an', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f);
-  const cp = cpOf(story, 'perspective');
+  const { story, cp } = await customCp(f, 'perspective');
   await prisma.storyCheckpoint.update({
     where: { id: cp.id },
     data: { origin: 'ai', question: 'cũ', questionAudioKey: 'q.mp3', hintAudioKey: 'h.mp3' },
@@ -243,8 +281,7 @@ test('updateCheckpoint: chu -> token, ai -> ai_edited, xoa audio cau hoi/goi y/p
 
 test('updateCheckpoint: emotion_self du question + answerEmotion -> luu; origin human giu human', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f);
-  const cp = cpOf(story, 'emotion_self');
+  const { story, cp } = await customCp(f, 'emotion_self');
   const res = await call(f, 'PUT', `/stories/${story.id}/checkpoints/${cp.id}`, {
     question: 'Bin thấy thế nào?',
     answerEmotion: 'sad',

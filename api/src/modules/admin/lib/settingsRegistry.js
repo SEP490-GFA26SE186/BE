@@ -5,9 +5,25 @@
 const int = (min, max) => ({ type: 'int', min, max });
 
 export const SETTINGS_REGISTRY = {
-  'ai_cost.story_text': {
-    group: 'ai', label: 'Credit cho một lần AI viết truyện', unit: 'credit', ...int(0, 100), default: 1,
-    hint: 'Trừ khi bắt đầu sinh, hoàn lại nếu sinh lỗi. 0 = miễn phí.',
+  'ai_cost.story_text.short': {
+    group: 'ai', label: 'Credit cho truyện AI ngắn', unit: 'credit', ...int(0, 100), default: 1,
+    hint: 'Theo độ dài truyện (số trang ở story_layout.short). Trừ khi bắt đầu viết, hoàn lại nếu lỗi. 0 = miễn phí.',
+  },
+  'ai_cost.story_text.medium': {
+    group: 'ai', label: 'Credit cho truyện AI vừa', unit: 'credit', ...int(0, 100), default: 2,
+    hint: 'Theo độ dài truyện (số trang ở story_layout.medium). Chỉ áp dụng cho lần viết mới.',
+  },
+  'ai_cost.story_text.long': {
+    group: 'ai', label: 'Credit cho truyện AI dài', unit: 'credit', ...int(0, 100), default: 3,
+    hint: 'Theo độ dài truyện (số trang ở story_layout.long). Chỉ áp dụng cho lần viết mới.',
+  },
+  'ai_cost.character_portrait': {
+    group: 'ai', label: 'Credit cho một chân dung nhân vật AI', unit: 'credit', ...int(0, 100), default: 1,
+    hint: 'Chân dung dùng làm ảnh tham chiếu cho tranh của mọi truyện. Hoàn lại nếu vẽ lỗi.',
+  },
+  'ai_cost.scene_image': {
+    group: 'ai', label: 'Credit cho một tranh cảnh AI', unit: 'credit', ...int(0, 100), default: 1,
+    hint: 'Mỗi truyện tối đa 4 cảnh. Trừ khi bắt đầu vẽ, hoàn lại nếu lỗi.',
   },
   'finance.usd_vnd': {
     group: 'ai', label: 'Tỉ giá quy đổi chi phí AI', unit: 'đ / 1 USD', ...int(15_000, 40_000), default: 26_000,

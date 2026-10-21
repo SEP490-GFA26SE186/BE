@@ -1,0 +1,34 @@
+{
+  "_note": "Fixture for scripts/compare_images.py. Scenes are real scene descriptions produced by the story pipeline (local DB, stories 'Bin và cơn giận' / 'Bin và bạn bè', 2026-10-18/19). Characters are the demo family's appearances, translated to English, no real names.",
+  "characters": [
+    {
+      "id": "boy",
+      "description": "a 6-year-old Vietnamese boy with short black hair, wearing a blue T-shirt and dark shorts"
+    },
+    {
+      "id": "grandma",
+      "description": "a kind Vietnamese grandmother with silver hair in a neat bun, round glasses, wearing a brown ao ba ba"
+    }
+  ],
+  "stories": [
+    {
+      "id": "anger",
+      "title": "Bin và cơn giận",
+      "scenes": [
+        {"description": "A cozy Vietnamese home living room in the afternoon. A boy in a blue T-shirt builds a tall wooden block castle while a grandmother in a brown ao ba ba and glasses holds a basket; blocks tumble.", "characters": ["boy", "grandma"]},
+        {"description": "Same living room. The boy with short black hair sits crying among scattered wooden blocks, holding one block. The silver-haired grandmother kneels beside him, watery-eyed and gentle.", "characters": ["boy", "grandma"]},
+        {"description": "Same living room, warm light. The boy and his grandmother sit together on the floor happily rebuilding the wooden block castle, placing a block on top.", "characters": ["boy", "grandma"]}
+      ]
+    },
+    {
+      "id": "friends",
+      "title": "Bin và bạn bè",
+      "scenes": [
+        {"description": "Rainy afternoon in a cozy Vietnamese home. A boy in a blue shirt sits on a mat with a red toy train, hugging it as his grandmother approaches.", "characters": ["boy", "grandma"]},
+        {"description": "The grandmother in a brown ao ba ba and glasses sits quietly in a corner of the mat while the boy looks at her, toy train beside him.", "characters": ["boy", "grandma"]},
+        {"description": "The boy and his grandmother happily play together with the red train and wooden carriage on the mat, a pillow tunnel nearby, rain fading outside.", "characters": ["boy", "grandma"]}
+      ]
+    }
+  ],
+  "expressions": ["happy", "sad", "angry", "scared", "neutral"]
+}

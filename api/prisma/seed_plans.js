@@ -1,5 +1,5 @@
 // =============================================================================
-// Seed: goi dich vu (rev8 plans). Nguoi dung duyet 2026-10-18. 1 truyen AI = 1 credit (ai_cost.story_text).
+// Seed: goi dich vu (rev8 plans). Nguoi dung duyet 2026-10-18. 1 truyen AI = 1-3 credit theo do dai (ai_cost.story_text.<length>).
 // upsert theo code voi update: {} — chay lai KHONG ghi de gia Admin da chinh.
 // =============================================================================
 

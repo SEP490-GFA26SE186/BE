@@ -48,12 +48,44 @@ export async function loadGenerationInput(db, aiRequestId) {
     where: { id: request.storyId },
     select: {
       situation: true,
-      topic: { select: { title: true, guidance: true, skill: { select: { caselCode: true } } } },
+      topic: {
+        select: {
+          title: true,
+          guidance: true,
+          ageMin: true,
+          ageMax: true,
+          skill: { select: { caselCode: true } },
+          subSkills: {
+            select: { subSkill: { select: { nameVi: true, descriptionVi: true, displayOrder: true } } },
+          },
+        },
+      },
       storyCharacters: {
         select: { token: true, isMain: true, character: { select: { appearance: true } } },
       },
       pages: { select: { pageOrder: true } },
-      checkpoints: { select: { type: true, targetToken: true, afterPage: { select: { pageOrder: true } } } },
+      checkpoints: {
+        select: {
+          type: true,
+          targetToken: true,
+          afterPage: { select: { pageOrder: true } },
+          subSkill: { select: { nameVi: true } },
+          templateVersion: {
+            select: {
+              questionFrame: true,
+              pageSetup: true,
+              hintGuidance: true,
+              allowedEmotions: true,
+              correctDesc: true,
+              distractorDesc: true,
+              constructiveDesc: true,
+              avoidantDesc: true,
+              impulsiveDesc: true,
+              template: { select: { answerFormat: true } },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -74,6 +106,12 @@ export async function loadGenerationInput(db, aiRequestId) {
       title: story.topic.title,
       guidance: story.topic.guidance,
       caselCode: story.topic.skill.caselCode,
+      ageMin: story.topic.ageMin,
+      ageMax: story.topic.ageMax,
+      subSkills: story.topic.subSkills
+        .map((t) => t.subSkill)
+        .sort((a, b) => a.displayOrder - b.displayOrder)
+        .map(({ nameVi, descriptionVi }) => ({ nameVi, descriptionVi })),
     },
     characters: [...story.storyCharacters]
       .sort((a, b) => tokenNumber(a.token) - tokenNumber(b.token))
@@ -83,6 +121,9 @@ export async function loadGenerationInput(db, aiRequestId) {
       type: c.type,
       targetToken: c.targetToken,
       afterPageOrder: c.afterPage.pageOrder,
+      subSkillName: c.subSkill?.nameVi ?? null,
+      answerFormat: c.templateVersion?.template.answerFormat ?? null,
+      version: c.templateVersion ?? null,
     })),
     limits: settings.limits,
     nameContext,
@@ -110,7 +151,14 @@ async function writeContent(tx, storyId, response) {
     select: {
       scenes: { select: { id: true } },
       pages: { select: { id: true, pageOrder: true } },
-      checkpoints: { select: { id: true, type: true, afterPage: { select: { pageOrder: true } } } },
+      checkpoints: {
+        select: {
+          id: true,
+          type: true,
+          afterPage: { select: { pageOrder: true } },
+          templateVersion: { select: { allowedEmotions: true } },
+        },
+      },
     },
   });
   // Response sai hinh -> AiServiceError OUTPUT_INVALID; transaction rollback ca buoc `succeeded`.
@@ -120,6 +168,7 @@ async function writeContent(tx, storyId, response) {
       id: c.id,
       type: c.type,
       afterPageOrder: c.afterPage.pageOrder,
+      allowedEmotions: c.templateVersion?.allowedEmotions ?? [],
     })),
   });
 

@@ -104,7 +104,13 @@ def _checkpoint(cp: CheckpointFrame, main: str, other: str, w: _Writer) -> LlmCh
             return LlmCheckpoint(
                 **base,
                 question=question(f"Con nghĩ {subject} đang cảm thấy thế nào?"),
-                answer=_EMOTION_ANSWER.value,
+                # Stay inside the Specialist's allowed list so the mock never trips
+                # EMOTION_NOT_ALLOWED.
+                answer=(
+                    cp.guide.allowed_emotions[0]
+                    if cp.guide and cp.guide.allowed_emotions
+                    else _EMOTION_ANSWER
+                ).value,
                 hint=hint(f"Con nhìn kỹ nét mặt của {subject} nhé.", subject),
             )
         case CheckpointType.PERSPECTIVE:
