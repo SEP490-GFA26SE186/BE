@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Cập nhật 2026-10-21:** người dùng chốt gộp còn **một tầng** — kỹ năng con chính là mục CASEL (`eq_sub_skills.source = casel | specialist`, `casel_text_en`), bảng `casel_references` đã bỏ (migration `20261029000000_sub_skill_is_casel_item`). Các phần dưới nói về `casel_references` / `caselReferenceId` là lịch sử; xem spec §5.1.
+
 **Goal:** Điểm EQ truy ngược được về CASEL: Specialist quản lý kỹ năng con + mẫu câu hỏi có phiên bản; truyện AI sinh checkpoint theo mẫu của đúng năng lực topic; chấm theo mẫu; báo cáo theo mức độ kèm bằng chứng, gợi ý trò chuyện, gợi ý topic.
 
 **Architecture:** Dữ liệu sư phạm mới (`casel_references` → `eq_sub_skills` → `question_templates`/`_versions`, `topic_sub_skills`) trong Postgres (DBML là nguồn sự thật). Backend xếp mỗi ô chấm của khung truyện thành một **phiên bản mẫu**, gửi "guide" sang service `ai`; service chỉ viết lời. Mẫu quy định *dạng trả lời*, ánh xạ về `checkpoint_type` cũ nên giao diện trẻ và output AI giữ nguyên hình dạng. Mức độ báo cáo tính lúc đọc từ `checkpoint_answers` (bỏ cache `eq_competency_stats`).
