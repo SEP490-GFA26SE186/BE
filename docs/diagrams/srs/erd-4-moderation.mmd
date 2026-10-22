@@ -1,0 +1,13 @@
+erDiagram
+  users ||--o| seller_profiles : "becomes"
+  seller_profiles ||--o{ listings : "sells"
+  listings ||--o{ product_reviews : ""
+  listings ||--o{ moderation_reviews : ""
+  moderation_reviews ||--o{ review_checklist_results : ""
+  checklist_items ||--o{ review_checklist_results : ""
+  moderation_reviews ||--o{ review_page_views : ""
+  listings |o--o{ content_reports : ""
+  product_reviews |o--o{ content_reports : ""
+  seller_profiles ||--o{ creator_strikes : ""
+  creator_strikes ||--o| strike_appeals : ""
+  users ||--o{ admin_audit_logs : "acts"

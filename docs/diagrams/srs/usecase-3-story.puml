@@ -1,0 +1,32 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #EEF3FB
+skinparam usecaseBorderColor #4A6FA5
+actor "Parent" as Parent
+rectangle "StoryWeaver AI – Story creation, bookshelf and EQ report" {
+  usecase "UC-09\nCreate story" as UC09
+  usecase "UC-10\nWrite story with AI" as UC10
+  usecase "UC-11\nEdit story" as UC11
+  usecase "UC-12\nGenerate AI illustrations" as UC12
+  usecase "UC-13\nReview story" as UC13
+  usecase "UC-14\nRetry narration" as UC14
+  usecase "UC-15\nManage bookshelf" as UC15
+  usecase "UC-16\nView EQ report" as UC16
+}
+Parent --> UC09
+Parent --> UC10
+Parent --> UC11
+Parent --> UC12
+Parent --> UC13
+Parent --> UC14
+Parent --> UC15
+Parent --> UC16
+actor "AI Service" as AIS
+UC10 --> AIS
+UC12 --> AIS
+UC13 --> AIS
+@enduml

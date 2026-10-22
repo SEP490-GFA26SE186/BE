@@ -1,0 +1,60 @@
+classDiagram
+  class PublishingRoutes {
+    +POST sellersApply()
+    +POST listings()
+    +GET moderationSubmissions()
+    +POST claim(reviewId)
+    +POST viewPage(reviewId, pageId)
+    +POST decision(reviewId)
+  }
+  class PublishingService {
+    +applySeller(user, body)
+    +decideSeller(moderator, userId, approve)
+    +createListing(user, body)
+    +getQueue()
+    +claimReview(moderator, reviewId)
+    +viewPage(moderator, reviewId, pageId)
+    +decide(moderator, reviewId, body)
+  }
+  class PublishRules {
+    +identifyingNames(story)
+    +aliasErrors(aliases)
+    +leftoverNameErrors(texts, names)
+    +reviewProgress(review)
+    +claimedByOther(review, id, now)
+  }
+  class NarrationService
+  class MonitoringService {
+    +issueStrikeTx(tx, issuer, data)
+  }
+  class SellerProfile {
+    uuid userId
+    SellerStatus status
+    string displayName
+    int totalSales
+  }
+  class Listing {
+    uuid id
+    ListingStatus status
+    uuid publishedStoryId
+    uuid priceTierId
+    int purchaseCount
+  }
+  class ModerationReview {
+    uuid id
+    ModerationReviewType reviewType
+    uuid moderatorId
+    datetime claimedAt
+    ModerationDecision decision
+    datetime decidedAt
+  }
+  class ReviewPageView
+  class ReviewChecklistResult
+  PublishingRoutes --> PublishingService
+  PublishingService --> PublishRules
+  PublishingService --> NarrationService : regenerate voice for copy
+  PublishingService --> MonitoringService : strike on reject/takedown
+  SellerProfile "1" --> "*" Listing
+  Listing "1" --> "*" ModerationReview
+  ModerationReview "1" --> "*" ReviewPageView
+  ModerationReview "1" --> "*" ReviewChecklistResult

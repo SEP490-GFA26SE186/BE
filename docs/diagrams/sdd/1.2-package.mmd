@@ -1,0 +1,40 @@
+flowchart TB
+  subgraph api [api/src]
+    direction TB
+    routes[routes/v1<br/>router index]
+    mw[middlewares<br/>auth, kidAuth, validate, error]
+    subgraph modules [modules]
+      direction LR
+      m1[auth · children · characters]
+      m2[stories · bookshelf · kid]
+      m3[topics · sub-skills · question-templates<br/>checkpoint-review · pedagogy-settings<br/>content-library · keywords · eq-skills]
+      m4[publishing · market · reviews · monitoring]
+      m5[plans · billing · refunds · wallets · admin]
+    end
+    lib[modules/*/lib<br/>pure business rules]
+    clients[clients<br/>aiClient, payos, assetUrl]
+    queues[queues<br/>ai.queue, narration.queue]
+    workers[workers<br/>ai.processor, narration.processor]
+    worker[worker.js<br/>workers + cron]
+    utils[utils / config / docs swagger]
+    prisma[prisma<br/>schema, migrations, seed]
+  end
+  subgraph ai [ai/app]
+    aapi[api/v1<br/>story, tts, images]
+    acore[core<br/>validation, content rules]
+    aprov[providers<br/>llm: claude, gemini, mock<br/>tts: vieneu, mock<br/>image: cloudflare, mock]
+    astore[storage<br/>cloudinary]
+    aprompt[prompts]
+  end
+  routes --> mw --> modules
+  modules --> lib
+  modules --> clients
+  modules --> queues
+  modules --> prisma
+  worker --> workers
+  workers --> modules
+  workers --> clients
+  clients -->|HTTP| aapi
+  aapi --> acore --> aprov
+  aapi --> astore
+  acore --> aprompt

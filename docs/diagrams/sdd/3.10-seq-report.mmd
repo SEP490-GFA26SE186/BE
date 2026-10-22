@@ -1,0 +1,20 @@
+sequenceDiagram
+  actor P as Parent
+  actor M as Specialist
+  participant API as MonitoringService
+  participant DB as PostgreSQL
+  P->>API: POST /market/listings/:id/reports {category, pageId?}
+  API->>DB: listing published? not own? not reported before?
+  API->>DB: insert content_reports(open)
+  API->>DB: distinct reporters of open reports in last 24h
+  alt >= moderation.report_threshold
+    API->>DB: listing -> suspended, open report_followup review
+  end
+  API-->>P: {reportId, suspended}
+  M->>API: claim follow-up review, view pages
+  M->>API: decision approved | taken_down
+  alt approved
+    API->>DB: listing -> published, reports resolved
+  else taken_down
+    API->>DB: listing -> archived, issueStrike
+  end

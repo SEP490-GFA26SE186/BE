@@ -1,0 +1,29 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #EEF3FB
+skinparam usecaseBorderColor #4A6FA5
+actor "Guest" as Guest
+actor "Parent" as Parent
+actor "Specialist" as Specialist
+actor "Admin" as Admin
+rectangle "StoryWeaver AI – Account management" {
+  usecase "UC-01\nRegister account" as UC01
+  usecase "UC-02\nLog in / Log out" as UC02
+  usecase "UC-03\nReset forgotten password" as UC03
+  usecase "UC-04\nChange password" as UC04
+}
+Guest --> UC01
+Parent --> UC02
+Specialist --> UC02
+Admin --> UC02
+Parent --> UC03
+Specialist --> UC03
+Admin --> UC03
+Parent --> UC04
+Specialist --> UC04
+Admin --> UC04
+@enduml

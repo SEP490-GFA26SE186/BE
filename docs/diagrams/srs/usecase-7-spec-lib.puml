@@ -1,0 +1,26 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #EEF3FB
+skinparam usecaseBorderColor #4A6FA5
+actor "Specialist" as Specialist
+rectangle "StoryWeaver AI – Specialist – pedagogical library" {
+  usecase "UC-35\nManage sub-skills" as UC35
+  usecase "UC-36\nManage topics" as UC36
+  usecase "UC-37\nManage question templates" as UC37
+  usecase "UC-38\nReview generated checkpoints" as UC38
+  usecase "UC-39\nConfigure EQ report settings" as UC39
+  usecase "UC-40\nManage blocked keywords" as UC40
+  usecase "UC-41\nManage content library" as UC41
+}
+Specialist --> UC35
+Specialist --> UC36
+Specialist --> UC37
+Specialist --> UC38
+Specialist --> UC39
+Specialist --> UC40
+Specialist --> UC41
+@enduml

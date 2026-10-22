@@ -1,0 +1,50 @@
+classDiagram
+  class MarketRoutes {
+    +GET listings()
+    +GET listing(id)
+    +GET owned()
+    +POST checkout()
+  }
+  class MarketService {
+    +listListings(query)
+    +getListing(id)
+    +listOwned(user)
+    +checkoutListing(user, listingId)
+  }
+  class BillingService {
+    +checkoutOrder(user, item)
+  }
+  class BillingStore {
+    -deliverListing(tx, buyerId, item)
+  }
+  class EarningLedger {
+    +recordEarning(tx, sellerId, amount, availableAt)
+    +releaseDueEarnings(now)
+  }
+  class ReviewsService {
+    +listReviews(listingId)
+    +upsertReview(user, listingId, body)
+    +replyReview(user, reviewId, reply)
+  }
+  class Entitlement {
+    uuid parentId
+    uuid listingId
+    datetime revokedAt
+  }
+  class Wallet {
+    WalletType type
+    bigint earningPendingVnd
+    bigint earningAvailableVnd
+  }
+  class WalletLedger {
+    LedgerEntryType entryType
+    bigint amount
+    string idempotencyKey
+  }
+  MarketRoutes --> MarketService
+  MarketService --> BillingService
+  BillingService --> BillingStore
+  BillingStore --> EarningLedger
+  BillingStore --> Entitlement
+  EarningLedger --> Wallet
+  EarningLedger --> WalletLedger
