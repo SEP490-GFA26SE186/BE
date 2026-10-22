@@ -1,4 +1,4 @@
-// Soat mau checkpoint cham diem (Specialist). Khong tra ten that / situation: token doi thanh "Bạn A/B...".
+// Soat mau checkpoint cham diem (Specialist). Khong tra ten that: token doi thanh "Bạn A/B..."; situation chi voi truyen family (da che ten).
 const bearer = [{ BearerAuth: [] }];
 const cp = { name: 'checkpointId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } };
 const q = (name, schema) => ({ name, in: 'query', schema });
@@ -9,7 +9,7 @@ export default {
     get: {
       tags,
       summary: '[Specialist] Hàng đợi soát mẫu điểm dừng chấm điểm',
-      description: 'Chỉ điểm dừng `scored = true` của truyện AI (kể cả bản đã đăng bán), mới nhất trước. Tên nhân vật thay bằng "Bạn A/B…" (bản đăng bán dùng tên đại diện); không trả tình huống. Phân trang con trỏ: `nextCursor` ở gốc phản hồi.',
+      description: 'Chỉ điểm dừng `scored = true` của truyện AI (kể cả bản đã đăng bán), mới nhất trước. Tên nhân vật thay bằng "Bạn A/B…" (bản đăng bán dùng tên đại diện). Truyện "Kể chuyện nhà mình" (`entry = family`) kèm `family { situation, momentSummary, seedEvent, source }` (đã che tên như câu hỏi; `source` = nguồn kỹ năng con của điểm dừng: moment / need / parent); truyện khác `family: null`. Phân trang con trỏ: `nextCursor` ở gốc phản hồi.',
       security: bearer,
       parameters: [
         q('status', { type: 'string', enum: ['pending', 'ok', 'flagged'] }),
@@ -19,7 +19,7 @@ export default {
         q('cursor', { type: 'string', format: 'uuid' }),
         q('limit', { type: 'integer', minimum: 1, maximum: 50, default: 20 }),
       ],
-      responses: { 200: { description: '{ data: [{ checkpointId, createdAt, skill, subSkill, template:{ id, title, version }, pageBefore, question, options:[{ text, role?, isCorrect? }], answerEmotion?, status, excludedReason? }], nextCursor }' } },
+      responses: { 200: { description: '{ data: [{ checkpointId, createdAt, skill, subSkill, template:{ id, title, version }, pageBefore, question, options:[{ text, role?, isCorrect? }], answerEmotion?, status, excludedReason?, family }], nextCursor }' } },
     },
   },
   '/checkpoint-review/stats': {

@@ -9,6 +9,7 @@ router.use(auth, authorize('specialist', 'admin'));
 router.get('/', validate(validation.list), controller.list);
 router.post('/', validate(validation.create), controller.create);
 router.put('/:id', validate(validation.update), controller.update);
+router.post('/:id/duplicate', validate(validation.duplicate), controller.duplicate);
 router.put('/:id/draft', validate(validation.draft), controller.saveDraft);
 router.post('/:id/publish', validate(validation.publish), controller.publish);
 router.delete('/:id', validate(validation.remove), controller.remove);

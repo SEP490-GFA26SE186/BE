@@ -12,6 +12,7 @@ const byKey = (key) => (a, b) => a[key] - b[key];
 export const STORY_DETAIL_INCLUDE = {
   topic: { select: { id: true, title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { id: true, name: true } } } },
+  subSkills: { orderBy: { position: 'asc' }, include: { subSkill: { select: { id: true, nameVi: true } } } },
   scenes: true,
   pages: true,
   checkpoints: { include: { options: true } },
@@ -22,6 +23,7 @@ export const STORY_DETAIL_INCLUDE = {
 export const STORY_SUMMARY_INCLUDE = {
   topic: { select: { id: true, title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { id: true, name: true } } } },
+  subSkills: { orderBy: { position: 'asc' }, include: { subSkill: { select: { id: true, nameVi: true } } } },
   _count: { select: { pages: true, checkpoints: true } },
 };
 
@@ -36,24 +38,41 @@ export function formatCharacters(storyCharacters = []) {
     }));
 }
 
-const formatHeader = (story) => ({
-  id: story.id,
-  kind: story.kind,
-  topicId: story.topicId,
-  topic: story.topic
-    ? { id: story.topic.id, title: story.topic.title, competency: story.topic.skill?.caselCode ?? null }
-    : null,
-  length: story.length,
-  title: story.title,
-  situation: story.situation,
-  useAiImage: story.useAiImage,
-  useTts: story.useTts,
-  status: story.status,
-  reviewedAt: story.reviewedAt,
-  createdAt: story.createdAt,
-  updatedAt: story.updatedAt,
-  characters: formatCharacters(story.storyCharacters),
-});
+const TOKEN_RE = /\{NV\d+\}/g;
+
+/** Token -> ten (cung bang `characters` tra ve); chi dung cho chu "Ke chuyen nha minh" (spec A.1). */
+const withNames = (text, characters) => {
+  if (text == null) return null;
+  const names = new Map(characters.map((c) => [c.token, c.name]));
+  return text.replace(TOKEN_RE, (t) => names.get(t) ?? t);
+};
+
+const formatHeader = (story) => {
+  const characters = formatCharacters(story.storyCharacters);
+  return {
+    id: story.id,
+    kind: story.kind,
+    topicId: story.topicId,
+    topic: story.topic
+      ? { id: story.topic.id, title: story.topic.title, competency: story.topic.skill?.caselCode ?? null }
+      : null,
+    length: story.length,
+    entry: story.entry ?? (story.length === 'custom' ? 'handwritten' : 'topic'),
+    scored: story.scored ?? true,
+    title: story.title,
+    situation: story.situation,
+    momentSummary: withNames(story.momentSummary ?? null, characters),
+    seedEvent: withNames(story.seedEvent ?? null, characters),
+    subSkills: (story.subSkills ?? []).map((l) => ({ id: l.subSkillId, nameVi: l.subSkill?.nameVi ?? null, source: l.source, position: l.position })),
+    useAiImage: story.useAiImage,
+    useTts: story.useTts,
+    status: story.status,
+    reviewedAt: story.reviewedAt,
+    createdAt: story.createdAt,
+    updatedAt: story.updatedAt,
+    characters,
+  };
+};
 
 /**
  * `voice`: giong hien hanh (platform_settings tts.voice) — van tay cua clip tinh theo giong, nen

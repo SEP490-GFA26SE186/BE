@@ -40,8 +40,13 @@ const storyDetailExample = {
   topicId: '11111111-2222-3333-4444-555555555555',
   topic: { id: '11111111-2222-3333-4444-555555555555', title: 'Chia sẻ đồ chơi' },
   length: 'short',
+  entry: 'topic',
+  scored: true,
   title: 'Bo và chiếc xe cứu hỏa',
-  situation: 'Bo không muốn cho bạn mượn xe cứu hỏa.',
+  situation: null,
+  momentSummary: null, // truyen family: khoanh khac kho (da thay ten that)
+  seedEvent: null, // truyen family: tinh tiet AI them (da thay ten that)
+  subSkills: [], // truyen family: [{ id, nameVi, source: moment|need|parent, position }] (1 = ky nang chinh)
   useAiImage: false,
   useTts: true,
   status: 'ready',
@@ -110,14 +115,16 @@ const editorErrors = {
 };
 
 const storiesPaths = {
-  '/stories': {
+  '/stories/analyze': {
     post: {
       tags: ['Stories'],
-      summary: '[Parent] Tạo truyện nháp',
+      summary: '[Parent] Phân tích lời kể "Kể chuyện nhà mình"',
       description:
-        `${OWNER}\nTạo truyện \`kind = private\`, \`status = draft\` cùng khung trang/cảnh/điểm dừng trống, dựng theo \`length\` ` +
-        '(cấu hình `story_layout.*` trong `platform_settings`). Chưa có chữ và chưa tốn credit; gọi `POST /stories/{id}/generate` để AI viết chữ. ' +
-        'Nếu `situation` chứa tên bé chưa có trong truyện, trả `422`. Truyện `custom` chỉ có khung tối thiểu, phụ huynh tự viết.',
+        '**Quyền truy cập:** phụ huynh. Gọi đồng bộ AI (có thể 10–90 giây), **không trừ credit**; tối đa ' +
+        '`limits.story_analysis_per_day` lượt/ngày (mặc định 30). Lời kể được thay tên thật bằng token trước khi gửi AI. ' +
+        'AI tìm khoảnh khắc khó (`momentSummary`) hoặc, nếu không có, thêm một tình tiết nhỏ (`seedEvent`), và chọn 1–2 kỹ năng con ' +
+        'trong danh mục đang dùng (`position` 1 = kỹ năng chính). "Đổi kỹ năng": gửi lại kèm `subSkillIds` → token mới. ' +
+        'Chữ trả về đã thay tên thật. Gửi `analysisToken` vào `POST /stories` với `entry = family`.',
       security: bearer,
       requestBody: {
         required: true,
@@ -125,12 +132,78 @@ const storiesPaths = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['topicId', 'length', 'title', 'characters'],
+              required: ['situation', 'characters', 'length'],
               properties: {
-                topicId: { ...uuid, description: 'ID chủ đề (topic) sư phạm' },
+                situation: { type: 'string', minLength: 20, maxLength: 2000, example: 'Bin đang xếp lego thì em Na làm đổ, Bin hét lên và đẩy em ngã.' },
+                characters: charactersInput,
+                length: { type: 'string', enum: ['short', 'medium', 'long'] },
+                subSkillIds: { type: 'array', minItems: 1, maxItems: 2, items: uuid, description: 'Kỹ năng phụ huynh chọn (đầu = kỹ năng chính)' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: resp('Kết quả phân tích', {
+          success: true,
+          data: {
+            momentSummary: 'Bin giận khi em Na làm đổ tháp lego',
+            seedEvent: null,
+            subSkills: [
+              {
+                id: '11111111-0000-4000-8000-000000000001',
+                code: 'sm_managing_emotions',
+                nameVi: 'Bình tĩnh lại khi cảm xúc mạnh',
+                descriptionVi: '…',
+                skill: { id: '22222222-0000-4000-8000-000000000001', caselCode: 'self_management', nameVi: 'Tự quản lý' },
+                source: 'moment',
+                position: 1,
+              },
+            ],
+            analysisToken: 'eyJ2IjoxfQ.c2ln',
+            expiresAt: '2026-10-22T10:00:00.000Z',
+          },
+        }),
+        400: err('Dữ liệu không hợp lệ'),
+        403: err('Không phải phụ huynh, hoặc quyền dùng AI đang tạm khoá'),
+        422: err('Lời kể có từ khoá chặn / tên con chưa là nhân vật, hoặc kỹ năng đã chọn chưa dùng được'),
+        429: err('Quá số lượt phân tích trong ngày'),
+        502: err('AI lỗi: "Chưa phân tích được, thử lại"'),
+      },
+    },
+  },
+
+  '/stories': {
+    post: {
+      tags: ['Stories'],
+      summary: '[Parent] Tạo truyện nháp',
+      description:
+        `${OWNER}\nTạo truyện \`kind = private\`, \`status = draft\` cùng khung trang/cảnh/điểm dừng trống, dựng theo \`length\` ` +
+        '(cấu hình `story_layout.*` trong `platform_settings`). Chưa có chữ và chưa tốn credit; gọi `POST /stories/{id}/generate` để AI viết chữ.\n\n' +
+        'Ba lối vào (`entry`):\n' +
+        '- `topic` (Chuyện mẫu, mặc định khi thiếu `entry` với độ dài AI): bắt buộc `topicId`; **gửi `situation` → 400**.\n' +
+        '- `family` (Kể chuyện nhà mình): bắt buộc `situation` (20–2000 ký tự, khớp lời kể đã phân tích) + `analysisToken` từ ' +
+        '`POST /stories/analyze` + `characters` giống hệt lúc phân tích; không có `topicId`. `scored = false` ("Chỉ kể truyện"): ' +
+        'chỉ giữ điểm dừng `reflection`. Token sai / hết hạn / không khớp → `422` (phân tích lại). Ô chấm thứ hai (hoặc ô cuối nếu chỉ 1) ' +
+        'luôn đo kỹ năng chính.\n' +
+        '- `length = custom` (tự viết): server đặt `entry = handwritten`; `situation`, `topicId` tuỳ chọn, phụ huynh tự viết.\n\n' +
+        'Nếu `situation` chứa tên bé chưa có trong truyện, trả `422`.',
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['length', 'title', 'characters'],
+              properties: {
+                entry: { type: 'string', enum: ['topic', 'family', 'handwritten'], description: 'Thiếu với độ dài AI → `topic`; `custom` → `handwritten`' },
+                topicId: { ...uuid, description: 'ID chuyện mẫu (topic) — bắt buộc với `entry = topic`' },
                 length: { type: 'string', enum: ['short', 'medium', 'long', 'custom'] },
                 title: { type: 'string', maxLength: 200, example: 'Bo và chiếc xe cứu hỏa' },
-                situation: { type: 'string', maxLength: 2000, example: 'Bo không muốn cho bạn mượn xe cứu hỏa.' },
+                situation: { type: 'string', maxLength: 2000, description: 'Chỉ `family` (bắt buộc, ≥ 20 ký tự) và `custom`', example: 'Bo đang xếp lego thì em làm đổ tháp, Bo giận và đẩy em.' },
+                analysisToken: { type: 'string', description: '`family`: token từ `POST /stories/analyze` (hạn 2 giờ)' },
+                scored: { type: 'boolean', default: true, description: '`family`: false = "Chỉ kể truyện" (không chấm điểm)' },
                 characters: charactersInput,
                 useAiImage: { type: 'boolean', default: false },
                 useTts: { type: 'boolean', default: true },
@@ -141,8 +214,8 @@ const storiesPaths = {
       },
       responses: {
         201: detailResponse('Tạo truyện thành công, trả chi tiết truyện (chưa có chữ)'),
-        400: err('Dữ liệu không hợp lệ (thiếu nhân vật chính, trùng nhân vật…)'),
-        422: err('Tình huống chứa tên bé chưa có trong truyện, hoặc thiếu nhân vật phụ cho độ dài này'),
+        400: err('Dữ liệu không hợp lệ (thiếu nhân vật chính, trùng nhân vật, chuyện mẫu gửi `situation`…)'),
+        422: err('Tình huống chứa tên bé chưa có trong truyện, thiếu nhân vật phụ, hoặc `analysisToken` không còn dùng được / kỹ năng chính hết câu hỏi (phân tích lại)'),
       },
     },
     get: {
@@ -182,7 +255,9 @@ const storiesPaths = {
     put: {
       tags: ['Stories'],
       summary: '[Parent] Sửa thông tin truyện',
-      description: `${OWNER}\nSửa \`title\`, \`situation\`, \`useAiImage\`, \`useTts\`. Cần gửi ít nhất một trường. ${LOCKED}`,
+      description:
+        `${OWNER}\nSửa \`title\`, \`situation\`, \`useAiImage\`, \`useTts\`. Cần gửi ít nhất một trường. ${LOCKED}\n` +
+        'Truyện `entry = family`: gửi `situation` → `409` ("Muốn đổi lời kể hay nhân vật, hãy tạo truyện mới").',
       security: bearer,
       parameters: [idParam],
       requestBody: {
@@ -230,7 +305,7 @@ const storiesPaths = {
       summary: '[Parent] Đổi nhân vật của truyện',
       description:
         `${OWNER}\nChỉ đổi được khi **chưa trang nào có chữ** (đổi sau khi có chữ làm token trỏ sai người). ` +
-        'Token của điểm dừng được đưa về nhân vật phụ đầu tiên mới. ' +
+        'Token của điểm dừng được đưa về nhân vật phụ đầu tiên mới. Truyện `entry = family` luôn trả `409`. ' +
         LOCKED,
       security: bearer,
       parameters: [idParam],

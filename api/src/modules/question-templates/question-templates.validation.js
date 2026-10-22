@@ -13,10 +13,34 @@ const list = z.object({
     isActive: z.enum(['true', 'false']).optional(),
   }),
 });
+// Noi dung nhap: moi truong tuy chon (nhap duoc phep do); du/thieu kiem khi ban hanh.
+const content = z
+  .object({
+    questionFrame: text,
+    pageSetup: text.nullable(),
+    needsTarget: z.boolean(),
+    allowedEmotions: z.array(emotion).max(5),
+    correctDesc: text.nullable(),
+    distractorDesc: text.nullable(),
+    constructiveDesc: text.nullable(),
+    avoidantDesc: text.nullable(),
+    impulsiveDesc: text.nullable(),
+    constructiveScore: score.nullable(),
+    avoidantScore: score.nullable(),
+    impulsiveScore: score.nullable(),
+    hintGuidance: text.nullable(),
+    parentPrompts: z.array(z.string().trim().min(1).max(500)).max(5),
+    rationale: text.nullable(),
+    referenceUrl: z.string().trim().url('Đường dẫn không hợp lệ').max(500).nullable(),
+  })
+  .partial();
+
+// Mot man hinh tao + soan (spec family-story §4.2): ten tuy chon (de trong -> tu sinh tu questionFrame),
+// kem noi dung ban nhap v1 tuy chon.
 const create = z.object({
-  body: z.object({
+  body: content.extend({
     subSkillId: uuid,
-    title: z.string().trim().min(3, 'Tên mẫu tối thiểu 3 ký tự').max(200),
+    title: z.union([z.string().trim().min(3, 'Tên mẫu tối thiểu 3 ký tự').max(200), z.string().trim().max(0)]).optional(),
     answerFormat: format,
   }),
 });
@@ -24,30 +48,10 @@ const update = z.object({
   params: z.object({ id: uuid }),
   body: z.object({ title: z.string().trim().min(3).max(200).optional(), isActive: z.boolean().optional() }).refine((b) => Object.keys(b).length > 0, 'Không có gì để sửa'),
 });
-// Noi dung nhap: moi truong tuy chon (nhap duoc phep do); du/thieu kiem khi ban hanh.
 const draft = z.object({
   params: z.object({ id: uuid }),
-  body: z
-    .object({
-      questionFrame: text,
-      pageSetup: text.nullable(),
-      needsTarget: z.boolean(),
-      allowedEmotions: z.array(emotion).max(5),
-      correctDesc: text.nullable(),
-      distractorDesc: text.nullable(),
-      constructiveDesc: text.nullable(),
-      avoidantDesc: text.nullable(),
-      impulsiveDesc: text.nullable(),
-      constructiveScore: score.nullable(),
-      avoidantScore: score.nullable(),
-      impulsiveScore: score.nullable(),
-      hintGuidance: text.nullable(),
-      parentPrompts: z.array(z.string().trim().min(1).max(500)).max(5),
-      rationale: text.nullable(),
-      referenceUrl: z.string().trim().url('Đường dẫn không hợp lệ').max(500).nullable(),
-    })
-    .partial(),
+  body: content,
 });
 const id = z.object({ params: z.object({ id: uuid }) });
 
-export default { list, create, update, draft, publish: id, remove: id };
+export default { list, create, update, draft, publish: id, remove: id, duplicate: id };

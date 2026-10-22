@@ -100,3 +100,55 @@ test('mau cau hoi: xoa 409 khi checkpoint dang dung 1 phien ban', { skip }, asyn
   assert.equal(del.status, 409);
   assert.equal(await prisma.questionTemplate.count({ where: { id: t.id } }), 1);
 });
+
+test('mau cau hoi: mac dinh ban nhap dau (diem 1/0,5/0, CASEL), ban hanh khong can page_setup/hint, 1 cau goi y', { skip }, async () => {
+  const created = await tpl('role_choice');
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const t = created.body.data;
+  assert.deepEqual([t.draft.constructiveScore, t.draft.avoidantScore, t.draft.impulsiveScore], [1, 0.5, 0]);
+  assert.match(t.draft.referenceUrl, /casel\.org/);
+  const emo = await tpl('emotion_pick');
+  assert.deepEqual([...emo.body.data.draft.allowedEmotions].sort(), ['angry', 'happy', 'neutral', 'sad', 'scared']);
+
+  const lean = {
+    questionFrame: 'Bé được hỏi sẽ làm gì khi bị giành đồ', parentPrompts: ['Con sẽ làm gì?'], rationale: 'Giải quyết vấn đề.',
+    constructiveDesc: 'Nói với bạn', avoidantDesc: 'Bỏ đi', impulsiveDesc: 'Giật lại',
+  };
+  assert.equal((await call(spec.token, 'PUT', `/question-templates/${t.id}/draft`, lean)).status, 200);
+  const pub = await call(spec.token, 'POST', `/question-templates/${t.id}/publish`);
+  assert.equal(pub.status, 200, JSON.stringify(pub.body));
+  assert.equal(pub.body.data.latestPublished.pageSetup, null);
+});
+
+test('mau cau hoi: tao kem noi dung, ten de trong -> tu sinh tu questionFrame', { skip }, async () => {
+  const frame = 'Bé được hỏi về cảm xúc của bạn khi bị lấy mất đồ chơi yêu thích nhất trong giờ chơi';
+  const res = await call(spec.token, 'POST', '/question-templates', { subSkillId: subSkill.id, answerFormat: 'emotion_pick', questionFrame: frame });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.ok(res.body.data.title.length <= 61);
+  assert.ok(frame.startsWith(res.body.data.title.replace('…', '')));
+  assert.equal(res.body.data.draft.questionFrame, frame);
+  assert.equal((await call(spec.token, 'POST', '/question-templates', { subSkillId: subSkill.id, answerFormat: 'emotion_pick' })).status, 400);
+});
+
+test('POST /question-templates/:id/duplicate: mau moi cung ky nang con/dang, nhap v1 chep ban published', { skip }, async () => {
+  const t = (await tpl('role_choice')).body.data;
+  await call(spec.token, 'PUT', `/question-templates/${t.id}/draft`, full);
+  await call(spec.token, 'POST', `/question-templates/${t.id}/publish`);
+  await call(spec.token, 'PUT', `/question-templates/${t.id}/draft`, { questionFrame: 'Ban nhap moi chua ban hanh' });
+
+  const dup = await call(spec.token, 'POST', `/question-templates/${t.id}/duplicate`);
+  assert.equal(dup.status, 201, JSON.stringify(dup.body));
+  const d = dup.body.data;
+  assert.notEqual(d.id, t.id);
+  assert.equal(d.subSkillId, t.subSkillId);
+  assert.equal(d.answerFormat, 'role_choice');
+  assert.equal(d.latestPublished, null);
+  assert.equal(d.draft.version, 1);
+  assert.equal(d.draft.questionFrame, full.questionFrame);
+  assert.equal(d.draft.avoidantScore, 0.5);
+  assert.match(d.title, /bản sao/);
+
+  const parent = await createParent();
+  assert.equal((await call(parent.token, 'POST', `/question-templates/${t.id}/duplicate`)).status, 403);
+  assert.equal((await call(spec.token, 'POST', '/question-templates/00000000-0000-4000-8000-000000000000/duplicate')).status, 404);
+});

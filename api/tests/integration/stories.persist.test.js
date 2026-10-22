@@ -72,7 +72,6 @@ async function createStory(f) {
       topicId: topic.id,
       length: 'medium',
       title: 'Bin và Mít',
-      situation: 'Bin giận vì Mít lấy xe.',
       characters: [
         { characterId: f.bin.id, isMain: true },
         { characterId: f.mit.id, isMain: false },
@@ -80,6 +79,8 @@ async function createStory(f) {
     },
   });
   assert.equal(res.status, 201, JSON.stringify(res.body));
+  // Truyen chuyen mau cu (truoc spec family-story) con `situation`: van gui AI nhu boi canh bo sung.
+  await prisma.story.update({ where: { id: res.body.data.story.id }, data: { situation: '{NV1} giận vì {NV2} lấy xe.' } });
   return res.body.data.story;
 }
 

@@ -1,5 +1,5 @@
 # =============================================================================
-# ai/ CHAY NGOAI DOCKER (chi dev) — worker trong Docker goi ai/ tren may host.
+# ai/ CHAY NGOAI DOCKER (chi dev) — worker (va api, cho buoc phan tich loi ke) trong Docker goi ai/ tren may host.
 #
 # Vi sao: chu that cho dev dung `LLM_PROVIDER=claude_code` (CLI `claude` dang dang nhap tren may),
 # ma CLI do khong co trong image; VieNeu-TTS chay thang tren Windows cung nhanh gap ~2 lan trong
@@ -16,6 +16,12 @@
 # =============================================================================
 
 services:
+  api:
+    # POST /stories/analyze goi ai/ dong bo tu api.
+    environment:
+      AI_SERVICE_URL: http://host.docker.internal:8001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   worker:
     environment:
       AI_SERVICE_URL: http://host.docker.internal:8001

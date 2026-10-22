@@ -59,7 +59,10 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-storyweaver}
-      # CO Y khong co AI_SERVICE_URL: moi yeu cau sinh noi dung phai qua queue.
+      # Sinh noi dung (chu, anh, giong doc) van qua queue. Ngoai le duy nhat: phan tich loi ke
+      # (POST /stories/analyze) goi ai/ dong bo, ngan, khong tru credit — nen api can URL + token.
+      AI_SERVICE_URL: http://ai:8000
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
     ports:
       - "3000:3000"
     depends_on:

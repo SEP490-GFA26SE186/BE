@@ -77,9 +77,9 @@ export async function createFixedSlotTopic({ formats = FIXED_FORMATS } = {}) {
   const seeded = await getSeededTopic();
   const link = await prisma.topicSubSkill.findFirst({
     where: { topicId: seeded.id },
-    select: { subSkill: { select: { skillId: true, caselReferenceId: true } } },
+    select: { subSkill: { select: { skillId: true } } },
   });
-  const { skillId, caselReferenceId } = link.subSkill;
+  const { skillId } = link.subSkill;
   const { user } = await createUser({ role: 'specialist' });
   const tag = rand();
   const topic = await prisma.topic.create({
@@ -88,7 +88,7 @@ export async function createFixedSlotTopic({ formats = FIXED_FORMATS } = {}) {
   for (const [i, [answerFormat, needsTarget]] of formats.entries()) {
     const sub = await prisma.eqSubSkill.create({
       data: {
-        skillId, caselReferenceId, code: `it_fixed_${tag}_${i}`, nameVi: `Kỹ năng cố định ${tag} ${i}`,
+        skillId, code: `it_fixed_${tag}_${i}`, nameVi: `Kỹ năng cố định ${tag} ${i}`,
         descriptionVi: 'x', displayOrder: i, createdBy: user.id,
       },
     });

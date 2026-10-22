@@ -30,9 +30,9 @@ const skills = [
   { id: 'k1', caselCode: 'self_awareness', nameVi: 'Tự nhận thức', displayOrder: 1 },
 ];
 const subSkills = [
-  { id: 'a', skillId: 'k1', nameVi: 'Gọi tên cảm xúc', displayOrder: 1, caselReference: { textEn: 'Identify emotions' } },
-  { id: 'b', skillId: 'k1', nameVi: 'Nhận ra điểm mạnh', displayOrder: 2, caselReference: { textEn: 'Recognize strengths' } },
-  { id: 'c', skillId: 'k2', nameVi: 'Bình tĩnh', displayOrder: 1, caselReference: { textEn: 'Manage emotions' } },
+  { id: 'a', skillId: 'k1', nameVi: 'Gọi tên cảm xúc', displayOrder: 1, caselTextEn: 'Identify emotions' },
+  { id: 'b', skillId: 'k1', nameVi: 'Nhận ra điểm mạnh', displayOrder: 2, caselTextEn: 'Recognize strengths' },
+  { id: 'c', skillId: 'k2', nameVi: 'Bình tĩnh', displayOrder: 1, caselTextEn: 'Manage emotions' },
 ];
 const at = (i) => new Date(Date.UTC(2026, 9, 20) - i * 60_000);
 const rows = (subSkillId, scores) => scores.map((score, i) => ({ subSkillId, score, answeredAt: at(i) }));

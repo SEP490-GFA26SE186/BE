@@ -1,4 +1,4 @@
-// Kiem tra du lieu seed su pham (khong can DB): 40 muc CASEL, 23 ky nang con (Phu luc A cua spec),
+// Kiem tra du lieu seed su pham (khong can DB): 40 muc CASEL (= 40 ky nang con source casel), 23 muc bat san (Phu luc A cua spec),
 // mau cau hoi dung dang tra loi, topic seed gan ky nang con cung nang luc.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -72,7 +72,7 @@ test('casel: dung 40 muc, 9/7/8/9/7 theo nang luc, code + thu tu khong trung', (
   assert.equal(CASEL_URL, 'https://casel.org/fundamentals-of-sel/what-is-the-casel-framework/');
 });
 
-test('ky nang con: 23 muc, moi muc tro ve dung muc Phu luc A, cung nang luc, tuoi 5-8', () => {
+test('ky nang con bat san: 23 muc, moi muc la dung 1 muc Phu luc A, cung nang luc, tuoi 5-8', () => {
   assert.equal(SUB_SKILLS.length, 23);
   assert.equal(subByCode.size, 23);
   const texts = SUB_SKILLS.map((s) => caselByCode.get(s.caselCode)?.textEn);
@@ -190,15 +190,24 @@ test('platform_settings: tham so bao cao EQ mac dinh (spec muc 7)', () => {
   assert.equal(v['eq_report.secure_from'], 0.8);
 });
 
-// Prisma gia lap toi thieu cho seedPedagogy: kiem luat tao mau va co publish ma khong can DB.
+// Prisma gia lap toi thieu cho seedPedagogy: kiem luat tao ky nang con / mau va co publish ma khong can DB.
+// existingSubs: { code: { id, source? } } — dong da co trong DB.
 function fakePrisma({ existingSubs = {}, templateCounts = {} } = {}) {
   const created = { subSkills: [], templates: [] };
+  const updated = [];
+  const rows = Object.entries(existingSubs).map(([code, r]) => ({ code, source: 'casel', ...r }));
   const prisma = {
     user: { findUnique: async () => ({ id: 'spec-1' }) },
     eqSkill: { findMany: async () => COMPETENCIES.map((c) => ({ id: `sk-${c}`, caselCode: c })) },
-    caselReference: { upsert: async ({ where }) => ({ id: `ref-${where.code}` }) },
     eqSubSkill: {
-      findUnique: async ({ where }) => (existingSubs[where.code] ? { id: existingSubs[where.code] } : null),
+      findMany: async ({ where }) => {
+        const [byCode, byText] = where.OR;
+        return rows.filter((r) => byCode.code.in.includes(r.code) || (r.source === 'casel' && r.caselTextEn === byText.caselTextEn));
+      },
+      update: async ({ where, data }) => {
+        updated.push({ id: where.id, data });
+        return { id: where.id };
+      },
       create: async ({ data }) => {
         created.subSkills.push(data);
         return { id: `sub-${data.code}` };
@@ -212,7 +221,7 @@ function fakePrisma({ existingSubs = {}, templateCounts = {} } = {}) {
       },
     },
   };
-  return { prisma, created };
+  return { prisma, created, updated };
 }
 
 const { seedPedagogy } = await import('../../prisma/seed_pedagogy.js');
@@ -226,11 +235,26 @@ const quiet = async (fn) => {
   }
 };
 
-test('seedPedagogy: DB trong -> tao du 23 ky nang con + tat ca mau; publish quyet dinh trang thai', async () => {
+test('seedPedagogy: DB trong -> 40 ky nang con casel (23 bat, 17 tat ten tieng Viet) + mau cua 23 muc', async () => {
   for (const publish of [true, false]) {
     const { prisma, created } = fakePrisma();
     await quiet(() => seedPedagogy(prisma, { publish }));
-    assert.equal(created.subSkills.length, 23);
+    assert.equal(created.subSkills.length, 40);
+    assert.ok(created.subSkills.every((d) => d.source === 'casel' && d.caselTextEn));
+    assert.deepEqual(new Set(created.subSkills.map((d) => d.caselTextEn)), new Set(CASEL_REFERENCES.map((c) => c.textEn)));
+    const active = created.subSkills.filter((d) => d.isActive);
+    assert.equal(active.length, 23);
+    assert.deepEqual(new Set(active.map((d) => d.code)), new Set(SUB_SKILLS.map((x) => x.code)));
+    for (const d of created.subSkills.filter((x) => !x.isActive)) {
+      const ref = caselByCode.get(d.code);
+      assert.ok(ref, d.code);
+      assert.equal(d.nameVi, ref.textVi);
+      assert.equal(d.skillId, `sk-${ref.skill}`);
+      assert.deepEqual([d.ageMin, d.ageMax], [5, 8]);
+    }
+    const emo = created.subSkills.find((d) => d.code === 'sa_emotion_naming');
+    assert.equal(emo.nameVi, subByCode.get('sa_emotion_naming').nameVi);
+    assert.equal(emo.caselTextEn, "Identifying one's emotions");
     assert.equal(created.templates.length, allTemplates.length);
     for (const t of created.templates) {
       const v = t.versions.create;
@@ -242,14 +266,40 @@ test('seedPedagogy: DB trong -> tao du 23 ky nang con + tat ca mau; publish quye
   }
 });
 
-test('seedPedagogy: ky nang con da co mau thi khong tao them (ke ca khi Specialist doi ten mau)', async () => {
+test('seedPedagogy: dong da co -> chi dat lai caselTextEn, khong ghi de ten / tuoi / bat-tat; khong tao mau khi da co', async () => {
   const [a, b] = SUB_SKILLS;
-  const { prisma, created } = fakePrisma({
-    existingSubs: { [a.code]: 'sub-a', [b.code]: 'sub-b' },
+  const inactiveRef = CASEL_REFERENCES.find((c) => !SUB_SKILLS.some((x) => x.caselCode === c.code));
+  const { prisma, created, updated } = fakePrisma({
+    existingSubs: {
+      [a.code]: { id: 'sub-a' },
+      [b.code]: { id: 'sub-b' },
+      [inactiveRef.code]: { id: 'sub-i' },
+    },
     templateCounts: { 'sub-a': 1, 'sub-b': 0 }, // a: Specialist da doi ten/giu 1 mau; b: da xoa het mau
   });
   await quiet(() => seedPedagogy(prisma, { publish: true }));
-  assert.equal(created.subSkills.length, 21);
+  assert.equal(created.subSkills.length, 37);
+  assert.equal(updated.length, 3);
+  for (const u of updated) assert.deepEqual(Object.keys(u.data), ['caselTextEn']);
+  assert.equal(updated.find((u) => u.id === 'sub-i').data.caselTextEn, inactiveRef.textEn);
   assert.ok(!created.templates.some((t) => t.subSkillId === 'sub-a'));
   assert.equal(created.templates.filter((t) => t.subSkillId === 'sub-b').length, b.templates.length);
+  assert.ok(!created.templates.some((t) => t.subSkillId === 'sub-i'));
+});
+
+test('seedPedagogy: ma goc bi ky nang con chuyen gia chiem -> tao `<ma>_casel`; tim lai dong casel theo cau tieng Anh', async () => {
+  const ref = CASEL_REFERENCES.find((c) => !SUB_SKILLS.some((x) => x.caselCode === c.code));
+  const sub = SUB_SKILLS[0];
+  const { prisma, created, updated } = fakePrisma({
+    existingSubs: {
+      [ref.code]: { id: 'sub-spec', source: 'specialist' },
+      old_custom_code: { id: 'sub-old', caselTextEn: caselByCode.get(sub.caselCode).textEn },
+    },
+    templateCounts: { 'sub-old': 2 },
+  });
+  await quiet(() => seedPedagogy(prisma, { publish: true }));
+  assert.ok(created.subSkills.some((d) => d.code === `${ref.code}_casel` && d.source === 'casel'));
+  assert.ok(!created.subSkills.some((d) => d.code === sub.code), 'khong tao trung dong casel da co ma cu');
+  assert.ok(updated.some((u) => u.id === 'sub-old'));
+  assert.ok(!updated.some((u) => u.id === 'sub-spec'));
 });

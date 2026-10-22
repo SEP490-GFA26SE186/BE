@@ -1,6 +1,6 @@
 # Hướng dẫn đọc schema — rev 8
 
-50 bảng, chia 8 khối (dọn 2026-10-18: bỏ voucher, giỏ hàng, `prompt_templates`, `child_usage_sessions`; thêm `narration_clips`. 2026-10-20: thêm 5 bảng sư phạm CASEL — `casel_references`, `eq_sub_skills`, `question_templates`, `question_template_versions`, `topic_sub_skills`). Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
+49 bảng, chia 8 khối (dọn 2026-10-18: bỏ voucher, giỏ hàng, `prompt_templates`, `child_usage_sessions`; thêm `narration_clips`. 2026-10-20: thêm bảng sư phạm CASEL — `eq_sub_skills`, `question_templates`, `question_template_versions`, `topic_sub_skills`. 2026-10-21: gộp `casel_references` vào `eq_sub_skills` — kỹ năng con chính là mục CASEL). Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
 và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để xem ERD.
 
 ## 1. Tám khối
@@ -8,7 +8,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 | Khối | Trả lời câu hỏi | Bảng chính | Bảng phụ |
 |---|---|---|---|
 | **Tài khoản** (4) | Ai dùng app, con là ai, nhà có nhân vật nào? | `users`, `child_profiles`, `characters` | `auth_tokens` |
-| **Thư viện nội dung** (11) | Specialist/Admin chuẩn bị sẵn gì? | `topics`, `eq_sub_skills`, `question_templates` | `eq_skills`, `casel_references`, `question_template_versions`, `topic_sub_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
+| **Thư viện nội dung** (10) | Specialist/Admin chuẩn bị sẵn gì? | `topics`, `eq_sub_skills`, `question_templates` | `eq_skills`, `question_template_versions`, `topic_sub_skills`, `backgrounds`, `ui_audio_assets`, `blocked_keywords`, `checklist_items` |
 | **Truyện** (8) | Một truyện gồm những gì? | `stories`, `story_pages`, `story_checkpoints` | `story_characters`, `story_scenes`, `checkpoint_options`, `narration_clips`, `bookshelf_items` |
 | **Học** (2) | Trẻ đã trả lời gì, mức EQ ra sao? | `play_sessions`, `checkpoint_answers` | (mức độ tính trực tiếp từ `checkpoint_answers`) |
 | **AI** (1) | Đã gọi AI bao nhiêu, tốn bao nhiêu? | `ai_requests` | (prompt nằm trong dịch vụ ai/) |
@@ -27,7 +27,8 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 
 **Tạo truyện**
 4. Chọn bài học "Con hay nổi giận" → đọc `topics`; kỹ năng con của bài → `topic_sub_skills` → `eq_sub_skills`
-   (mỗi kỹ năng con trỏ về đúng 1 mục `casel_references`).
+   (kỹ năng con chính là một mục CASEL: `source = casel` là 40 mục gốc có `casel_text_en` nguyên văn tiếng Anh,
+   `source = specialist` là kỹ năng chuyên gia bổ sung).
 5. Hệ thống tạo `stories` (`private`, `length = medium`), gắn nhân vật + token `{NV1}`… →
    `story_characters`, dựng 8 trang → `story_pages`, 4 điểm dừng → `story_checkpoints`; điểm dừng chấm lấy mẫu đã ban hành của kỹ năng con → ghi `sub_skill_id`, `template_version_id`, `scored = true` (truyện tự viết và câu liên hệ bản thân: `scored = false`, không kỹ năng con). Specialist có thể gắn cờ `excluded` / `reviewed_ok_*` khi soát điểm dừng.
 6. "Viết giúp tôi" → một `ai_requests` (`story_text`) → điền chữ trang, cảnh (`story_scenes`),
@@ -106,9 +107,10 @@ DBML không diễn tả được; đã ghi trong `Note` của từng bảng, t�
 - `product_reviews`: `rating BETWEEN 1 AND 5`
 - `checkpoint_answers`: `attempts BETWEEN 1 AND 2`
 - `topics`, `eq_sub_skills`: `age_min <= age_max`
+- `eq_sub_skills`: `source <> 'casel' OR casel_text_en IS NOT NULL`
 
 **Validator ở tầng service** (khác bảng, CHECK không làm được)
-- `eq_sub_skills`: mục `casel_references` phải cùng `skill_id`; `topic_sub_skills`: 1–3 kỹ năng con cùng năng lực với topic.
+- `eq_sub_skills`: mục gốc CASEL (`source = casel`) không đổi `skill_id` / `code` / `casel_text_en`, không xoá (chỉ tắt); kỹ năng chuyên gia chỉ xoá khi chưa có mẫu / bài học / điểm dừng dùng; `topic_sub_skills`: 1–3 kỹ năng con cùng năng lực với topic.
 - `checkpoint_options`: `perspective` đúng 3 phương án, đúng 1 `is_correct`; `problem_solving` đủ 3 vai.
 - Truyện `custom`: 4–20 trang, 0–6 điểm dừng có chấm, không đặt sau trang 1, `reflection` ở cuối.
 - Chỉ đưa vào giá sách khi `reviewed_at IS NOT NULL`, và phụ huynh sở hữu truyện (riêng tư hoặc có `entitlements`).

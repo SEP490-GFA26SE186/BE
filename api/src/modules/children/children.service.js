@@ -208,7 +208,7 @@ const EVIDENCE_SELECT = {
   checkpoint: {
     select: {
       type: true, question: true, answerEmotion: true,
-      story: { select: { title: true, storyCharacters: STORY_NAMES } },
+      story: { select: { title: true, entry: true, momentSummary: true, storyCharacters: STORY_NAMES } },
     },
   },
 };
@@ -234,7 +234,7 @@ async function computeReport(child, rows) {
     // Ky nang con dang bat + ky nang con da tat nhung be da co cau tra loi.
     prisma.eqSubSkill.findMany({
       where: { OR: [{ isActive: true }, { id: { in: subIds } }] },
-      select: { id: true, skillId: true, nameVi: true, displayOrder: true, caselReference: { select: { textEn: true } } },
+      select: { id: true, skillId: true, nameVi: true, displayOrder: true, caselTextEn: true },
     }),
     prisma.topic.findMany({
       where: { isActive: true },

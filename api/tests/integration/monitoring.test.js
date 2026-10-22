@@ -207,7 +207,7 @@ test('canh bao AI: phu huynh nhieu luot bi chan -> gan co; tam khoa quyen dung A
   const bin = await createCharacter(parent.user.id, 'Bin', { childId: child.id });
   const mit = await createCharacter(parent.user.id, 'Mít');
   const created = await call(parent.token, 'POST', '/stories', {
-    topicId: topic.id, length: 'short', title: 'Truyện AI', situation: 'Bé làm đổ sữa.', useTts: false, characters: [{ characterId: bin.id, isMain: true }, { characterId: mit.id, isMain: false }],
+    topicId: topic.id, length: 'short', title: 'Truyện AI', useTts: false, characters: [{ characterId: bin.id, isMain: true }, { characterId: mit.id, isMain: false }],
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const story = created.body.data.story;

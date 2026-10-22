@@ -1,0 +1,20 @@
+{
+  "request_id": "a1b2c3-analyze-demo",
+  "situation": "{NV1} đang xếp lego thì {NV2} làm đổ tháp, {NV1} giận và đẩy {NV2} ngã.",
+  "characters": [
+    {"token": "{NV1}", "description": "bé trai 6 tuổi, áo xanh", "is_main": true},
+    {"token": "{NV2}", "description": "em gái 3 tuổi", "is_main": false}
+  ],
+  "age_min": 6,
+  "age_max": 6,
+  "catalog": [
+    {"code": "SM_CALM", "name": "Bình tĩnh lại khi cảm xúc mạnh", "description": "Trẻ dùng cách hạ nhiệt khi giận hoặc buồn.", "competency": "self_management"},
+    {"code": "SA_EMPATHY", "name": "Quan tâm đến cảm xúc của người khác", "description": "Trẻ để ý và quan tâm khi người khác buồn.", "competency": "social_awareness"},
+    {"code": "RS_SHARE", "name": "Chia sẻ và thay phiên", "description": "Trẻ biết chia sẻ đồ chơi và chờ đến lượt.", "competency": "relationship_skills"}
+  ],
+  "needs": ["SA_EMPATHY", "RS_SHARE"],
+  "forced_sub_skills": [],
+  "limits": {"moment_max_words": 25, "seed_event_max_words": 30},
+  "forbidden_terms": ["Bin", "Na"],
+  "blocked_keywords": [{"keyword": "đánh", "severity": "block"}]
+}

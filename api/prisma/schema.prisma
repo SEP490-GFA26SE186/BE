@@ -130,6 +130,7 @@ enum AiRequestType {
   character_portrait
   scene_image
   narration
+  story_analysis
 
   @@map("ai_request_type")
 }
@@ -319,11 +320,37 @@ enum AnswerFormat {
   @@map("answer_format")
 }
 
+/// Nguon goc ky nang con: muc goc CASEL hay chuyen gia bo sung
+enum SubSkillSource {
+  casel
+  specialist
+
+  @@map("sub_skill_source")
+}
+
 enum TemplateStatus {
   draft
   published
 
   @@map("template_status")
+}
+
+/// Loi vao tao truyen: chuyen mau (topic), ke chuyen nha minh (family), tu viet (handwritten)
+enum StoryEntry {
+  topic
+  family
+  handwritten
+
+  @@map("story_entry")
+}
+
+/// Nguon cua ky nang con da xac nhan (truyen family)
+enum StorySubSkillSource {
+  moment
+  need
+  parent
+
+  @@map("story_sub_skill_source")
 }
 
 // =============================================================================
@@ -475,7 +502,6 @@ model EqSkill {
 
   // -- back-references --
   topics            Topic[]
-  caselReferences   CaselReference[]
   subSkills         EqSubSkill[]
   checkpointAnswers CheckpointAnswer[]
 
@@ -508,53 +534,38 @@ model Topic {
   @@map("topics")
 }
 
-/// @note Nguyen van khung CASEL (tieng Anh), chi doc: khong co API ghi, chi doi bang migration/seed
-model CaselReference {
-  id           String @id @default(uuid()) @db.Uuid
-  skillId      String @map("skill_id") @db.Uuid
-  code         String @unique @db.VarChar(60)
-  textEn       String @map("text_en")
-  displayOrder Int    @default(0) @map("display_order")
-
-  skill EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
-
-  // -- back-references --
-  subSkills EqSubSkill[]
-
-  @@index([skillId])
-  @@map("casel_references")
-}
-
-/// @note Ky nang con do Specialist CRUD; moi ky nang con tro ve dung 1 muc CASEL
-/// @note casel_reference phai cung skill_id (validator tang service)
-/// @note CHECK: age_min <= age_max
+/// @note Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21):
+/// @note source=casel: 40 muc goc CASEL (seed), casel_text_en bat buoc va khong sua qua API, khong xoa (chi tat)
+/// @note source=specialist: Specialist bo sung duoi 1 nang luc, casel_text_en tuy chon
+/// @note CHECK: age_min <= age_max; source <> 'casel' OR casel_text_en IS NOT NULL
 model EqSubSkill {
-  id               String   @id @default(uuid()) @db.Uuid
-  skillId          String   @map("skill_id") @db.Uuid
-  caselReferenceId String   @map("casel_reference_id") @db.Uuid
-  code             String   @unique @db.VarChar(60)
-  nameVi           String   @map("name_vi") @db.VarChar(200)
-  descriptionVi    String   @map("description_vi")
-  ageMin           Int      @default(5) @map("age_min")
-  ageMax           Int      @default(8) @map("age_max")
-  isActive         Boolean  @default(true) @map("is_active")
-  displayOrder     Int      @default(0) @map("display_order")
-  createdBy        String   @map("created_by") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id            String         @id @default(uuid()) @db.Uuid
+  skillId       String         @map("skill_id") @db.Uuid
+  code          String         @unique @db.VarChar(60)
+  nameVi        String         @map("name_vi") @db.VarChar(200)
+  descriptionVi String         @map("description_vi")
+  /// nguyen van tieng Anh cua muc CASEL (null voi ky nang con chuyen gia bo sung khong gan cau goc)
+  caselTextEn   String?        @map("casel_text_en")
+  source        SubSkillSource @default(specialist)
+  ageMin        Int            @default(5) @map("age_min")
+  ageMax        Int            @default(8) @map("age_max")
+  isActive      Boolean        @default(true) @map("is_active")
+  displayOrder  Int            @default(0) @map("display_order")
+  createdBy     String         @map("created_by") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  skill          EqSkill        @relation(fields: [skillId], references: [id], onDelete: Restrict)
-  caselReference CaselReference @relation(fields: [caselReferenceId], references: [id], onDelete: Restrict)
-  creator        User           @relation("SubSkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  skill   EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  creator User    @relation("SubSkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   // -- back-references --
   templates         QuestionTemplate[]
   topics            TopicSubSkill[]
   checkpoints       StoryCheckpoint[]
   checkpointAnswers CheckpointAnswer[]
+  storySubSkills    StorySubSkill[]
 
   @@index([skillId, isActive])
-  @@index([caselReferenceId])
   @@map("eq_sub_skills")
 }
 
@@ -697,7 +708,8 @@ model ChecklistItem {
 /// @note private  : truyen phu huynh tao cho con minh, sua tu do
 /// @note published: ban sao da go ca nhan hoa de ban; dong bang sau khi duyet
 /// @note CHECK: kind <> 'published' OR source_story_id IS NOT NULL
-/// @note CHECK: length = 'custom' OR topic_id IS NOT NULL (topic tuy chon voi truyen tu viet)
+/// @note CHECK: entry <> 'topic' OR topic_id IS NOT NULL (topic tuy chon voi tu viet, null voi family)
+/// @note CHECK: kind <> 'private' OR (entry = 'family') = (moment_summary IS NOT NULL OR seed_event IS NOT NULL OR NOT scored)
 /// @note Chi dua vao gia sach khi reviewed_at IS NOT NULL (validator tang service)
 /// @note Truyen custom (validator khi luu): 4-20 trang, 0-6 diem dung co cham,
 ///       khong dat sau trang 1, reflection chi o cuoi
@@ -708,8 +720,15 @@ model Story {
   sourceStoryId String?     @map("source_story_id") @db.Uuid
   topicId       String?     @map("topic_id") @db.Uuid
   length        StoryLength @default(medium)
+  entry         StoryEntry  @default(topic)
   title         String      @db.VarChar(200)
   situation     String?
+  /// family: khoanh khac kho, dang token
+  momentSummary String?     @map("moment_summary")
+  /// family: tinh tiet AI them, dang token
+  seedEvent     String?     @map("seed_event")
+  /// family "chi ke truyen" -> false
+  scored        Boolean     @default(true)
   useAiImage    Boolean     @default(false) @map("use_ai_image")
   useTts        Boolean     @default(true) @map("use_tts")
   status        StoryStatus @default(draft)
@@ -733,10 +752,27 @@ model Story {
   playSessions    PlaySession[]
   aiRequests      AiRequest[]
   listing         Listing?
+  subSkills       StorySubSkill[]
 
   @@index([ownerId, kind])
   @@index([topicId])
   @@map("stories")
+}
+
+/// @note family: ky nang phu huynh da xac nhan, 1-2; position 1 = ky nang chinh
+model StorySubSkill {
+  storyId    String              @map("story_id") @db.Uuid
+  subSkillId String              @map("sub_skill_id") @db.Uuid
+  source     StorySubSkillSource
+  position   Int                 @db.SmallInt
+
+  story    Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  subSkill EqSubSkill @relation(fields: [subSkillId], references: [id], onDelete: Restrict)
+
+  @@id([storyId, subSkillId])
+  @@unique([storyId, position])
+  @@index([subSkillId])
+  @@map("story_sub_skills")
 }
 
 /// @note token: {NV1}, {NV2}...

@@ -218,7 +218,7 @@ async function createCustomStory(prisma, { parent, child, own, backgroundId }) {
   const createdAt = new Date(Date.now() - 7 * DAY_MS);
   await prisma.$transaction(async (tx) => {
     await createStoryBody(tx, {
-      storyData: { kind: 'private', topicId: null, length: 'custom', title: DEMO_CUSTOM_STORY.title, situation: DEMO_CUSTOM_STORY.situation },
+      storyData: { kind: 'private', topicId: null, length: 'custom', entry: 'handwritten', title: DEMO_CUSTOM_STORY.title, situation: DEMO_CUSTOM_STORY.situation },
       spec: DEMO_CUSTOM_STORY, ownerId: parent.id, child, own, second: null, backgroundId, createdAt,
     });
   }, STORY_TX);

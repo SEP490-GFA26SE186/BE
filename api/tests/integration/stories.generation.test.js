@@ -118,9 +118,9 @@ const rejectsWith = (promise, statusCode) =>
 async function topicWithSubSkills(owner, subs) {
   const seeded = await prisma.topicSubSkill.findFirst({
     where: { topicId: topic.id },
-    select: { subSkill: { select: { skillId: true, caselReferenceId: true } } },
+    select: { subSkill: { select: { skillId: true } } },
   });
-  const { skillId, caselReferenceId } = seeded.subSkill;
+  const { skillId } = seeded.subSkill;
   const tag = crypto.randomUUID().slice(0, 8);
   const t = await prisma.topic.create({
     // displayOrder lon: khong thanh topic dau tien ma getSeededTopic chon o lan chay sau.
@@ -130,7 +130,7 @@ async function topicWithSubSkills(owner, subs) {
   for (const [i, sub] of subs.entries()) {
     const ss = await prisma.eqSubSkill.create({
       data: {
-        skillId, caselReferenceId, code: `it_${tag}_${i}`, nameVi: `Kỹ năng thử ${tag} ${i}`,
+        skillId, code: `it_${tag}_${i}`, nameVi: `Kỹ năng thử ${tag} ${i}`,
         descriptionVi: 'x', isActive: sub.isActive ?? true, displayOrder: i, createdBy: owner.id,
       },
     });

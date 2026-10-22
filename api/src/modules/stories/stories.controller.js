@@ -1,5 +1,6 @@
 import { StatusCodes } from 'http-status-codes';
 import storiesService from './stories.service.js';
+import analysisService from './stories.analysis.service.js';
 import editorService from './stories.editor.service.js';
 import generationService from './stories.generation.service.js';
 import narrationService from './stories.narration.service.js';
@@ -9,6 +10,11 @@ import { ApiError, ApiResponse, catchAsync } from '../../utils/index.js';
 const createStory = catchAsync(async (req, res) => {
   const story = await storiesService.createStory(req.user, req.body);
   return ApiResponse.created(res, { message: 'Tạo truyện thành công', data: { story } });
+});
+
+const analyzeStory = catchAsync(async (req, res) => {
+  const data = await analysisService.analyzeStory(req.user, req.body);
+  return ApiResponse.success(res, { data });
 });
 
 const getStories = catchAsync(async (req, res) => {
@@ -136,6 +142,7 @@ const publishStoryVersion = notImplemented('Chức năng đăng bán sẽ có �
 
 export default {
   createStory,
+  analyzeStory,
   getStories,
   getStoryById,
   updateStory,

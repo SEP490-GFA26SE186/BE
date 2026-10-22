@@ -1,3 +1,4 @@
+import { CaselCompetency } from '@prisma/client';
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 
@@ -35,6 +36,8 @@ const getEqSkills = async (filter = {}) => {
 /** GET /eq-skills/:idOrCode — chi tiet + bai hoc dang dung cua nang luc. */
 const getEqSkillById = async (idOrCode) => {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode);
+  // Khong phai uuid cung khong phai ma nang luc (enum) -> 404 thay vi loi Prisma 500.
+  if (!isUuid && !Object.values(CaselCompetency).includes(idOrCode)) throw ApiError.notFound('Không tìm thấy năng lực CASEL.');
   const skill = await prisma.eqSkill.findFirst({
     where: isUuid ? { id: idOrCode } : { caselCode: idOrCode },
     include: {
@@ -57,16 +60,4 @@ const getEqSkillById = async (idOrCode) => {
   };
 };
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** GET /eq-skills/casel-references?skillId -> [{ id, skillId, code, textEn, displayOrder }] (40 muc CASEL). */
-const listCaselReferences = async ({ skillId } = {}) => {
-  if (skillId && !UUID_RE.test(skillId)) throw ApiError.badRequest('skillId không hợp lệ.');
-  return prisma.caselReference.findMany({
-    where: skillId ? { skillId } : {},
-    orderBy: [{ displayOrder: 'asc' }, { code: 'asc' }],
-    select: { id: true, skillId: true, code: true, textEn: true, displayOrder: true },
-  });
-};
-
-export default { getEqSkills, getEqSkillById, listCaselReferences };
+export default { getEqSkills, getEqSkillById };

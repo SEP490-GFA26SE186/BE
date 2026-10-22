@@ -41,9 +41,9 @@ async function setup() {
   for (const p of pages) {
     await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} nói chuyện với {NV2} ở trang ${p.pageOrder}.` } });
   }
-  const link = await prisma.topicSubSkill.findFirst({ where: { topicId: topic.id }, select: { subSkill: { select: { skillId: true, caselReferenceId: true } } } });
+  const link = await prisma.topicSubSkill.findFirst({ where: { topicId: topic.id }, select: { subSkill: { select: { skillId: true } } } });
   const sub = await prisma.eqSubSkill.create({
-    data: { skillId: link.subSkill.skillId, caselReferenceId: link.subSkill.caselReferenceId, code: `it_cr_${tag()}`, nameVi: `Kỹ năng ${tag()}`, descriptionVi: 'x', createdBy: user.id },
+    data: { skillId: link.subSkill.skillId, code: `it_cr_${tag()}`, nameVi: `Kỹ năng ${tag()}`, descriptionVi: 'x', createdBy: user.id },
   });
   const tpl = await prisma.questionTemplate.create({ data: { subSkillId: sub.id, title: `Mẫu ${tag()}`, answerFormat: 'role_choice', createdBy: user.id } });
   const ver = await prisma.questionTemplateVersion.create({

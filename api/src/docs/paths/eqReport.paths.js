@@ -79,7 +79,7 @@ export default {
     get: {
       tags: ['Children'],
       summary: '[Parent] Báo cáo EQ chi tiết: bằng chứng, gợi ý trò chuyện, xu hướng theo tuần',
-      description: `Gồm mọi trường của \`/eq-report\`, thêm:\n- \`evidence\`: tối đa 5 câu mới nhất mỗi kỹ năng con { subSkillId, answeredAt, storyTitle, question (tên thật), firstChoiceText, correctFirstTry, usedHint, source: "ai_template" };\n- \`conversation\`: 3 truyện bé đọc gần nhất { storyId, storyTitle, subSkillId, prompts (parent_prompts của mẫu, tối đa 3; truyện tự viết: câu hỏi của truyện), reflection?: { question, answered } };\n- \`trend\`: { weekStart, competencies: { [caselCode]: { items, level } } } — số câu chấm trong tuần và mức cuối tuần.\n${RULES}`,
+      description: `Gồm mọi trường của \`/eq-report\`, thêm:\n- \`evidence\`: tối đa 5 câu mới nhất mỗi kỹ năng con { subSkillId, answeredAt, storyTitle, question (tên thật), firstChoiceText, correctFirstTry, usedHint, source: "ai_template", momentSummary (tên thật; chỉ truyện "Kể chuyện nhà mình" có khoảnh khắc thật, còn lại null) };\n- \`conversation\`: 3 truyện bé đọc gần nhất { storyId, storyTitle, subSkillId, prompts (parent_prompts của mẫu, tối đa 3; truyện tự viết: câu hỏi của truyện), reflection?: { question, answered } };\n- \`trend\`: { weekStart, competencies: { [caselCode]: { items, level } } } — số câu chấm trong tuần và mức cuối tuần.\n${RULES}`,
       security: bearer,
       parameters: [id, { name: 'weeks', in: 'query', schema: { type: 'integer', minimum: 4, maximum: 26, default: 8 } }],
       responses: {

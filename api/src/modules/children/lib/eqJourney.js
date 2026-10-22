@@ -59,7 +59,7 @@ function correctFirstTry(a) {
 
 /**
  * answers: checkpoint_answers MOI -> CU (da loc nhu buildEqLevels) kem firstOption { text, role, isCorrect }
- * va checkpoint { type, question, answerEmotion, story: { title, storyCharacters } }.
+ * va checkpoint { type, question, answerEmotion, story: { title, entry, momentSummary, storyCharacters } }.
  */
 export function buildEvidence(answers, { perSubSkill = 5 } = {}) {
   const count = new Map();
@@ -79,6 +79,8 @@ export function buildEvidence(answers, { perSubSkill = 5 } = {}) {
       correctFirstTry: correctFirstTry(a),
       usedHint: a.attempts > 1,
       source: 'ai_template',
+      // "Tu chuyen: ..." (spec family-story §3.3): chi truyen family co khoanh khac that, khong hien tinh tiet AI them.
+      momentSummary: a.checkpoint.story.entry === 'family' ? real(a.checkpoint.story.momentSummary ?? null) : null,
     });
   }
   return out;

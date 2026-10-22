@@ -10,6 +10,8 @@ import { formatErrorMessage } from './lib/generationStatus.js';
 import { planPersist } from './lib/persistPlan.js';
 import { loadStorySettings } from './lib/storySettings.js';
 import { TX_OPTIONS, loadNameContextForStory } from './stories.service.js';
+import { ageOf } from '../children/lib/childFormat.js';
+import { ageRangeOf } from './lib/familySkills.js';
 
 /** CHECK `ai_requests.attempts <= 3`. */
 const MAX_RECORDED_ATTEMPTS = 3;
@@ -48,6 +50,10 @@ export async function loadGenerationInput(db, aiRequestId) {
     where: { id: request.storyId },
     select: {
       situation: true,
+      entry: true,
+      momentSummary: true,
+      seedEvent: true,
+      subSkills: { orderBy: { position: 'asc' }, select: { subSkill: { select: { nameVi: true, descriptionVi: true } } } },
       topic: {
         select: {
           title: true,
@@ -61,7 +67,11 @@ export async function loadGenerationInput(db, aiRequestId) {
         },
       },
       storyCharacters: {
-        select: { token: true, isMain: true, character: { select: { appearance: true } } },
+        select: {
+          token: true,
+          isMain: true,
+          character: { select: { appearance: true, child: { select: { birthDate: true, deletedAt: true } } } },
+        },
       },
       pages: { select: { pageOrder: true } },
       checkpoints: {
@@ -99,10 +109,23 @@ export async function loadGenerationInput(db, aiRequestId) {
     loadStorySettings(db),
   ]);
 
+  // Truyen family: khong co topic; tuoi lay tu be gan voi nhan vat chinh (khong co -> 5-8).
+  let family = null;
+  if (story.entry === 'family') {
+    const mainChild = story.storyCharacters.find((sc) => sc.isMain)?.character?.child;
+    family = {
+      moment: story.momentSummary,
+      seedEvent: story.seedEvent,
+      subSkills: story.subSkills.map((l) => ({ nameVi: l.subSkill.nameVi, descriptionVi: l.subSkill.descriptionVi })),
+      ageRange: ageRangeOf(mainChild && !mainChild.deletedAt ? ageOf(mainChild.birthDate) : null),
+    };
+  }
+
   return {
     aiRequestId: request.id,
     situation: story.situation,
-    topic: {
+    family,
+    topic: family ? null : {
       title: story.topic.title,
       guidance: story.topic.guidance,
       caselCode: story.topic.skill.caselCode,

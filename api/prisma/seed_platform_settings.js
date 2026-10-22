@@ -67,6 +67,10 @@ export const platformSettingsData = [
   // Tranh AI (2026-10-19): chân dung nhân vật 1 credit (dùng lại mãi), mỗi tranh cảnh 1 credit.
   { key: 'ai_cost.character_portrait', value: 1 },
   { key: 'ai_cost.scene_image', value: 1 },
+  // Phân tích lời kể "Kể chuyện nhà mình" (spec family-story §5.1): không trừ credit, tối đa 30 lượt
+  // mỗi phụ huynh mỗi ngày.
+  { key: 'ai_cost.story_analysis', value: 0 },
+  { key: 'limits.story_analysis_per_day', value: 30 },
   // Giọng đọc kể truyện (spec TTS §5.2): preset VieNeu, Node luôn gửi tường minh. Đổi giọng làm
   // lệch vân tay mọi đoạn -> các truyện phải hoàn tất lại để đọc bằng giọng mới.
   { key: 'tts.voice', value: 'Kim Thanh' },

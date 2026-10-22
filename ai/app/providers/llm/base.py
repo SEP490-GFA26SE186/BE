@@ -1,10 +1,14 @@
-"""LLM port (spec 9.1). Deliberately story-specific: one method, one use case."""
+"""LLM port (spec 9.1). Story-specific: one method, used by story generation and analysis.
+
+Real providers only read `contents` / `response_schema` / limits; `frame` exists for the mock.
+"""
 
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
 from pydantic import BaseModel
 
+from app.schemas.analyze import StoryAnalyzeRequest
 from app.schemas.story import StoryGenerateRequest
 
 
@@ -19,7 +23,7 @@ class StoryLLMCall:
     # `frame` is in the port although Gemini ignores it: it is the price for the mock to
     # build an output that fits the frame (and read `__force`) without parsing the prompt
     # back. Kept explicit here rather than hidden behind another abstraction (spec 9.1).
-    frame: StoryGenerateRequest
+    frame: StoryGenerateRequest | StoryAnalyzeRequest  # analysis: family-story spec 5.3
     contents: list[Turn]  # multi-turn; includes the fix-up turn on a retry (spec 8.2)
     response_schema: type[BaseModel]
     max_output_tokens: int  # text cap + thinking budget (the value sent to the SDK)

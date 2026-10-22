@@ -29,6 +29,7 @@ const env = {
       character_portrait: parseInt(process.env.AI_TIMEOUT_MS_CHARACTER_PORTRAIT, 10) || undefined,
       scene_image: parseInt(process.env.AI_TIMEOUT_MS_SCENE_IMAGE, 10) || undefined,
       narration: parseInt(process.env.AI_TIMEOUT_MS_NARRATION, 10) || undefined,
+      story_analysis: parseInt(process.env.AI_TIMEOUT_MS_STORY_ANALYSIS, 10) || undefined,
     },
     attempts: parseInt(process.env.AI_JOB_ATTEMPTS, 10) || 3,
     concurrency: parseInt(process.env.AI_WORKER_CONCURRENCY, 10) || 3,

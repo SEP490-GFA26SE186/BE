@@ -17,4 +17,6 @@ export const AI_JOB = {
   CHARACTER_PORTRAIT: 'character_portrait',
   SCENE_IMAGE: 'scene_image',
   NARRATION: 'narration',
+  // Phan tich loi ke "Ke chuyen nha minh": goi DONG BO tu API (khong qua queue), khong tru credit.
+  STORY_ANALYSIS: 'story_analysis',
 };

@@ -1,10 +1,13 @@
 import { StatusCodes } from 'http-status-codes';
-import { prisma } from '../../config/index.js';
+import { env, prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { loadStorySettings } from './lib/storySettings.js';
 import { buildNameContext, tokenizeNames, findLeftoverNames, findDroppedTokens } from './lib/names.js';
 import { assignTokens, defaultTarget, buildSkeleton } from './lib/skeleton.js';
 import { planSlots } from './lib/slotPlan.js';
+import { planFamilySlots } from './lib/familySkills.js';
+import { hashSituation, sameCharacters, verifyAnalysisToken } from './lib/analysisToken.js';
+import { loadConfirmedSubSkills } from './stories.family.store.js';
 import {
   STORY_DETAIL_INCLUDE,
   STORY_SUMMARY_INCLUDE,
@@ -30,14 +33,14 @@ const NEEDS_SECONDARY = { OR: [HAS_TARGET, { templateVersion: { needsTarget: tru
 // Ten -> token
 // ---------------------------------------------------------------------------
 
-const loadChildren = (db, parentId) =>
+export const loadChildren = (db, parentId) =>
   db.childProfile.findMany({ where: { parentId, deletedAt: null }, select: { id: true, name: true } });
 
 /**
  * Nap nhan vat cua phu huynh theo thu tu gui len, gan token. Nhan vat khong thuoc phu huynh hoac
  * da xoa -> 404. Tra ve [{ characterId, token, isMain, name, childId }].
  */
-async function resolveStoryCharacters(db, parentId, input) {
+export async function resolveStoryCharacters(db, parentId, input) {
   const ids = input.map((c) => c.characterId);
   const rows = await db.character.findMany({
     where: { id: { in: ids }, parentId, deletedAt: null },
@@ -174,37 +177,80 @@ const slotSubSkills = (topic) =>
       versions: s.templates.flatMap((t) => t.versions.map((v) => ({ ...v, answerFormat: t.answerFormat }))),
     }));
 
+const FAMILY_LOCKED = 'Muốn đổi lời kể hay nhân vật, hãy tạo truyện mới.';
+const REANALYZE = 'Kết quả phân tích đã hết hạn hoặc không khớp với lời kể / nhân vật. Hãy bấm "Xem bé sẽ tập gì" để phân tích lại.';
+
+/**
+ * Truyen family (spec family-story §6.1): kiem `analysisToken` (chu ky, han, chu truyen, hash loi ke,
+ * nhan vat) roi tra ve phan rieng cua truyen family: o cham (plan), cac truong luu va story_sub_skills.
+ */
+async function prepareFamily(user, data, { storyCharacters, tokenizedSituation, layout, rng }) {
+  const analysis = verifyAnalysisToken(data.analysisToken, env.jwt.secret, { ownerId: user.id });
+  if (!analysis || analysis.situationHash !== hashSituation(tokenizedSituation) || !sameCharacters(analysis.characters, data.characters)) {
+    throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, REANALYZE, [{ path: 'analysisToken', message: 'Kết quả phân tích không còn dùng được' }]);
+  }
+  const scored = data.scored !== false;
+  const fields = { momentSummary: analysis.momentSummary, seedEvent: scored ? analysis.seedEvent : null, scored };
+  if (!scored) return { plan: [], fields, subSkillRows: [], reflectionOnly: true };
+
+  const confirmed = await loadConfirmedSubSkills(prisma, analysis.subSkills.map((s) => s.id), {
+    hasSecondary: storyCharacters.some((c) => !c.isMain),
+  });
+  // Ky nang chinh phai con (loadConfirmedSubSkills bo id khong ton tai) -> planFamilySlots kiem phien ban.
+  if (confirmed[0]?.id !== analysis.subSkills[0].id) confirmed.unshift({ id: analysis.subSkills[0].id, versions: [] });
+  const plan = planFamilySlots({
+    slots: layout.checkpoints.filter((c) => c.type === 'scored').map((c) => c.after),
+    subSkills: confirmed,
+    rng,
+  });
+  const sourceOf = new Map(analysis.subSkills.map((s) => [s.id, s.source]));
+  const subSkillRows = confirmed
+    .filter((s) => s.versions.length > 0)
+    .map((s, i) => ({ subSkillId: s.id, source: sourceOf.get(s.id), position: i + 1 }));
+  return { plan, fields, subSkillRows, reflectionOnly: false };
+}
+
 const createStory = async (user, data, { rng = Math.random } = {}) => {
   const { topicId, length, title, situation, characters, useAiImage = false, useTts = true } = data;
+  // Thieu `entry` voi do dai AI -> topic; tu viet luon handwritten (spec A.1).
+  const entry = length === 'custom' ? 'handwritten' : data.entry ?? 'topic';
 
   const settings = await loadStorySettings(prisma);
 
-  // Truyen AI bat buoc co topic; truyen tu viet (custom) co the khong chon bai hoc (topic_id NULL).
-  if (!topicId && length !== 'custom') throw ApiError.badRequest('Truyện AI cần chọn chủ đề.');
-  const topic = topicId ? await prisma.topic.findUnique({ where: { id: topicId }, select: TOPIC_SLOT_SELECT }) : null;
-  if (topicId && !topic) throw ApiError.notFound('Không tìm thấy chủ đề.');
+  // Chuyen mau bat buoc co topic; tu viet co the khong chon bai hoc; family khong co topic.
+  if (entry === 'topic' && !topicId) throw ApiError.badRequest('Truyện AI cần chọn chủ đề.');
+  const useTopic = entry !== 'family' && topicId;
+  const topic = useTopic ? await prisma.topic.findUnique({ where: { id: topicId }, select: TOPIC_SLOT_SELECT }) : null;
+  if (useTopic && !topic) throw ApiError.notFound('Không tìm thấy chủ đề.');
   if (topic && !topic.isActive) throw ApiError.badRequest('Chủ đề này đã ngừng sử dụng, vui lòng chọn chủ đề khác.');
 
   const storyCharacters = await resolveStoryCharacters(prisma, user.id, characters);
   const children = await loadChildren(prisma, user.id);
   const nameContext = buildNameContext({ storyCharacters, children });
-  const tokenizedSituation = tokenizeOrReject(situation?.trim() ? situation : null, nameContext);
+  const tokenizedSituation = tokenizeOrReject(situation?.trim() ? situation.trim() : null, nameContext);
 
   // Xep mau vao o cham truoc khi ghi gi (va truoc moi buoc giu credit o luc sinh): 422 o day khong
   // tao truyen, khong dong toi vi.
-  const layout = length === 'custom' ? null : settings.layouts[length];
-  const plan = layout
-    ? planSlots({
+  let layout = length === 'custom' ? null : settings.layouts[length];
+  let plan = [];
+  let family = null;
+  if (entry === 'family') {
+    family = await prepareFamily(user, data, { storyCharacters, tokenizedSituation, layout, rng });
+    plan = family.plan;
+    // "Chi ke truyen": khung chi giu trang + diem dung reflection.
+    if (family.reflectionOnly) layout = { ...layout, checkpoints: layout.checkpoints.filter((c) => c.type === 'reflection') };
+  } else if (layout) {
+    plan = planSlots({
       slots: layout.checkpoints.filter((c) => c.type === 'scored').map((c) => c.after),
       subSkills: slotSubSkills(topic),
       hasSecondary: storyCharacters.some((c) => !c.isMain),
       rng,
-    })
-    : [];
+    });
+  }
 
   const skeleton = buildSkeleton({
     length,
-    layouts: settings.layouts,
+    layouts: layout ? { ...settings.layouts, [length]: layout } : settings.layouts,
     customLimits: settings.customLimits,
     storyCharacters,
     plan,
@@ -215,10 +261,12 @@ const createStory = async (user, data, { rng = Math.random } = {}) => {
       data: {
         ownerId: user.id,
         kind: 'private',
-        topicId: topicId ?? null,
+        topicId: entry === 'family' ? null : topicId ?? null,
         length,
+        entry,
         title,
         situation: tokenizedSituation,
+        ...(family && family.fields),
         useAiImage,
         useTts,
         status: 'draft',
@@ -234,6 +282,10 @@ const createStory = async (user, data, { rng = Math.random } = {}) => {
         isMain: sc.isMain,
       })),
     });
+
+    if (family?.subSkillRows.length) {
+      await tx.storySubSkill.createMany({ data: family.subSkillRows.map((r) => ({ storyId: story.id, ...r })) });
+    }
 
     // Canh tam: story_pages.scene_id NOT NULL; AI thay bang canh that khi sinh (spec §3.1).
     const scene = await tx.storyScene.create({
@@ -303,7 +355,8 @@ const getStoryById = async (user, storyId) => {
 
 const updateStory = async (user, storyId, body) => {
   return prisma.$transaction(async (tx) => {
-    await lockForWrite(tx, user, storyId);
+    const story = await lockForWrite(tx, user, storyId);
+    if (body.situation !== undefined && story.entry === 'family') throw ApiError.conflict(FAMILY_LOCKED);
 
     const data = {};
     if (body.title !== undefined) data.title = body.title;
@@ -352,6 +405,7 @@ const hasWrittenContent = async (tx, storyId) => {
 const bindCharacters = async (user, storyId, characters) => {
   return prisma.$transaction(async (tx) => {
     const story = await lockForWrite(tx, user, storyId);
+    if (story.entry === 'family') throw ApiError.conflict(FAMILY_LOCKED);
 
     if (await hasWrittenContent(tx, storyId)) {
       throw ApiError.conflict('Truyện đã có nội dung nên không thể đổi nhân vật. Hãy tạo truyện mới để dùng nhân vật khác.');

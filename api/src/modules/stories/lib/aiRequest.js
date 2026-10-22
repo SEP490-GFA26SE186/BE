@@ -1,5 +1,6 @@
 // Dung payload gui ai/ /v1/story/generate (spec §7). Ham thuan, khong DB.
 import { tokenizeNames } from './names.js';
+import { anchorPageOrder } from './familySkills.js';
 
 const NEEDS_TARGET = new Set(['perspective', 'emotion_other']);
 
@@ -48,6 +49,7 @@ export const buildAiRequest = ({
   aiRequestId,
   situation,
   topic,
+  family = null,
   characters,
   pages,
   checkpoints,
@@ -60,16 +62,35 @@ export const buildAiRequest = ({
   const sortedPages = [...pages].sort((a, b) => a.pageOrder - b.pageOrder);
   const sortedCheckpoints = [...checkpoints].sort((a, b) => a.afterPageOrder - b.afterPageOrder);
 
-  const topicOut = { title: topic.title, competency: topic.caselCode, guidance: topic.guidance };
-  if (topic.ageMin != null) topicOut.age_min = topic.ageMin;
-  if (topic.ageMax != null) topicOut.age_max = topic.ageMax;
-  if (topic.subSkills?.length) {
-    topicOut.sub_skills = topic.subSkills.map((s) => ({ name: s.nameVi, description: s.descriptionVi }));
+  let topicOut = null;
+  if (topic) {
+    topicOut = { title: topic.title, competency: topic.caselCode, guidance: topic.guidance };
+    if (topic.ageMin != null) topicOut.age_min = topic.ageMin;
+    if (topic.ageMax != null) topicOut.age_max = topic.ageMax;
+    if (topic.subSkills?.length) {
+      topicOut.sub_skills = topic.subSkills.map((s) => ({ name: s.nameVi, description: s.descriptionVi }));
+    }
   }
+
+  // Truyen "Ke chuyen nha minh" (spec family-story A.2): topic null, tuoi o cap goc, khoi `family`
+  // voi trang neo = trang ngay truoc diem dung cham thu hai (o cham cuoi neu chi 1; khong cham: trang ap cuoi).
+  const familyFields = family
+    ? {
+      age_min: family.ageRange.ageMin,
+      age_max: family.ageRange.ageMax,
+      family: {
+        moment: family.moment ?? null,
+        seed_event: family.seedEvent ?? null,
+        anchor_page: pageLabels.get(anchorPageOrder(pages, checkpoints)),
+        sub_skills: (family.subSkills ?? []).map((s) => ({ name: s.nameVi, description: s.descriptionVi })),
+      },
+    }
+    : {};
 
   return {
     request_id: aiRequestId,
     topic: topicOut,
+    ...familyFields,
     characters: characters.map((c) => ({
       token: c.token,
       description: tokenizeNames(c.appearance, nameContext.nameMap),

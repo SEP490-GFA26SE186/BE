@@ -38,3 +38,15 @@ class LlmStoryOutput(BaseModel):
     pages: list[LlmPage]
     scenes: list[LlmScene]
     checkpoints: list[LlmCheckpoint]
+
+
+class LlmAnalyzeOutput(BaseModel):
+    """Shape the LLM returns for POST /v1/story/analyze (family-story spec 5.3).
+
+    Lax like LlmStoryOutput: the analyze validator enforces the rules so a retry can name them.
+    """
+
+    moment_summary: str | None = None
+    seed_event: str | None = None
+    sub_skill_codes: list[str]
+    reasons: list[str] = []
