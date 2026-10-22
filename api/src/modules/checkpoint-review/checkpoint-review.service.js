@@ -1,5 +1,6 @@
 // Soat mau checkpoint cham diem (Specialist): xem mau do AI sinh, danh dau on / loai khoi diem.
-// QUYEN RIENG TU: khong tra ten that, khong tra situation; token {NVx} doi thanh "Bạn A/B..." (aliasName neu la ban published).
+// QUYEN RIENG TU: khong tra ten that; token {NVx} doi thanh "Bạn A/B..." (aliasName neu la ban published).
+// `situation` chi tra voi truyen "Ke chuyen nha minh" (spec family-story §4.3), da che ten nhu cau hoi.
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
@@ -64,7 +65,13 @@ const scrub = (text, scrubbers) => {
 };
 
 const INCLUDE = {
-  story: { select: { id: true, ownerId: true, kind: true, createdAt: true, storyCharacters: { select: { token: true, aliasName: true, isMain: true } } } },
+  story: {
+    select: {
+      id: true, ownerId: true, kind: true, createdAt: true, entry: true, situation: true, momentSummary: true, seedEvent: true,
+      storyCharacters: { select: { token: true, aliasName: true, isMain: true } },
+      subSkills: { select: { subSkillId: true, source: true } },
+    },
+  },
   afterPage: { select: { contentText: true } },
   options: { orderBy: { optionOrder: 'asc' }, select: { text: true, role: true, isCorrect: true } },
   subSkill: { select: { id: true, nameVi: true, skill: { select: { id: true, caselCode: true, nameVi: true } } } },
@@ -93,6 +100,15 @@ const format = (c, scrubbers = []) => {
     ...(c.answerEmotion && { answerEmotion: c.answerEmotion }),
     status: statusOf(c),
     ...(c.excluded && { excludedReason: c.excludedReason }),
+    // Ngu canh chuyen nha (A.1): loi ke, khoanh khac, tinh tiet them, nguon ky nang con cua checkpoint nay.
+    family: c.story.entry === 'family'
+      ? {
+        situation: mask(c.story.situation ?? null, names),
+        momentSummary: mask(c.story.momentSummary ?? null, names),
+        seedEvent: mask(c.story.seedEvent ?? null, names),
+        source: (c.story.subSkills ?? []).find((l) => l.subSkillId === c.subSkillId)?.source ?? null,
+      }
+      : null,
   };
 };
 

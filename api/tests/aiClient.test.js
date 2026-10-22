@@ -50,12 +50,13 @@ const expectError = async (status, body, check, jobName = AI_JOB.STORY_TEXT) => 
   }
 };
 
-test('AI_JOB co bon ten job khop ai_request_type', () => {
+test('AI_JOB co nam ten job khop ai_request_type', () => {
   assert.deepEqual(AI_JOB, {
     STORY_TEXT: 'story_text',
     CHARACTER_PORTRAIT: 'character_portrait',
     SCENE_IMAGE: 'scene_image',
     NARRATION: 'narration',
+    STORY_ANALYSIS: 'story_analysis',
   });
 });
 

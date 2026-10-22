@@ -130,6 +130,7 @@ enum AiRequestType {
   character_portrait
   scene_image
   narration
+  story_analysis
 
   @@map("ai_request_type")
 }
@@ -332,6 +333,24 @@ enum TemplateStatus {
   published
 
   @@map("template_status")
+}
+
+/// Loi vao tao truyen: chuyen mau (topic), ke chuyen nha minh (family), tu viet (handwritten)
+enum StoryEntry {
+  topic
+  family
+  handwritten
+
+  @@map("story_entry")
+}
+
+/// Nguon cua ky nang con da xac nhan (truyen family)
+enum StorySubSkillSource {
+  moment
+  need
+  parent
+
+  @@map("story_sub_skill_source")
 }
 
 // =============================================================================
@@ -544,6 +563,7 @@ model EqSubSkill {
   topics            TopicSubSkill[]
   checkpoints       StoryCheckpoint[]
   checkpointAnswers CheckpointAnswer[]
+  storySubSkills    StorySubSkill[]
 
   @@index([skillId, isActive])
   @@map("eq_sub_skills")
@@ -688,7 +708,8 @@ model ChecklistItem {
 /// @note private  : truyen phu huynh tao cho con minh, sua tu do
 /// @note published: ban sao da go ca nhan hoa de ban; dong bang sau khi duyet
 /// @note CHECK: kind <> 'published' OR source_story_id IS NOT NULL
-/// @note CHECK: length = 'custom' OR topic_id IS NOT NULL (topic tuy chon voi truyen tu viet)
+/// @note CHECK: entry <> 'topic' OR topic_id IS NOT NULL (topic tuy chon voi tu viet, null voi family)
+/// @note CHECK: kind <> 'private' OR (entry = 'family') = (moment_summary IS NOT NULL OR seed_event IS NOT NULL OR NOT scored)
 /// @note Chi dua vao gia sach khi reviewed_at IS NOT NULL (validator tang service)
 /// @note Truyen custom (validator khi luu): 4-20 trang, 0-6 diem dung co cham,
 ///       khong dat sau trang 1, reflection chi o cuoi
@@ -699,8 +720,15 @@ model Story {
   sourceStoryId String?     @map("source_story_id") @db.Uuid
   topicId       String?     @map("topic_id") @db.Uuid
   length        StoryLength @default(medium)
+  entry         StoryEntry  @default(topic)
   title         String      @db.VarChar(200)
   situation     String?
+  /// family: khoanh khac kho, dang token
+  momentSummary String?     @map("moment_summary")
+  /// family: tinh tiet AI them, dang token
+  seedEvent     String?     @map("seed_event")
+  /// family "chi ke truyen" -> false
+  scored        Boolean     @default(true)
   useAiImage    Boolean     @default(false) @map("use_ai_image")
   useTts        Boolean     @default(true) @map("use_tts")
   status        StoryStatus @default(draft)
@@ -724,10 +752,27 @@ model Story {
   playSessions    PlaySession[]
   aiRequests      AiRequest[]
   listing         Listing?
+  subSkills       StorySubSkill[]
 
   @@index([ownerId, kind])
   @@index([topicId])
   @@map("stories")
+}
+
+/// @note family: ky nang phu huynh da xac nhan, 1-2; position 1 = ky nang chinh
+model StorySubSkill {
+  storyId    String              @map("story_id") @db.Uuid
+  subSkillId String              @map("sub_skill_id") @db.Uuid
+  source     StorySubSkillSource
+  position   Int                 @db.SmallInt
+
+  story    Story      @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  subSkill EqSubSkill @relation(fields: [subSkillId], references: [id], onDelete: Restrict)
+
+  @@id([storyId, subSkillId])
+  @@unique([storyId, position])
+  @@index([subSkillId])
+  @@map("story_sub_skills")
 }
 
 /// @note token: {NV1}, {NV2}...

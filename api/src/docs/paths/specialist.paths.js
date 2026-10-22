@@ -31,32 +31,25 @@ const topicBody = (required) => ({
   },
 });
 
-const subSkillBody = (required) => ({
+const subSkillBody = {
   required: true,
   content: {
     'application/json': {
       schema: {
         type: 'object',
-        ...(required && { required: ['skillId', 'nameVi', 'descriptionVi'] }),
+        additionalProperties: false,
+        description: 'Chỉ các trường dưới đây; gửi `skillId` / `code` / `caselTextEn` hay trường khác là 400.',
         properties: {
-          skillId: { type: 'string', format: 'uuid', description: 'Năng lực CASEL.' },
-          code: { type: 'string', example: 'sm_hit_tho_khi_gian', description: 'Chữ thường + gạch dưới; bỏ trống để tự sinh từ năng lực + tên. Mục gốc CASEL không đổi được (422).' },
-          nameVi: { type: 'string', example: 'Hít thở khi giận' },
+          nameVi: { type: 'string', example: 'Gọi tên cảm xúc của mình' },
           descriptionVi: { type: 'string' },
-          caselTextEn: {
-            type: 'string',
-            nullable: true,
-            description: 'Câu gốc CASEL (tiếng Anh), tuỳ chọn với kỹ năng chuyên gia bổ sung. Mục gốc CASEL không sửa được (422).',
-          },
-          ageMin: { type: 'integer', minimum: 1, maximum: 18, default: 5 },
-          ageMax: { type: 'integer', minimum: 1, maximum: 18, default: 8 },
-          displayOrder: { type: 'integer', default: 0 },
-          isActive: { type: 'boolean', default: true },
+          ageMin: { type: 'integer', minimum: 1, maximum: 18 },
+          ageMax: { type: 'integer', minimum: 1, maximum: 18 },
+          isActive: { type: 'boolean' },
         },
       },
     },
   },
-});
+};
 
 export default {
   '/sub-skills': {
@@ -64,7 +57,7 @@ export default {
       tags: ['Sub-skills'],
       summary: 'Danh sách kỹ năng con',
       description:
-        'Kỹ năng con chính là mục CASEL: `source = casel` (40 mục gốc, `caselTextEn` là nguyên văn tiếng Anh) hoặc `specialist` (chuyên gia bổ sung).\n**Phụ huynh:** chỉ kỹ năng con đang dùng, không kèm số đếm.\n**Specialist / Admin:** tất cả + `templatesCount`, `publishedTemplatesCount`, `topicsCount`, `checkpointsCount`; lọc `skillId`, `search`, `isActive`, `source`.',
+        'Kỹ năng con chính là mục CASEL (`caselTextEn` là nguyên văn tiếng Anh). Đây là danh mục chuẩn: không thêm / xoá qua API, chỉ điều chỉnh bằng PUT.\n**Phụ huynh:** chỉ kỹ năng con đang dùng, không kèm số đếm.\n**Specialist / Admin:** tất cả + `templatesCount`, `publishedTemplatesCount`, `topicsCount`, `checkpointsCount`; lọc `skillId`, `search`, `isActive`, `source`.',
       security: bearer,
       parameters: [
         { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' } },
@@ -74,32 +67,16 @@ export default {
       ],
       responses: { 200: { description: 'Mảng `[{ id, skillId, skill, code, nameVi, descriptionVi, caselTextEn, source, ageMin, ageMax, isActive, displayOrder, ...counts }]` trong `data`' } },
     },
-    post: {
-      tags: ['Sub-skills'],
-      summary: '[Specialist | Admin] Tạo kỹ năng con',
-      description: 'Luôn tạo `source = specialist` (40 mục gốc CASEL chỉ đến từ seed). `caselTextEn` tuỳ chọn. `code` thiếu thì sinh từ năng lực + tên (thêm `_2`, `_3` nếu trùng).',
-      security: bearer,
-      requestBody: subSkillBody(true),
-      responses: { 201: { description: 'Đã tạo' }, 400: { description: 'Năng lực sai / tuổi sai' }, 403: { description: 'Không phải Specialist / Admin' }, 409: { description: 'Mã trùng' } },
-    },
   },
   '/sub-skills/{id}': {
     put: {
       tags: ['Sub-skills'],
-      summary: '[Specialist | Admin] Sửa kỹ năng con',
-      description: 'Mục gốc CASEL: không đổi `skillId` / `code` / `caselTextEn` (422). Đã có điểm dừng (checkpoint) dùng thì **khoá** `skillId` (422).',
+      summary: '[Specialist | Admin] Điều chỉnh kỹ năng con',
+      description: 'Chỉ sửa diễn giải tiếng Việt (`nameVi`, `descriptionVi`), độ tuổi và bật/tắt. Năng lực, mã và câu gốc CASEL giữ nguyên.',
       security: bearer,
       parameters: [idParam],
-      requestBody: subSkillBody(false),
-      responses: { 200: { description: 'Đã sửa' }, 400: { description: 'Dữ liệu sai' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Mã trùng' }, 422: { description: 'Sửa trường bị khoá của mục gốc CASEL / đổi năng lực khi đã có điểm dừng dùng' } },
-    },
-    delete: {
-      tags: ['Sub-skills'],
-      summary: '[Specialist | Admin] Xoá kỹ năng con',
-      description: 'Mục gốc CASEL không bao giờ xoá (409, chỉ tắt được). Kỹ năng chuyên gia bổ sung: chưa có mẫu / bài học / điểm dừng nào dùng thì xoá hẳn; ngược lại 409 "chỉ tắt được" (dùng PUT `isActive: false`).',
-      security: bearer,
-      parameters: [idParam],
-      responses: { 200: { description: '`{ deleted, message }`' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Mục gốc CASEL / đã có mẫu, bài học, điểm dừng dùng' } },
+      requestBody: subSkillBody,
+      responses: { 200: { description: 'Đã sửa' }, 400: { description: 'Dữ liệu sai / gửi trường không được sửa' }, 403: { description: 'Không phải Specialist / Admin' }, 404: { description: 'Không tìm thấy' } },
     },
   },
   '/question-templates': {
@@ -117,7 +94,11 @@ export default {
     },
     post: {
       tags: ['Question Templates'],
-      summary: '[Specialist | Admin] Tạo mẫu + phiên bản 1 nháp rỗng',
+      summary: '[Specialist | Admin] Tạo mẫu + phiên bản 1 nháp',
+      description:
+        'Một màn hình tạo + soạn: body nhận thêm mọi trường nội dung của `PUT /{id}/draft` (tuỳ chọn) cho bản nháp v1. ' +
+        '`title` để trống → tự sinh từ `questionFrame` (cắt ~60 ký tự); thiếu cả hai → 400. Giá trị điền sẵn: điểm vai 1 / 0,5 / 0 ' +
+        '(`role_choice`), `allowedEmotions` = cả 5 (`emotion_pick`), `referenceUrl` = trang CASEL.',
       security: bearer,
       requestBody: {
         required: true,
@@ -125,10 +106,11 @@ export default {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['subSkillId', 'title', 'answerFormat'],
+              required: ['subSkillId', 'answerFormat'],
               properties: {
                 subSkillId: { type: 'string', format: 'uuid' },
-                title: { type: 'string' },
+                title: { type: 'string', description: 'Tuỳ chọn (≥ 3 ký tự nếu có)' },
+                questionFrame: { type: 'string', description: 'Bé được hỏi về điều gì (ý định câu hỏi)' },
                 answerFormat: { type: 'string', enum: ['emotion_pick', 'single_correct', 'role_choice'] },
               },
             },
@@ -171,11 +153,24 @@ export default {
       responses: { 200: { description: 'Mẫu với `draft` đã cập nhật' }, 400: { description: 'Dữ liệu sai' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Đua nhau tạo nháp' } },
     },
   },
+  '/question-templates/{id}/duplicate': {
+    post: {
+      tags: ['Question Templates'],
+      summary: '[Specialist | Admin] Nhân bản mẫu',
+      description: 'Tạo mẫu mới cùng kỹ năng con + dạng trả lời, tên "<tên> (bản sao)", bản nháp v1 chép nội dung bản ban hành mới nhất (chưa ban hành thì chép bản nháp).',
+      security: bearer,
+      parameters: [idParam],
+      responses: { 201: { description: 'Mẫu mới (cùng dạng một phần tử của `GET /question-templates`)' }, 403: { description: 'Không phải Specialist / Admin' }, 404: { description: 'Không tìm thấy' } },
+    },
+  },
   '/question-templates/{id}/publish': {
     post: {
       tags: ['Question Templates'],
       summary: '[Specialist | Admin] Ban hành bản nháp',
-      description: 'Kiểm đủ trường theo dạng trả lời (422 liệt kê trường thiếu), rồi chuyển nháp thành `published`, ghi `publishedBy/At`.',
+      description:
+        'Kiểm đủ trường theo dạng trả lời (422 liệt kê trường thiếu), rồi chuyển nháp thành `published`, ghi `publishedBy/At`. ' +
+        'Bắt buộc: `questionFrame`, `rationale`, `parentPrompts` 1–3 câu; `single_correct`: `correctDesc`, `distractorDesc`; ' +
+        '`role_choice`: 3 mô tả vai + 3 điểm 0–1, điểm xây dựng lớn nhất. `pageSetup`, `hintGuidance` không bắt buộc.',
       security: bearer,
       parameters: [idParam],
       responses: { 200: { description: 'Mẫu với `latestPublished` mới' }, 404: { description: 'Không tìm thấy' }, 409: { description: 'Không có bản nháp' }, 422: { description: 'Thiếu / sai trường' } },

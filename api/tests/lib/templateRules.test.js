@@ -35,11 +35,19 @@ test('assertVersionComplete: thieu truong -> 422 liet ke ten truong', () => {
   assert.match(e.message, /impulsiveDesc/);
   const e2 = code(() => assertVersionComplete('emotion_pick', { questionFrame: '' }));
   assert.equal(e2.statusCode, 422);
-  for (const f of ['questionFrame', 'pageSetup', 'parentPrompts', 'rationale', 'hintGuidance']) assert.match(e2.message, new RegExp(f));
+  for (const f of ['questionFrame', 'parentPrompts', 'rationale']) assert.match(e2.message, new RegExp(f));
+  for (const f of ['pageSetup', 'hintGuidance']) assert.doesNotMatch(e2.message, new RegExp(f));
 });
 
-test('assertVersionComplete: parentPrompts 2-3, cam xuc, diem', () => {
-  assert.equal(code(() => assertVersionComplete('role_choice', { ...role, parentPrompts: ['a'] })).statusCode, 422);
+test('assertVersionComplete: page_setup / hint_guidance tuy chon, 1 cau goi y du (spec family-story §4.2)', () => {
+  const lean = { questionFrame: 'Bé được hỏi về cảm xúc', parentPrompts: ['Con nghĩ sao?'], rationale: 'r' };
+  assertVersionComplete('emotion_pick', lean);
+  assertVersionComplete('single_correct', { ...lean, correctDesc: 'a', distractorDesc: 'b' });
+  assert.equal(code(() => assertVersionComplete('single_correct', { ...lean, correctDesc: 'a' })).statusCode, 422);
+});
+
+test('assertVersionComplete: parentPrompts 1-3, cam xuc, diem', () => {
+  assert.equal(code(() => assertVersionComplete('role_choice', { ...role, parentPrompts: [] })).statusCode, 422);
   assert.equal(code(() => assertVersionComplete('role_choice', { ...role, parentPrompts: ['a', 'b', 'c', 'd'] })).statusCode, 422);
   assert.match(code(() => assertVersionComplete('emotion_pick', { ...common, hintGuidance: 'g', allowedEmotions: ['joy'] })).message, /allowedEmotions/);
   assert.match(code(() => assertVersionComplete('role_choice', { ...role, avoidantScore: 1.2 })).message, /avoidantScore/);

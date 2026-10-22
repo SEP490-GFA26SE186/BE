@@ -11,7 +11,7 @@ def _sample() -> StoryGenerateRequest:
 
 
 def test_prompt_version_from_front_matter() -> None:
-    assert PROMPT_VERSION == "story.v2"
+    assert PROMPT_VERSION == "story.v3"
 
 
 def test_render_sample(settings) -> None:
@@ -20,7 +20,7 @@ def test_render_sample(settings) -> None:
     assert "{NV1}" in prompt  # the literal token survives (no str.format / f-string)
     assert str(req.limits.page_max_words) in prompt
     assert "$" not in prompt  # every placeholder substituted
-    assert "version: story.v2" not in prompt  # front matter is not sent to the model
+    assert "version: story.v3" not in prompt  # front matter is not sent to the model
     for page_id in req.pages:
         assert page_id in prompt
     for cp in req.checkpoints:

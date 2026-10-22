@@ -70,7 +70,7 @@ test('buildEvidence: lua chon dau (nhan cam xuc / chu phuong an), dung ngay lan 
   assert.equal(ev.filter((e) => e.subSkillId === 'a').length, 5);
   assert.deepEqual(ev[0], {
     subSkillId: 'a', answeredAt: answers[0].answeredAt, storyTitle: 'Bin và Bà', question: 'Bin thấy sao?',
-    firstChoiceText: 'Giận', correctFirstTry: true, usedHint: false, source: 'ai_template',
+    firstChoiceText: 'Giận', correctFirstTry: true, usedHint: false, source: 'ai_template', momentSummary: null,
   });
   assert.deepEqual([ev[1].firstChoiceText, ev[1].correctFirstTry, ev[1].usedHint], ['Buồn', false, true]);
   assert.deepEqual([ev[2].firstChoiceText, ev[2].correctFirstTry, ev[2].question], ['Bin hít thở', true, 'Bin làm gì?']);
@@ -105,4 +105,14 @@ test('buildConversation: parentPrompts theo truyen (bo trung, toi da 3) + reflec
     },
     { storyId: 's2', storyTitle: 'Truyện của mẹ', subSkillId: null, prompts: ['Bin nghĩ gì?'] },
   ]);
+});
+
+test('buildEvidence: momentSummary chi voi truyen family (da thay ten that), khong voi topic', () => {
+  const fam = { ...story, entry: 'family', momentSummary: '{NV1} giận khi em làm đổ tháp' };
+  const ev = buildEvidence([
+    ans({ firstEmotion: 'angry', checkpoint: { type: 'emotion_self', question: 'q', answerEmotion: 'angry', story: fam } }),
+    ans({ firstEmotion: 'angry', checkpoint: { type: 'emotion_self', question: 'q', answerEmotion: 'angry', story: { ...fam, entry: 'topic' } } }),
+  ]);
+  assert.equal(ev[0].momentSummary, 'Bin giận khi em làm đổ tháp');
+  assert.equal(ev[1].momentSummary, null);
 });

@@ -29,9 +29,11 @@ Request:
 | Trường | Kiểu | Ghi chú |
 |---|---|---|
 | `request_id` | string | |
-| `topic` | `{title, competency, guidance, age_min?, age_max?, sub_skills?}` | Bài học do Moderator quản lý; `competency` là một trong 5 năng lực CASEL (docs 02). `age_min` / `age_max` (số nguyên dương, `age_min <= age_max`) đưa vào prompt ("trẻ 6–9 tuổi"); thiếu một trong hai thì prompt dùng "trẻ 5–8 tuổi". `sub_skills: [{name, description}]` (1–3 kỹ năng con cùng năng lực, lời Việt), mặc định `[]` |
+| `topic` | `{title, competency, guidance, age_min?, age_max?, sub_skills?}` \| null | Chuyện mẫu; `null` với truyện family. Bài học do Moderator quản lý; `competency` là một trong 5 năng lực CASEL (docs 02). `age_min` / `age_max` (số nguyên dương, `age_min <= age_max`) đưa vào prompt ("trẻ 6–9 tuổi"); thiếu một trong hai thì prompt dùng "trẻ 5–8 tuổi". `sub_skills: [{name, description}]` (1–3 kỹ năng con cùng năng lực, lời Việt), mặc định `[]` |
+| `age_min`, `age_max` | int \| null | Tuổi của bé (spec family-story 5.2), ưu tiên hơn `topic.age_*`; không có thì lấy topic, rồi 5–8 |
+| `family` | `{moment, seed_event, anchor_page, sub_skills}` \| null | Truyện "Kể chuyện nhà mình": `moment` / `seed_event` (string \| null, dạng token), `anchor_page` thuộc `pages` (trang ngay trước điểm dừng chấm thứ hai, Node tính), `sub_skills: [{name, description}]`. **Đúng một** trong `topic` / `family` khác null, sai → `INVALID_INPUT` |
 | `characters` | `[{token, description, is_main}]` | `token` khớp `{NV<số>}`; đúng một `is_main = true` |
-| `situation` | string \| null | Chuyện thật, đã che tên |
+| `situation` | string \| null | Chuyện thật, đã che tên; prompt chỉ có phần "Chuyện thật phụ huynh kể" khi có giá trị |
 | `tone` | `gentle` \| `playful` | |
 | `pages` | `[page_id]` | Theo thứ tự, không trùng |
 | `checkpoints` | `[{id, type, after, target?, guide?}]` | `after` thuộc `pages`, tối đa 1 điểm dừng mỗi trang; `target` là token đã khai, bắt buộc với `emotion_other` (tuỳ chọn với `perspective` từ story.v2); `guide` xem dưới |
@@ -74,8 +76,37 @@ Response:
 | `scenes` | `{scene_id: mô tả tiếng Anh}` |
 | `checkpoints` | `{checkpoint_id: ...}` theo kiểu — xem docs 03. `problem_solving.options` khoá theo vai (`constructive` / `avoidant` / `impulsive`), `perspective.options` khoá theo `option_id` |
 | `warnings` | `[{code, target_id, detail}]`; `detail` tiếng Việt |
-| `prompt_version` | vd. `story.v2` |
+| `prompt_version` | `story.v3` (một prompt cho mọi request; v1 / v2 chỉ còn làm lịch sử) |
 | `usage` | cộng dồn |
+
+## `POST /v1/story/analyze`
+
+Phân tích lời kể "Kể chuyện nhà mình" (spec `BE/docs/superpowers/specs/2026-10-22-family-story-design.md`
+§5.3, A.2): tìm khoảnh khắc khó, chọn 1–2 kỹ năng con. Prompt `analyze.v1`. Chốt chặn tên thật chạy
+trên `situation` và `characters[].description` trước lời gọi.
+
+Request (`extra="forbid"`, có `__force`):
+
+| Trường | Kiểu | Ghi chú |
+|---|---|---|
+| `request_id` | string | |
+| `situation` | string | Lời kể đã token hoá `{NVx}` |
+| `characters` | `[{token, description, is_main}]` | Như `/generate` |
+| `age_min`, `age_max` | int | `age_min <= age_max` |
+| `catalog` | `[{code, name, description, competency}]` | Danh mục dùng được, ≥ 1, mã không trùng |
+| `needs` | `[code]` | ⊂ `catalog`, 0–5, mặc định `[]` |
+| `forced_sub_skills` | `[code]` | ⊂ `catalog`, 0–2, mặc định `[]` |
+| `limits` | `{moment_max_words, seed_event_max_words}` | Bắt buộc |
+| `forbidden_terms` | `[string]` | |
+| `blocked_keywords` | `[{keyword, severity}]` | |
+
+Response: `{request_id, moment_summary, seed_event, sub_skill_codes, reasons, usage, provider, model}`.
+`sub_skill_codes` 1–2 mã, mã đầu là kỹ năng chính. Validator (mọi lỗi đều thử lại 1 lần, vẫn sai →
+`OUTPUT_INVALID`): `ANALYZE_CODE_COUNT`, `ANALYZE_CODE_NOT_ALLOWED` (forced → đúng `forced_sub_skills`
+theo thứ tự; có khoảnh khắc → ⊂ `catalog`; không → ⊂ `needs`, `needs` rỗng thì ⊂ `catalog`),
+`ANALYZE_MOMENT_SEED_INVALID` (đúng một trong `moment_summary` / `seed_event`), `ANALYZE_TEXT_TOO_LONG`,
+`UNKNOWN_CHARACTER_TOKEN`, `BLOCKED_KEYWORD_BLOCK`. Mock: có khoảnh khắc khi lời kể chứa
+"giận" / "sợ" / "khóc" / "buồn", chọn mã đầu danh sách được phép (forced: cả danh sách).
 
 ## `POST /v1/images/portrait`
 

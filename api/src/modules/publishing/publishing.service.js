@@ -150,6 +150,9 @@ export async function createListing(user, body, narrationOptions) {
         length: story.length,
         title: body.title.trim(),
         situation: null, // chuyen that cua gia dinh khong theo ban dang ban
+        // Loi vao + co cham theo truyen goc; khoanh khac / tinh tiet (chuyen that) khong theo ban dang ban.
+        entry: story.entry,
+        scored: story.scored,
         useAiImage: story.useAiImage, // tranh ve tu mo ta ngoai hinh, khong co ten -> theo sang ban dang ban
         useTts: story.useTts, // theo lua chon cua tac gia; audio sinh lai bang ten chung ben duoi
         status: 'ready',

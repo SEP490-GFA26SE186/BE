@@ -49,9 +49,19 @@ test('createStory: can it nhat mot nhan vat, id phai la uuid', () => {
   assert.equal(create(body({ topicId: 'x' })).success, false);
 });
 
-test('createStory: title bat buoc, situation tuy chon', () => {
+test('createStory: title bat buoc; chuyen mau khong nhan situation, tu viet thi tuy chon', () => {
   assert.equal(create(body({ title: '  ' })).success, false);
-  assert.equal(create(body({ situation: 'Bin giận Mít' })).success, true);
+  assert.equal(create(body({ situation: 'Bin giận Mít' })).success, false);
+  assert.equal(create(body({ length: 'custom', situation: 'Bin giận Mít' })).success, true);
+});
+
+test('createStory family: can situation 20+ ky tu + analysisToken, khong topicId', () => {
+  const fam = { entry: 'family', topicId: undefined, situation: 'Bin đang xếp lego thì em làm đổ tháp.', analysisToken: 'x.y' };
+  assert.equal(create(body(fam)).success, true);
+  assert.equal(create(body({ ...fam, analysisToken: undefined })).success, false);
+  assert.equal(create(body({ ...fam, situation: 'ngắn quá' })).success, false);
+  assert.equal(create(body({ ...fam, topicId: '7d0c5e1e-7d43-4f4c-9c55-9b3d1f6f1a11' })).success, false);
+  assert.equal(create(body({ entry: 'handwritten' })).success, false);
 });
 
 test('getStories: page/limit ep so, mac dinh 1/10, loc status', () => {

@@ -1,7 +1,8 @@
 // Mau cau hoi (question_templates) co phien ban: ban published bat bien, sua = tao/ghi ban nhap moi.
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
-import { assertVersionComplete } from './lib/templateRules.js';
+import { assertVersionComplete, draftDefaults } from './lib/templateRules.js';
+import { CASEL_URL } from '../../../prisma/data/casel.js';
 
 const SCORES = ['constructiveScore', 'avoidantScore', 'impulsiveScore'];
 const CONTENT_FIELDS = [
@@ -50,18 +51,56 @@ const listTemplates = async ({ subSkillId, skillId, isActive } = {}) => {
   return rows.map(formatTemplate);
 };
 
-const createTemplate = async (user, { subSkillId, title, answerFormat }) => {
+const TITLE_FROM_FRAME = 60;
+
+/** Ten mau tu sinh tu y dinh cau hoi (o 1) khi chuyen gia de trong (spec family-story §4.2). */
+const titleFrom = (title, questionFrame) => {
+  const given = title?.trim();
+  if (given) return given;
+  const frame = (questionFrame ?? '').trim().replace(/\s+/g, ' ');
+  if (!frame) throw ApiError.badRequest('Cần tên mẫu hoặc nội dung "Bé được hỏi về điều gì".');
+  return frame.length > TITLE_FROM_FRAME ? `${frame.slice(0, TITLE_FROM_FRAME).trimEnd()}…` : frame;
+};
+
+const createTemplate = async (user, { subSkillId, title, answerFormat, ...content }) => {
   if (!(await prisma.eqSubSkill.findUnique({ where: { id: subSkillId }, select: { id: true } }))) {
     throw ApiError.badRequest('Kỹ năng con không hợp lệ.');
   }
+  const data = Object.fromEntries(Object.entries(content).filter(([k, v]) => CONTENT_FIELDS.includes(k) && v !== undefined));
   // question_frame NOT NULL -> nhap rong luu ''; assertVersionComplete coi chuoi trong la thieu.
   const created = await prisma.questionTemplate.create({
     data: {
       subSkillId,
-      title: title.trim(),
+      title: titleFrom(title, data.questionFrame),
       answerFormat,
       createdBy: user.id,
-      versions: { create: { version: 1, status: 'draft', questionFrame: '', createdBy: user.id } },
+      versions: {
+        create: { questionFrame: '', ...draftDefaults(answerFormat, CASEL_URL), ...data, version: 1, status: 'draft', createdBy: user.id },
+      },
+    },
+    select: { id: true },
+  });
+  return load(created.id);
+};
+
+const COPY_SUFFIX = ' (bản sao)';
+
+/**
+ * POST /:id/duplicate: mau moi cung ky nang con + dang tra loi, ban nhap v1 chep noi dung ban
+ * published moi nhat (chua ban hanh thi chep ban nhap).
+ */
+const duplicateTemplate = async (user, id) => {
+  const t = await prisma.questionTemplate.findUnique({ where: { id }, include: { versions: { orderBy: { version: 'desc' } } } });
+  if (!t) throw ApiError.notFound('Không tìm thấy mẫu câu hỏi.');
+  const source = t.versions.find((v) => v.status === 'published') ?? t.versions.find((v) => v.status === 'draft');
+  const content = source ? pickContent(source) : { questionFrame: '', ...draftDefaults(t.answerFormat, CASEL_URL) };
+  const created = await prisma.questionTemplate.create({
+    data: {
+      subSkillId: t.subSkillId,
+      title: `${t.title.slice(0, 200 - COPY_SUFFIX.length)}${COPY_SUFFIX}`,
+      answerFormat: t.answerFormat,
+      createdBy: user.id,
+      versions: { create: { ...content, version: 1, status: 'draft', createdBy: user.id } },
     },
     select: { id: true },
   });
@@ -94,7 +133,7 @@ const saveDraft = async (user, id, body) => {
       const latest = t.versions.find((v) => v.status === 'published');
       await prisma.questionTemplateVersion.create({
         data: {
-          ...(latest ? pickContent(latest) : { questionFrame: '' }),
+          ...(latest ? pickContent(latest) : { questionFrame: '', ...draftDefaults(t.answerFormat, CASEL_URL) }),
           ...data,
           templateId: id,
           version: (t.versions[0]?.version ?? 0) + 1,
@@ -136,4 +175,4 @@ const deleteTemplate = async (id) => {
   return { deleted: true, message: 'Đã xoá mẫu câu hỏi.' };
 };
 
-export default { listTemplates, createTemplate, updateTemplate, saveDraft, publish, deleteTemplate };
+export default { listTemplates, createTemplate, duplicateTemplate, updateTemplate, saveDraft, publish, deleteTemplate };

@@ -31,6 +31,8 @@ const JOB_CONFIG = {
   // tren 5500U, 31-38 s trong Docker Desktop (2026-10-18). Queue narration chay 1 job mot luc nen
   // khong phai cho khoa ben ai/.
   [AI_JOB.NARRATION]: { endpoint: '/v1/tts/synthesize', timeoutMs: 150_000 },
+  // Goi dong bo trong request cua phu huynh (spec family-story §5.1): ~90 s.
+  [AI_JOB.STORY_ANALYSIS]: { endpoint: '/v1/story/analyze', timeoutMs: 90_000 },
 };
 
 export class AiServiceError extends Error {

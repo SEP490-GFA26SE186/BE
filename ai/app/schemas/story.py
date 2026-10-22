@@ -138,6 +138,19 @@ class Limits(StrictModel):
         return self
 
 
+class FamilyBlock(StrictModel):
+    """Family story (family-story spec A.2): the analysed moment or the seed event.
+
+    `anchor_page` is computed by Node: the page right before the second scored checkpoint (or
+    the last scored one if there is only one; unscored story: the second-to-last page).
+    """
+
+    moment: str | None = None  # tokenised; the hard moment found in the parent's story
+    seed_event: str | None = None  # tokenised; small event the AI adds when there is none
+    anchor_page: str
+    sub_skills: list[SubSkillIn] = []
+
+
 class BlockedKeyword(StrictModel):
     keyword: str
     severity: Literal["warn", "block"]
@@ -145,7 +158,11 @@ class BlockedKeyword(StrictModel):
 
 class StoryGenerateRequest(ForceableRequest):
     request_id: str
-    topic: Topic
+    topic: Topic | None = None  # null for a family story (family-story spec A.2)
+    # Preferred over topic.age_*; falls back to the topic, then 5-8.
+    age_min: PositiveInt | None = None
+    age_max: PositiveInt | None = None
+    family: FamilyBlock | None = None
     characters: list[CharacterIn]
     situation: str | None = None
     tone: Literal["gentle", "playful"]
@@ -189,6 +206,13 @@ class StoryGenerateRequest(ForceableRequest):
         mains = sum(1 for c in self.characters if c.is_main)
         if mains != 1:
             errors.append(f"cần đúng một nhân vật is_main, đang có {mains}")
+
+        if (self.topic is None) == (self.family is None):
+            errors.append("cần đúng một trong topic hoặc family khác null")
+        if self.family is not None and self.family.anchor_page not in page_set:
+            errors.append(f"family.anchor_page '{self.family.anchor_page}' không có trong pages")
+        if self.age_min is not None and self.age_max is not None and self.age_min > self.age_max:
+            errors.append("cần age_min <= age_max")
 
         if errors:
             raise ValueError("; ".join(errors))

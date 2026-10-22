@@ -78,7 +78,12 @@ Việc mới của Specialist:
 > không rõ. Nay **một kỹ năng con là một mục CASEL**. Bảng `casel_references` và cột
 > `eq_sub_skills.casel_reference_id` đã xoá (migration `20261029000000_sub_skill_is_casel_item`).
 
-**Bảng `eq_sub_skills`** (Specialist quản lý):
+> **Người dùng chốt 2026-10-22:** kỹ năng con là **danh mục chuẩn, chỉ điều chỉnh** — bỏ thêm/xoá qua
+> API (`POST` / `DELETE /sub-skills` đã gỡ). Lý do: kỹ năng tự thêm ngoài CASEL làm mất căn cứ "mọi
+> điểm truy về CASEL". `PUT` chỉ nhận `nameVi`, `descriptionVi`, `ageMin`, `ageMax`, `isActive`
+> (trường khác → 400). Giá trị `source = specialist` chỉ còn để tương thích dữ liệu cũ.
+
+**Bảng `eq_sub_skills`** (Specialist điều chỉnh):
 
 | Cột | Ghi chú |
 |---|---|
@@ -91,12 +96,8 @@ Việc mới của Specialist:
 | is_active, display_order, created_by, timestamps | |
 
 - **Mục gốc CASEL** (`source = casel`, đủ 40 mục SA 9, SM 7, SoA 8, RS 9, RDM 7 — xem trang CASEL ở
-  mục 3): seed từ `api/prisma/data/casel.js`. Specialist **sửa được** tên/mô tả tiếng Việt, tuổi, thứ
-  tự, bật/tắt; **không sửa** năng lực, mã, câu tiếng Anh (422); **không xoá**, chỉ tắt (409
-  "Mục gốc CASEL chỉ tắt được").
-- **Kỹ năng chuyên gia bổ sung** (`source = specialist`): Specialist tạo dưới 1 năng lực, câu gốc
-  CASEL tiếng Anh tuỳ chọn. Xoá chỉ khi chưa có mẫu / topic / checkpoint dùng; đã dùng thì chỉ tắt
-  (409 kèm lý do). Đổi `skill_id` bị khoá khi đã có checkpoint dùng (422).
+  mục 3): seed từ `api/prisma/data/casel.js`. Specialist **sửa được** tên/mô tả tiếng Việt, tuổi,
+  bật/tắt; **không sửa** năng lực, mã, câu tiếng Anh, thứ tự (400); **không thêm / xoá**, chỉ tắt.
 - Seed: 23 mục hợp lứa 5–8 (Phụ lục A) bật sẵn với tên/mô tả Việt do Claude soạn và mẫu câu hỏi; 17
   mục còn lại tắt, tên = bản dịch tiếng Việt của mục. Seed chạy lại không ghi đè tên/mô tả/tuổi/bật-tắt
   Specialist đã sửa; chỉ đặt lại `casel_text_en`.
@@ -260,7 +261,7 @@ Thiết kế này **kéo code về gần phiếu** ở các điểm:
 - "Stories are built on pedagogical templates designed by specialists around the five CASEL
   competencies" · "the LLM fills the template's slots" → mẫu câu hỏi + khung ô theo topic.
 - Specialist: "Create, update, and retire pedagogical templates (stages, learning objectives, choice
-  types with skill signals)" → CRUD kỹ năng con, mẫu (dạng trả lời + điểm), topic có mục tiêu.
+  types with skill signals)" → điều chỉnh danh mục kỹ năng con (bật/tắt, diễn giải), CRUD mẫu (dạng trả lời + điểm), topic có mục tiêu.
 - "AI can never … assign skill signals" · "EQ report from human-verified skill signals" → điểm lấy từ
   mẫu do Specialist ban hành; AI không chọn vai/điểm.
 - Specialist "complete weekly random audits" → soát mẫu checkpoint (mục 8).

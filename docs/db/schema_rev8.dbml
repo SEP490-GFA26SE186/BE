@@ -17,6 +17,7 @@
 //    stories.topic_id tuy chon voi truyen custom
 //  - 2026-10-21 gop tang: ky nang con CHINH LA muc CASEL (bo casel_references; eq_sub_skills them
 //    casel_text_en + source casel/specialist)
+//  - 2026-10-22 ky nang con la danh muc chuan: khong them / xoa qua API, chi chinh ten / mo ta / tuoi / bat-tat
 // =============================================================================
 
 
@@ -108,6 +109,7 @@ Enum ai_request_type {
   character_portrait
   scene_image
   narration
+  story_analysis [note: 'phan tich loi ke "Ke chuyen nha minh" (dong bo, khong tru credit)']
 }
 
 Enum ai_request_status {
@@ -265,6 +267,18 @@ Enum template_status {
   published
 }
 
+Enum story_entry {
+  topic [note: 'Chuyen mau: theo topic cua chuyen gia']
+  family [note: 'Ke chuyen nha minh: loi ke phu huynh + ky nang da xac nhan']
+  handwritten [note: 'tu viet (length = custom)']
+}
+
+Enum story_sub_skill_source {
+  moment [note: 'khop khoanh khac kho trong loi ke']
+  need [note: 'be dang can (theo muc ky nang con)']
+  parent [note: 'phu huynh chon o "Doi ky nang"']
+}
+
 
 // ---------------------------------------------------------------------------
 // 1. ACCOUNTS
@@ -392,7 +406,7 @@ Table eq_sub_skills {
   name_vi varchar(200) [not null]
   description_vi text [not null, note: 'loi cho phu huynh / AI']
   casel_text_en text [note: 'nguyen van tieng Anh cua muc CASEL; bat buoc khi source = casel, khong sua qua API']
-  source sub_skill_source [not null, default: 'specialist', note: 'casel = 40 muc goc (seed); specialist = chuyen gia bo sung']
+  source sub_skill_source [not null, default: 'specialist', note: 'casel = 40 muc goc (seed); specialist chi con cho du lieu cu, API khong tao moi']
   age_min int [not null, default: 5]
   age_max int [not null, default: 8]
   is_active boolean [not null, default: true]
@@ -407,8 +421,9 @@ Table eq_sub_skills {
 
   Note: '''
   Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21).
-  source = casel: 40 muc goc CASEL (seed), khong doi skill_id / code / casel_text_en, khong xoa (chi tat).
-  source = specialist: Specialist bo sung duoi 1 nang luc, casel_text_en tuy chon; xoa duoc khi chua dung.
+  Danh muc chuan (chot 2026-10-22): 40 muc goc CASEL tu seed; khong them / xoa qua API.
+  Specialist chi sua name_vi, description_vi, age_min, age_max, is_active;
+  skill_id / code / casel_text_en / display_order giu nguyen.
   CHECK: age_min <= age_max; source <> 'casel' OR casel_text_en IS NOT NULL
   '''
 }
@@ -530,10 +545,14 @@ Table stories {
   owner_id uuid [not null]
   kind story_kind [not null, default: 'private']
   source_story_id uuid [note: 'published: truyen rieng goc']
-  topic_id uuid [note: 'bat buoc voi short/medium/long; tuy chon voi custom']
+  topic_id uuid [note: 'bat buoc voi entry = topic; tuy chon voi handwritten; null voi family']
+  entry story_entry [not null, default: 'topic', note: 'loi vao tao truyen; length = custom -> handwritten']
   length story_length [not null, default: 'medium', note: 'short/medium/long: AI viet, he thong dat khung; custom: tu viet, cau truc tu do']
   title varchar(200) [not null]
   situation text [note: 'chuyen that phu huynh ke, luu dang token {NVx}']
+  moment_summary text [note: 'family: khoanh khac kho, dang token']
+  seed_event text [note: 'family: tinh tiet AI them, dang token']
+  scored boolean [not null, default: true, note: 'family "chi ke truyen" -> false']
   use_ai_image boolean [not null, default: false]
   use_tts boolean [not null, default: true]
   status story_status [not null, default: 'draft']
@@ -551,10 +570,30 @@ Table stories {
   private  : truyen phu huynh tao cho con minh, sua tu do
   published: ban sao da go ca nhan hoa de ban; dong bang sau khi duyet
   CHECK: kind <> published OR source_story_id IS NOT NULL
-  CHECK: length = custom OR topic_id IS NOT NULL
+  CHECK: entry <> topic OR topic_id IS NOT NULL
+  CHECK: kind <> private OR (entry = family) = (moment_summary IS NOT NULL OR seed_event IS NOT NULL OR NOT scored)
+    (ban dang ban bo chuyen that nen khong ap)
   Chi dua vao gia sach khi reviewed_at IS NOT NULL
   Truyen custom (validator khi luu): 4-20 trang, 0-6 diem dung co cham,
     khong dat sau trang 1, reflection chi o cuoi
+  '''
+}
+
+Table story_sub_skills {
+  story_id uuid [not null]
+  sub_skill_id uuid [not null]
+  source story_sub_skill_source [not null]
+  position smallint [not null, note: '1 = ky nang chinh']
+
+  indexes {
+    (story_id, sub_skill_id) [pk]
+    (story_id, position) [unique]
+    sub_skill_id
+  }
+
+  Note: '''
+  family: ky nang phu huynh da xac nhan, 1-2
+  CHECK: position BETWEEN 1 AND 2
   '''
 }
 
@@ -754,10 +793,11 @@ Table checkpoint_answers {
   }
 
   Note: '''
-  skill_id / score tinh ngay luc tra loi va dong bang:
-    emotion_self -> Tu nhan thuc; emotion_other, perspective -> Nhan thuc xa hoi;
-    problem_solving -> nang luc cua topic (constructive 1, avoidant 0.5, impulsive 0)
-  Doi topic hay doi cach cham ve sau khong lam thay doi lich su.
+  skill_id / score tinh ngay luc tra loi va dong bang, theo phien ban mau gan vao checkpoint:
+    skill_id = nang luc cua sub_skill; score = emotion_pick / single_correct dung 1 sai 0,
+    role_choice theo diem tung vai cua phien ban (seed: constructive 1, avoidant 0.5, impulsive 0).
+  Chi luot doc dau (play_sessions.is_first_play) va lan chon dau duoc tinh; checkpoint excluded bi loai khi doc bao cao.
+  Doi mau / doi topic ve sau khong lam thay doi lich su.
   '''
 }
 
@@ -1247,6 +1287,8 @@ Ref: question_template_versions.created_by > users.id [delete: restrict]
 Ref: question_template_versions.published_by > users.id [delete: restrict]
 Ref: topic_sub_skills.topic_id > topics.id [delete: restrict]
 Ref: topic_sub_skills.sub_skill_id > eq_sub_skills.id [delete: restrict]
+Ref: story_sub_skills.story_id > stories.id [delete: cascade]
+Ref: story_sub_skills.sub_skill_id > eq_sub_skills.id [delete: restrict]
 Ref: story_characters.story_id > stories.id [delete: cascade]
 Ref: story_characters.character_id > characters.id [delete: restrict]
 Ref: story_scenes.story_id > stories.id [delete: cascade]
@@ -1356,6 +1398,7 @@ TableGroup content_library {
 
 TableGroup stories_group {
   stories
+  story_sub_skills
   story_characters
   story_scenes
   story_pages

@@ -12,10 +12,13 @@ Story text is Vietnamese on purpose: it is content, not a log (spec 7.2).
 
 import unicodedata
 
+from app.core.text_utils import contains_phrase
+from app.core.validator.analyze_rules import allowed_codes
 from app.errors import AiError
 from app.providers.llm.base import LLMResult, StoryLLMCall
+from app.schemas.analyze import StoryAnalyzeRequest
 from app.schemas.common import ForceCode
-from app.schemas.llm import LlmCheckpoint, LlmOption, LlmPage, LlmScene, LlmStoryOutput
+from app.schemas.llm import LlmAnalyzeOutput, LlmCheckpoint, LlmOption, LlmPage, LlmScene, LlmStoryOutput
 from app.schemas.story import CheckpointFrame, CheckpointType, Emotion, StoryGenerateRequest
 
 # Neutral clauses: no emotion word (the answer must not be spelled out on the page, docs/03),
@@ -186,6 +189,47 @@ def build_valid_output(frame: StoryGenerateRequest) -> LlmStoryOutput:
     return LlmStoryOutput(pages=pages, scenes=scenes, checkpoints=checkpoints)
 
 
+# A situation with any of these words has a hard moment (family-story spec 5.3).
+_MOMENT_WORDS = ("giận", "sợ", "khóc", "buồn")
+
+
+def _blocked_words(blocked_keywords: list) -> set[str]:
+    return {_key(word) for kw in blocked_keywords for word in kw.keyword.split()}
+
+
+def _short(text: str, max_words: int, blocked: set[str]) -> str:
+    words = [w for w in text.split() if _key(w) not in blocked][: max(1, max_words)]
+    return " ".join(words).rstrip(_TRAILING_PUNCTUATION)
+
+
+def build_valid_analysis(req: StoryAnalyzeRequest) -> LlmAnalyzeOutput:
+    """A deterministic output that is valid for `req`: a moment when the situation has a
+    moment word, else a seed event; the first allowed code (all forced codes when forced)."""
+    main = next(c.token for c in req.characters if c.is_main)
+    other = next((c.token for c in req.characters if not c.is_main), main)
+    blocked = _blocked_words(req.blocked_keywords)
+    has_moment = any(contains_phrase(req.situation, w) for w in _MOMENT_WORDS)
+    _, allowed = allowed_codes(req, has_moment)
+    codes = allowed if req.forced_sub_skills else allowed[:1]
+    moment = seed = None
+    if has_moment:
+        moment = _short(
+            f"{main} thấy khó chịu khi chuyện không như ý cùng {other}",
+            req.limits.moment_max_words, blocked,
+        )
+    else:
+        seed = _short(
+            f"{other} làm rơi món đồ chơi {main} vừa xếp xong",
+            req.limits.seed_event_max_words, blocked,
+        )
+    return LlmAnalyzeOutput(
+        moment_summary=moment,
+        seed_event=seed,
+        sub_skill_codes=codes,
+        reasons=["Mock: chọn mã đầu của danh sách được phép."],
+    )
+
+
 def _fake_tokens(text: str) -> int:
     # Deterministic and > 0; roughly 4 characters per token. Not a real tokenizer.
     return max(1, len(text) // 4)
@@ -210,7 +254,11 @@ class MockLLMProvider:
         if force == ForceCode.TIMEOUT:
             raise AiError.timeout("Mock: provider quá thời gian giả lập.")
 
-        text = build_valid_output(call.frame).model_dump_json()
+        frame = call.frame
+        if isinstance(frame, StoryAnalyzeRequest):
+            text = build_valid_analysis(frame).model_dump_json()
+        else:
+            text = build_valid_output(frame).model_dump_json()
         # Which call of the request this is, read from the turns (a retry carries the
         # previous `model` turn), so the instance keeps no state between requests.
         is_first_call = not any(turn.role == "model" for turn in call.contents)

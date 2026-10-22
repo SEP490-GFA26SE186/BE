@@ -86,9 +86,9 @@ test('POST /stories medium -> 8 trang trong, 1 canh tam, 4 diem dung dung vi tri
   ]);
 });
 
-test('POST /stories: situation co ten nhan vat -> luu dang token', { skip }, async () => {
+test('POST /stories (tu viet): situation co ten nhan vat -> luu dang token', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f, { situation: 'Bin không muốn cho Mít mượn xe.' });
+  const story = await createStory(f, { length: 'custom', situation: 'Bin không muốn cho Mít mượn xe.' });
   assert.equal(story.situation, '{NV1} không muốn cho {NV2} mượn xe.');
   const row = await prisma.story.findUnique({ where: { id: story.id } });
   assert.equal(row.situation, '{NV1} không muốn cho {NV2} mượn xe.');
@@ -98,7 +98,7 @@ test('POST /stories: situation co ten con khong la nhan vat -> 422, khong tao gi
   const f = await family();
   const res = await api.request('POST', '/stories', {
     token: f.token,
-    body: createBody(f, { situation: 'Na giành đồ chơi của Bin.' }),
+    body: createBody(f, { length: 'custom', situation: 'Na giành đồ chơi của Bin.' }),
   });
   assert.equal(res.status, 422);
   assert.match(res.body.message, /tên của con chưa có trong truyện/);
@@ -286,7 +286,7 @@ test('Route editor/generation da khai bao, tam tra 501', { skip }, async () => {
 
 test('PUT /stories/:id/characters: bo nhan vat con nam trong situation -> 422, khong doi gi', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f, { situation: 'Bin giận Mít.' });
+  const story = await createStory(f, { length: 'custom', situation: 'Bin giận Mít.' });
 
   const res = await api.request('PUT', `/stories/${story.id}/characters`, {
     token: f.token,
@@ -302,7 +302,7 @@ test('PUT /stories/:id/characters: bo nhan vat con nam trong situation -> 422, k
 
 test('PUT /stories/:id/characters: giu nhan vat, doi vai -> situation chuyen sang token moi', { skip }, async () => {
   const f = await family();
-  const story = await createStory(f, { situation: 'Bin giận Mít.' });
+  const story = await createStory(f, { length: 'custom', situation: 'Bin giận Mít.' });
   const res = await api.request('PUT', `/stories/${story.id}/characters`, {
     token: f.token,
     body: { characters: [{ characterId: f.mit.id, isMain: true }, { characterId: f.bin.id, isMain: false }] },

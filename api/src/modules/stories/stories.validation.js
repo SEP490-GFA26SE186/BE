@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 const STORY_LENGTHS = ['short', 'medium', 'long', 'custom'];
+const AI_LENGTHS = ['short', 'medium', 'long'];
+const STORY_ENTRIES = ['topic', 'family', 'handwritten'];
 const STORY_STATUSES = ['draft', 'generating', 'ready'];
 const CHECKPOINT_TYPES = ['emotion_self', 'emotion_other', 'perspective', 'problem_solving', 'reflection'];
 const EMOTIONS = ['happy', 'sad', 'angry', 'scared', 'neutral'];
@@ -37,19 +39,67 @@ const characters = z
     message: 'Mỗi nhân vật chỉ được chọn một lần',
   });
 
+// Loi ke "Ke chuyen nha minh" (spec family-story §3.1): bat buoc 20-2000 ky tu.
+const familySituation = z
+  .string({ error: 'Lời kể là bắt buộc' })
+  .trim()
+  .min(20, 'Lời kể cần ít nhất 20 ký tự')
+  .max(2000, 'Lời kể không quá 2000 ký tự');
+
+/**
+ * Ba loi vao (spec family-story §6.1, A.1):
+ * - `length = custom`: tu viet (entry bo trong hoac handwritten), situation tuy chon, topic tuy chon;
+ * - `entry = topic` (mac dinh voi do dai AI): bat buoc topicId, KHONG nhan situation;
+ * - `entry = family`: bat buoc situation + analysisToken, khong co topicId; `scored` mac dinh true.
+ */
 const createStory = z.object({
   body: z
     .object({
-      // Chi truyen tu viet (custom) duoc bo trong topic; truyen AI van bat buoc.
+      entry: z.enum(STORY_ENTRIES, { error: 'Lối vào phải là topic, family hoặc handwritten' }).optional(),
       topicId: uuid('ID chủ đề').optional(),
       length: z.enum(STORY_LENGTHS, { error: 'Độ dài truyện phải là short, medium, long hoặc custom' }),
       title,
       situation: situation.optional(),
       characters,
+      analysisToken: z.string().min(1).max(8000).optional(),
+      scored: z.boolean().optional(),
       useAiImage: z.boolean().default(false),
       useTts: z.boolean().default(true),
     })
-    .refine((b) => b.length === 'custom' || b.topicId, { path: ['topicId'], message: 'Truyện AI cần chọn chủ đề' }),
+    .superRefine((b, ctx) => {
+      const issue = (path, message) => ctx.addIssue({ code: 'custom', path: [path], message });
+      if (b.length === 'custom') {
+        if (b.entry && b.entry !== 'handwritten') issue('entry', 'Truyện tự viết không dùng lối vào này');
+        return;
+      }
+      const entry = b.entry ?? 'topic';
+      if (entry === 'handwritten') issue('entry', 'Truyện AI chỉ dùng lối vào topic hoặc family');
+      if (entry === 'topic') {
+        if (!b.topicId) issue('topicId', 'Truyện AI cần chọn chủ đề');
+        if (b.situation !== undefined) issue('situation', 'Chuyện mẫu không nhận lời kể; hãy chọn "Kể chuyện nhà mình"');
+      }
+      if (entry === 'family') {
+        if (b.topicId) issue('topicId', 'Kể chuyện nhà mình không chọn chủ đề');
+        if (!b.analysisToken) issue('analysisToken', 'Cần phân tích lời kể trước khi tạo truyện');
+        const parsed = familySituation.safeParse(b.situation);
+        if (!parsed.success) issue('situation', parsed.error.issues[0]?.message ?? 'Lời kể không hợp lệ');
+      }
+    }),
+});
+
+// POST /stories/analyze (spec family-story §5.1, A.1)
+const analyzeStory = z.object({
+  body: z.object({
+    situation: familySituation,
+    characters,
+    length: z.enum(AI_LENGTHS, { error: 'Độ dài truyện phải là short, medium hoặc long' }),
+    subSkillIds: z
+      .array(uuid('ID kỹ năng con'))
+      .min(1, 'Chọn 1-2 kỹ năng')
+      .max(2, 'Chọn tối đa 2 kỹ năng')
+      .refine((ids) => new Set(ids).size === ids.length, { message: 'Mỗi kỹ năng chỉ chọn một lần' })
+      .optional(),
+  }),
 });
 
 const getStories = z.object({
@@ -153,6 +203,7 @@ const sceneOnly = z.object({ params: storyParams.extend({ sceneId: z.string().uu
 
 export default {
   createStory,
+  analyzeStory,
   getStories,
   getStory,
   updateStory,

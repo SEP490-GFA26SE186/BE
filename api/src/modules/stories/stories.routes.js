@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import storiesController from './stories.controller.js';
 import storiesValidation from './stories.validation.js';
-import { auth, validate } from '../../middlewares/index.js';
+import { auth, authorize, validate } from '../../middlewares/index.js';
 
 const router = Router();
 
@@ -11,6 +11,8 @@ router.use(auth);
 
 // Bang gia AI viet truyen theo do dai (khai bao truoc '/:id' de khong bi hieu la id).
 router.get('/ai-pricing', storiesController.getAiPricing);
+// Phan tich loi ke "Ke chuyen nha minh" (spec family-story §5.1) — chi phu huynh.
+router.post('/analyze', authorize('parent'), validate(storiesValidation.analyzeStory), storiesController.analyzeStory);
 
 // ---- Truyen (spec §4.1) ----
 router

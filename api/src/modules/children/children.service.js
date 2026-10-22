@@ -208,7 +208,7 @@ const EVIDENCE_SELECT = {
   checkpoint: {
     select: {
       type: true, question: true, answerEmotion: true,
-      story: { select: { title: true, storyCharacters: STORY_NAMES } },
+      story: { select: { title: true, entry: true, momentSummary: true, storyCharacters: STORY_NAMES } },
     },
   },
 };

@@ -11,15 +11,15 @@ const num = (v) => (v == null ? NaN : Number(v));
 /** Tra ve danh sach ten truong con thieu / sai (rong = day du). */
 const missingFields = (format, v) => {
   const missing = [];
-  for (const f of ['questionFrame', 'pageSetup', 'rationale']) if (blank(v[f])) missing.push(f);
+  // page_setup / hint_guidance khong con bat buoc: AI tu suy ra (spec family-story §4.2).
+  for (const f of ['questionFrame', 'rationale']) if (blank(v[f])) missing.push(f);
   const prompts = (v.parentPrompts ?? []).filter((p) => !blank(p));
-  if (prompts.length < 2 || prompts.length > 3) missing.push('parentPrompts (2-3 câu)');
+  if (prompts.length < 1 || prompts.length > 3) missing.push('parentPrompts (1-3 câu)');
 
   if (format === 'emotion_pick') {
-    if (blank(v.hintGuidance)) missing.push('hintGuidance');
     if ((v.allowedEmotions ?? []).some((e) => !EMOTIONS.includes(e))) missing.push('allowedEmotions (chỉ happy, sad, angry, scared, neutral)');
   } else if (format === 'single_correct') {
-    for (const f of ['correctDesc', 'distractorDesc', 'hintGuidance']) if (blank(v[f])) missing.push(f);
+    for (const f of ['correctDesc', 'distractorDesc']) if (blank(v[f])) missing.push(f);
   } else if (format === 'role_choice') {
     for (const r of ROLES) if (blank(v[`${r}Desc`])) missing.push(`${r}Desc`);
     for (const r of ROLES) {
@@ -31,6 +31,16 @@ const missingFields = (format, v) => {
   }
   return missing;
 };
+
+/**
+ * Gia tri dien san cho ban nhap dau tien cua mau moi (spec family-story §4.2): diem vai 1 / 0,5 / 0
+ * (role_choice), cam xuc cho phep = ca 5 (emotion_pick), can cu = trang CASEL.
+ */
+export const draftDefaults = (format, referenceUrl) => ({
+  ...(format === 'role_choice' && { constructiveScore: 1, avoidantScore: 0.5, impulsiveScore: 0 }),
+  ...(format === 'emotion_pick' && { allowedEmotions: [...EMOTIONS] }),
+  referenceUrl,
+});
 
 /** Nem 422 liet ke cac truong thieu neu phien ban chua du de ban hanh. */
 export const assertVersionComplete = (format, version) => {
