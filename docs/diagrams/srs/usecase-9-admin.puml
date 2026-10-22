@@ -1,0 +1,28 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #EEF3FB
+skinparam usecaseBorderColor #4A6FA5
+actor "Admin" as Admin
+rectangle "StoryWeaver AI – Administration" {
+  usecase "UC-50\nManage accounts" as UC50
+  usecase "UC-51\nManage plans and price tiers" as UC51
+  usecase "UC-52\nConfigure platform settings" as UC52
+  usecase "UC-53\nDecide refund" as UC53
+  usecase "UC-54\nProcess withdrawal" as UC54
+  usecase "UC-55\nDecide strike appeal" as UC55
+  usecase "UC-56\nView finance reports" as UC56
+  usecase "UC-57\nView audit logs" as UC57
+}
+Admin --> UC50
+Admin --> UC51
+Admin --> UC52
+Admin --> UC53
+Admin --> UC54
+Admin --> UC55
+Admin --> UC56
+Admin --> UC57
+@enduml

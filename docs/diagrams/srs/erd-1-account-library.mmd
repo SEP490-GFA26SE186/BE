@@ -1,0 +1,13 @@
+erDiagram
+  users ||--o{ child_profiles : "has"
+  users ||--o{ characters : "owns"
+  child_profiles |o--o| characters : "represented by"
+  users ||--o{ auth_tokens : "has"
+  eq_skills ||--o{ casel_references : "groups"
+  eq_skills ||--o{ eq_sub_skills : "groups"
+  casel_references ||--o{ eq_sub_skills : "references"
+  eq_skills ||--o{ topics : "targets"
+  topics ||--o{ topic_sub_skills : ""
+  eq_sub_skills ||--o{ topic_sub_skills : ""
+  eq_sub_skills ||--o{ question_templates : "assessed by"
+  question_templates ||--o{ question_template_versions : "versions"

@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant CR as Cron (every 15 min)
+  participant EL as EarningLedger
+  participant DB as PostgreSQL
+  CR->>EL: releaseDueEarnings(now)
+  EL->>DB: earning_pending rows with available_at <= now, no pending refund
+  loop each earning
+    EL->>DB: SELECT wallet FOR UPDATE
+    EL->>DB: pending -= amount, available += amount
+    EL->>DB: insert wallet_ledger earning_release (key release:orderItem)
+  end

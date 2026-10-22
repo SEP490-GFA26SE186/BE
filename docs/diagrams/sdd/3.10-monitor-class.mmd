@@ -1,0 +1,45 @@
+classDiagram
+  class MonitoringRoutes {
+    +POST listingReports(listingId)
+    +GET moderationReports()
+    +POST dismiss(reportId)
+    +POST suspend(listingId)
+    +POST strikes()
+    +POST appeal(strikeId)
+    +POST appealDecision(appealId)
+    +POST auditsRun()
+    +POST aiFlagBlock(userId)
+  }
+  class MonitoringService {
+    +createReport(user, listingId, body)
+    +dismissReport(moderator, id)
+    +suspendListing(moderator, listingId)
+    +issueStrike(moderator, body)
+    +appealStrike(user, strikeId, reason)
+    +decideAppeal(admin, appealId, approve)
+    +scheduleRandomAudits(now)
+    +listAiFlags() setAiBlock()
+  }
+  class MonitoringRules {
+    +reachesThreshold(reporters, threshold)
+    +strikeExpiry(issuedAt, days)
+    +isStrikeActive(strike, now)
+    +auditDue(now)
+  }
+  class ContentReport {
+    ReportCategory category
+    ReportStatus status
+  }
+  class CreatorStrike {
+    StrikeSource source
+    datetime expiresAt
+    datetime revokedAt
+  }
+  class StrikeAppeal {
+    RequestStatus status
+  }
+  MonitoringRoutes --> MonitoringService
+  MonitoringService --> MonitoringRules
+  MonitoringService --> ContentReport
+  MonitoringService --> CreatorStrike
+  CreatorStrike "1" --> "0..1" StrikeAppeal

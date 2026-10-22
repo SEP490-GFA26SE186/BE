@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant CR as Cron (worker, every 15 min)
+  participant BS as BillingStore
+  participant DB as PostgreSQL
+  CR->>BS: runBillingCycle(now)
+  BS->>DB: subscriptions active AND next_credit_grant_at <= now
+  loop each subscription
+    BS->>BS: cycleAction(sub, now)
+    alt new month in period
+      BS->>DB: credit_expire (key expire:sub:month)
+      BS->>DB: credit_grant (key grant:sub:month), move next_credit_grant_at
+    else period ended
+      BS->>DB: subscription expired, fall back to Free plan
+    end
+  end
+  BS->>DB: orders pending AND expires_at < now -> expired
+  Note over BS,DB: Deterministic idempotency keys make double runs safe

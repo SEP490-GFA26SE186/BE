@@ -1,0 +1,67 @@
+classDiagram
+  class AuthRoutes {
+    +POST register()
+    +POST login()
+    +POST refreshTokens()
+    +POST logout()
+    +POST forgotPassword()
+    +POST resetPassword()
+    +POST kidPinSet()
+    +POST kidModeEnter()
+    +POST kidModeExit()
+  }
+  class AuthController
+  class AuthService {
+    +register(data)
+    +login(identifier, password)
+    +refreshTokens(refreshToken)
+    +setKidPin(userId, pin)
+    +changeKidPin(userId, oldPin, newPin)
+    +enterKidMode(parentId, childId)
+    +exitKidMode(kidToken, pin)
+    +forgotPassword(email)
+    +resetPassword(code, password)
+  }
+  class TokenService {
+    +generateAuthTokens(user)
+    +verifyAndRotateRefreshToken(token)
+    +generateKidSessionToken(parent, childId)
+    +verifyKidSessionToken(token)
+    +consumeKidSessionToken(token)
+    +generatePasswordResetToken(user)
+  }
+  class BillingStore {
+    +ensureFreeSubscription(tx, parentId)
+  }
+  class User {
+    uuid id
+    string email
+    string passwordHash
+    UserRole role
+    string kidExitPinHash
+    bool isActive
+    datetime aiBlockedUntil
+  }
+  class AuthToken {
+    uuid id
+    AuthTokenType type
+    string tokenHash
+    datetime expiresAt
+    datetime consumedAt
+    uuid childId
+  }
+  class ChildProfile {
+    uuid id
+    uuid parentId
+    string name
+    date birthDate
+  }
+  AuthRoutes --> AuthController
+  AuthController --> AuthService
+  AuthService --> TokenService
+  AuthService --> BillingStore : on register
+  TokenService --> AuthToken
+  AuthService --> User
+  AuthService --> ChildProfile
+  User "1" --> "*" AuthToken
+  User "1" --> "*" ChildProfile

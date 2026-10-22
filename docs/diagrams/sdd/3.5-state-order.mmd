@@ -1,0 +1,11 @@
+stateDiagram-v2
+  [*] --> pending : Checkout created (price > 0)
+  [*] --> paid : Free item (0 VND) fulfilled immediately
+  pending --> paid : Webhook / sync PAID, amount matches
+  pending --> failed : payOS link creation failed
+  pending --> cancelled : Buyer cancels on payOS
+  pending --> expired : TTL passed (cron / sync)
+  expired --> paid : Late payment confirmed
+  paid --> [*]
+  failed --> [*]
+  cancelled --> [*]

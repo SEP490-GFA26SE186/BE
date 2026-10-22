@@ -1,0 +1,37 @@
+classDiagram
+  class WithdrawalRoutes {
+    +PUT sellersMeBank()
+    +POST sellersMeWithdrawals()
+    +DELETE sellersMeWithdrawal(id)
+    +GET adminWithdrawals()
+    +POST approve(id)
+    +POST reject(id)
+    +POST sync(id)
+  }
+  class WithdrawalsService {
+    +updateBank(user, body)
+    +getEarnings(user)
+    +requestWithdrawal(user, amount)
+    +cancelWithdrawal(user, id)
+    +approveWithdrawal(admin, id)
+    +rejectWithdrawal(admin, id, reason)
+    +syncWithdrawal(id)
+    +syncProcessingWithdrawals()
+  }
+  class PayOSPayout {
+    +payouts.create()
+    +payouts.get()
+  }
+  class WithdrawalRequest {
+    uuid id
+    bigint amountVnd
+    WithdrawalStatus status
+    string bankTransactionRef
+  }
+  class Wallet
+  class WalletLedger
+  WithdrawalRoutes --> WithdrawalsService
+  WithdrawalsService --> PayOSPayout
+  WithdrawalsService --> Wallet : FOR UPDATE
+  WithdrawalsService --> WalletLedger : withdrawal_hold / paid / release
+  WithdrawalsService --> WithdrawalRequest

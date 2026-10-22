@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> queued : Request created, credit held
+  queued --> processing : Worker picks job
+  processing --> succeeded : Result persisted, credit consumed
+  processing --> failed : Error after retries / timeout, credit released
+  processing --> blocked : Content safety / keyword block, credit released
+  queued --> failed : Enqueue failed or stale job
+  succeeded --> [*]
+  failed --> [*]
+  blocked --> [*]

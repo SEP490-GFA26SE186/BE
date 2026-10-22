@@ -1,0 +1,22 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #EEF3FB
+skinparam usecaseBorderColor #4A6FA5
+actor "Parent" as Parent
+actor "Child" as Child
+rectangle "StoryWeaver AI – Kid Mode" {
+  usecase "UC-17\nEnter Kid Mode" as UC17
+  usecase "UC-18\nRead story" as UC18
+  usecase "UC-19\nAnswer checkpoint" as UC19
+  usecase "UC-20\nExit Kid Mode" as UC20
+}
+Parent --> UC17
+Child --> UC18
+Child --> UC19
+Child --> UC20
+Parent --> UC20
+@enduml

@@ -1,0 +1,58 @@
+classDiagram
+  class BillingRoutes {
+    +POST plansCheckout()
+    +GET order(orderId)
+    +POST payosWebhook()
+  }
+  class BillingService {
+    +checkoutPlan(user, planId)
+    +checkoutOrder(user, price, item)
+    +getOrder(user, orderId)
+    +handleWebhook(body)
+  }
+  class BillingStore {
+    +fulfillOrder(tx, orderId)
+    +closeOrder(tx, orderId, status)
+    +ensureFreeSubscription(tx, parentId)
+    +runBillingCycle(now)
+  }
+  class BillingRules {
+    +newPeriod(plan, now)
+    +cycleAction(sub, now)
+    +newOrderCode()
+  }
+  class PayOSClient {
+    +paymentRequests.create()
+    +paymentRequests.get()
+    +webhooks.verify(body)
+  }
+  class CreditLedger {
+    +grantCredit() expireCredit()
+  }
+  class Order {
+    uuid id
+    OrderStatus status
+    bigint totalVnd
+    bigint payosOrderCode
+    datetime expiresAt
+  }
+  class OrderItem {
+    OrderItemType itemType
+    bigint unitPriceVnd
+    decimal sellerShareRate
+  }
+  class Subscription {
+    SubscriptionStatus status
+    datetime periodStart
+    datetime periodEnd
+    datetime nextCreditGrantAt
+  }
+  class WebhookLog
+  BillingRoutes --> BillingService
+  BillingService --> PayOSClient
+  BillingService --> BillingStore
+  BillingStore --> BillingRules
+  BillingStore --> CreditLedger
+  Order "1" --> "*" OrderItem
+  OrderItem "1" --> "0..1" Subscription
+  BillingService --> WebhookLog

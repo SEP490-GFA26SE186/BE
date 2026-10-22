@@ -1,0 +1,11 @@
+flowchart LR
+  Landing[Landing Page] --> Login[Login]
+  Landing --> Register[Register]
+  Landing --> Legal[Terms / Privacy Policy]
+  Register --> Verify[Verify Email link]
+  Verify --> Login
+  Login --> Forgot[Forgot / Reset Password]
+  Forgot --> Login
+  Login -->|role = parent| PD[Parent Dashboard]
+  Login -->|role = specialist| SD[Specialist Dashboard]
+  Login -->|role = admin| AD[Admin Dashboard]

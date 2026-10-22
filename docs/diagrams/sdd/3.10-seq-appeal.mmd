@@ -1,0 +1,17 @@
+sequenceDiagram
+  actor S as Seller
+  actor A as Admin
+  participant API as MonitoringService
+  participant DB as PostgreSQL
+  S->>API: POST /sellers/me/strikes/:id/appeal {reason}
+  API->>DB: strike own and active? no appeal yet?
+  API->>DB: insert strike_appeals(pending)
+  A->>API: POST /admin/appeals/:id/decision {approve, note}
+  alt admin issued the strike
+    API-->>A: 403 cannot decide own strike
+  else reject without note
+    API-->>A: 422 note required
+  else approve
+    API->>DB: appeal approved, strike revoked
+    API->>DB: active strikes < limit -> seller approved again
+  end

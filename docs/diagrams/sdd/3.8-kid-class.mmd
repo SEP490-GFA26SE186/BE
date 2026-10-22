@@ -1,0 +1,56 @@
+classDiagram
+  class KidRoutes {
+    +GET bookshelf()
+    +POST sessions()
+    +GET session(id)
+    +PUT progress(id)
+    +POST answers(id)
+    +POST complete(id)
+  }
+  class KidAuth {
+    +verify kid_session token -> req.kid
+  }
+  class KidService {
+    +getShelf(kid)
+    +startSession(kid, storyId)
+    +saveProgress(kid, id, pageId)
+    +answer(kid, id, body)
+    +complete(kid, id)
+  }
+  class PlayRules {
+    +readChoice(checkpoint, body)
+    +isCorrect(checkpoint, choice)
+    +firstScore(checkpoint, choice)
+    +answerOutcome(checkpoint, row)
+    +kidStoryContent(story)
+  }
+  class NarrationStore {
+    +loadReadiness(storyId)
+  }
+  class ChildrenService {
+    +getChildEqReport(user, childId)
+    +getChildEqJourney(user, childId)
+  }
+  class EqLevels {
+    +buildEqLevels(answers, settings)
+    +levelFor(scores, settings)
+  }
+  class PlaySession {
+    uuid id
+    PlayStatus status
+    bool isFirstPlay
+    uuid currentPageId
+  }
+  class CheckpointAnswer {
+    int attempts
+    decimal score
+    uuid skillId
+    uuid subSkillId
+    uuid templateVersionId
+  }
+  KidRoutes --> KidAuth
+  KidRoutes --> KidService
+  KidService --> PlayRules
+  KidService --> NarrationStore : ready-for-child gate
+  ChildrenService --> EqLevels
+  PlaySession "1" --> "*" CheckpointAnswer

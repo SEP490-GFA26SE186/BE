@@ -1,0 +1,30 @@
+sequenceDiagram
+  actor P as Parent
+  actor C as Child
+  participant W as Web App
+  participant S as AuthService
+  participant T as TokenService
+  participant DB as PostgreSQL
+  P->>W: Choose child, click Enter Kid Mode
+  W->>S: POST /auth/kid-mode/enter {childId}
+  S->>DB: load parent (kidExitPinHash) and child (owned, not deleted)
+  alt PIN not set
+    S-->>W: 403 Set a Kid Exit PIN first
+  else child not owned
+    S-->>W: 404 Child profile not found
+  else ok
+    S->>T: generateKidSessionToken(parent, childId)
+    T->>DB: insert auth_tokens (kid_session)
+    S-->>W: kid session token + child
+  end
+  C->>W: Read stories (all /kid/* calls carry kid token)
+  P->>W: Enter exit PIN
+  W->>S: POST /auth/kid-mode/exit {pin}
+  S->>T: verifyKidSessionToken(token)
+  alt wrong PIN
+    S-->>W: 401 Incorrect Kid Exit PIN
+  else correct
+    S->>T: consumeKidSessionToken(token)
+    T->>DB: set consumed_at
+    S-->>W: parent tokens, back to Parent Dashboard
+  end
