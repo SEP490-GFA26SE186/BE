@@ -201,6 +201,12 @@ const reviewStory = z.object({ params: storyParams });
 const storyOnly = z.object({ params: storyParams });
 const sceneOnly = z.object({ params: storyParams.extend({ sceneId: z.string().uuid('Mã cảnh không hợp lệ') }) });
 
+// Anh bia: canh cua truyen (da co anh), null = ve mac dinh (canh 1).
+const setCover = z.object({
+  params: storyParams,
+  body: z.object({ sceneId: uuid('Mã cảnh').nullable({ error: 'Cần gửi sceneId (mã cảnh hoặc null)' }) }),
+});
+
 export default {
   createStory,
   analyzeStory,
@@ -218,4 +224,5 @@ export default {
   reviewStory,
   storyOnly,
   sceneOnly,
+  setCover,
 };

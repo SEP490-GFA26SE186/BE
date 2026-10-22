@@ -26,6 +26,8 @@ router
   .put(validate(storiesValidation.updateStory), storiesController.updateStory)
   .delete(validate(storiesValidation.deleteStory), storiesController.deleteStory);
 
+// Anh bia = anh mot canh; null = canh 1 (chi phu huynh, chu truyen).
+router.put('/:id/cover', authorize('parent'), validate(storiesValidation.setCover), storiesController.setCover);
 router.put('/:id/characters', validate(storiesValidation.bindCharacters), storiesController.bindCharacters);
 
 // ---- Editor (spec §4.2) ----

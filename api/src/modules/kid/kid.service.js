@@ -4,6 +4,7 @@ import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { assetUrl } from '../../clients/assetUrl.js';
+import { COVER_SELECT, formatCover } from '../stories/lib/cover.js';
 import { loadReadiness, notReadyMessage } from '../stories/stories.narration.store.js';
 import { readingProgress } from '../bookshelf/lib/shelf.js';
 import { answerOutcome, firstScore, isCorrect, kidStoryContent, readChoice } from './lib/play.js';
@@ -82,7 +83,7 @@ const getShelf = async (kid) => {
   const rows = await prisma.bookshelfItem.findMany({
     where: { childId: kid.childId, story: { deletedAt: null } },
     orderBy: { addedAt: 'desc' },
-    select: { addedAt: true, story: { select: { id: true, title: true, _count: { select: { pages: true } } } } },
+    select: { addedAt: true, story: { select: { id: true, title: true, ...COVER_SELECT, _count: { select: { pages: true } } } } },
   });
   const sessions = await prisma.playSession.findMany({
     where: { childId: kid.childId, storyId: { in: rows.map((r) => r.story.id) } },
@@ -97,10 +98,12 @@ const getShelf = async (kid) => {
     const check = await loadReadiness(prisma, story.id);
     if (!check?.ready) continue;
     const s = latest.get(story.id);
+    const cover = formatCover(story);
     items.push({
       storyId: story.id,
       title: story.title,
-      coverImageUrl: null, // rev8: truyen khong co anh bia; luong sinh anh da bo -> FE dung anh giu cho
+      cover,
+      coverImageUrl: cover.imageUrl, // giu truong cu cho Web kid; null -> bia du phong theo nang luc
       totalPages: story._count.pages,
       addedAt,
       readingProgress: readingProgress(s && { ...s, currentPageOrder: s.currentPage?.pageOrder ?? null }, story._count.pages),

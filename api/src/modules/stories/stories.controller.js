@@ -42,6 +42,11 @@ const bindCharacters = catchAsync(async (req, res) => {
   return ApiResponse.success(res, { message: 'Đổi nhân vật của truyện thành công', data: { story } });
 });
 
+const setCover = catchAsync(async (req, res) => {
+  const story = await storiesService.setCover(req.user, req.params.id, req.body.sceneId);
+  return ApiResponse.success(res, { message: 'Đã đổi ảnh bìa', data: { story } });
+});
+
 const deleteStory = catchAsync(async (req, res) => {
   await storiesService.deleteStory(req.user, req.params.id);
   return ApiResponse.success(res, { message: 'Đã xoá truyện' });
@@ -148,6 +153,7 @@ export default {
   updateStory,
   bindCharacters,
   deleteStory,
+  setCover,
   updatePage,
   createPage,
   deletePage,
