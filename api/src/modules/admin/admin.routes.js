@@ -46,7 +46,7 @@ router.post(
   ok((req) => admin.createModerator(req.user, req.body), StatusCodes.CREATED),
 );
 
-// Goi + bac gia
+// Goi
 const planFields = {
   name: z.string().trim().min(2).max(100),
   priceVnd: money,
@@ -78,19 +78,6 @@ router.put(
   ...only,
   validate(z.object({ params: z.object({ planId: uuid('planId') }), body: z.object(Object.fromEntries(Object.entries(planFields).map(([k, v]) => [k, v.optional()]))).refine((b) => Object.keys(b).length > 0, 'Không có gì để sửa') })),
   ok((req) => admin.updatePlan(req.user, req.params.planId, req.body)),
-);
-router.get('/price-tiers', ...only, ok(() => admin.listPriceTiers()));
-router.post(
-  '/price-tiers',
-  ...only,
-  validate(z.object({ body: z.object({ label: z.string().trim().min(1).max(50), priceVnd: money }) })),
-  ok((req) => admin.createPriceTier(req.user, req.body), StatusCodes.CREATED),
-);
-router.put(
-  '/price-tiers/:tierId',
-  ...only,
-  validate(z.object({ params: z.object({ tierId: uuid('tierId') }), body: z.object({ label: z.string().trim().min(1).max(50).optional(), priceVnd: money.optional(), isActive: z.boolean().optional() }) })),
-  ok((req) => admin.updatePriceTier(req.user, req.params.tierId, req.body)),
 );
 
 // Cau hinh

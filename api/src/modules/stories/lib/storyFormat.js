@@ -98,7 +98,6 @@ export function formatStoryDetail(story, { voice = '' } = {}) {
       description: s.description,
       imageKey: s.imageKey,
       imageUrl: assetUrl(s.imageKey),
-      backgroundId: s.backgroundId,
       imageStatus: s.imageStatus,
     })),
     pages: pages.map((p) => ({

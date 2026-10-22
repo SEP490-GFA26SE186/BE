@@ -9,7 +9,6 @@ let topic;
 let store;
 let earnings;
 let setPayosClient;
-let tiers;
 
 function fakePayos() {
   const state = { created: [], status: new Map() };
@@ -35,13 +34,11 @@ before(async () => {
   earnings = await import('../../src/modules/wallets/earningLedger.js');
   ({ setPayosClient } = await import('../../src/clients/payos.js'));
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
-  await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
   const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => s.key.startsWith('market.'))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
-  tiers = Object.fromEntries((await prisma.priceTier.findMany()).map((t) => [Number(t.priceVnd), t]));
 });
 
 after(async () => {
@@ -76,7 +73,7 @@ async function publishedListing(price) {
   for (const p of story.pages) await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} ở trang ${p.pageOrder}.` } });
   await call(s.token, 'POST', `/stories/${story.id}/review`);
   const created = await call(s.token, 'POST', '/listings', {
-    storyId: story.id, title: 'Bé đi chơi', priceTierId: tiers[price].id, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
+    storyId: story.id, title: 'Bé đi chơi', priceVnd: price, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const { listing } = created.body.data;
@@ -93,7 +90,12 @@ test('cho: chi truyen published; truyen mien phi -> nhan ngay -> len gia sach ->
   const card = list.body.data.items.find((i) => i.id === listing.id);
   assert.ok(card);
   assert.equal(card.owned, false);
-  assert.equal(card.priceTier.priceVnd, 0);
+  assert.equal(card.priceVnd, 0);
+  assert.equal(card.priceTier, undefined);
+  const ids = async (qs) => (await call(buyer.token, 'GET', `/market/listings?search=Bé đi chơi&limit=50&${qs}`)).body.data.items.map((i) => i.id);
+  assert.ok((await ids('priceMax=0')).includes(listing.id), 'priceMax=0 -> chi truyen mien phi');
+  assert.ok(!(await ids('priceMin=1000')).includes(listing.id));
+  assert.equal((await call(buyer.token, 'GET', '/market/listings?priceMin=20000&priceMax=10000')).status, 400);
 
   const claim = await call(buyer.token, 'POST', '/market/checkout', { listingId: listing.id });
   assert.equal(claim.status, 201, JSON.stringify(claim.body));

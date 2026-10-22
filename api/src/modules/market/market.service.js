@@ -12,11 +12,10 @@ const SORTS = {
   best_selling: [{ purchaseCount: 'desc' }, { publishedAt: 'desc' }],
   newest: [{ publishedAt: 'desc' }],
   rating: [{ ratingAvg: { sort: 'desc', nulls: 'last' } }, { ratingCount: 'desc' }],
-  price_asc: [{ priceTier: { priceVnd: 'asc' } }, { publishedAt: 'desc' }],
+  price_asc: [{ priceVnd: 'asc' }, { publishedAt: 'desc' }],
 };
 
 const LISTING_INCLUDE = {
-  priceTier: true,
   seller: { select: { userId: true, displayName: true, ratingAvg: true, totalSales: true } },
   publishedStory: {
     select: { id: true, length: true, useTts: true, ...COVER_SELECT, topic: { select: { title: true, ageMin: true, ageMax: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true, checkpoints: true } } },
@@ -40,7 +39,7 @@ const formatCard = (l, owned = false) => ({
   cover: formatCover(l.publishedStory, { imageKey: l.coverImageKey }),
   totalPages: l.publishedStory._count.pages,
   checkpointCount: l.publishedStory._count.checkpoints,
-  priceTier: { id: l.priceTier.id, label: l.priceTier.label, priceVnd: vnd(l.priceTier.priceVnd) },
+  priceVnd: vnd(l.priceVnd), // 0 = mien phi
   seller: { id: l.seller.userId, displayName: l.seller.displayName, ratingAvg: l.seller.ratingAvg == null ? null : Number(l.seller.ratingAvg), totalSales: l.seller.totalSales },
   purchaseCount: l.purchaseCount + l.freeClaimCount,
   ratingAvg: l.ratingAvg == null ? 0 : Number(l.ratingAvg),
@@ -62,11 +61,13 @@ async function ownedListingIds(userId, listingIds) {
 }
 
 /** GET /market/listings — chi truyen `published`. */
-export async function listListings(user, { search, competency = 'all', age = 'all', priceTierId = 'all', narration = 'all', sort = 'best_selling', page = 1, limit = 8 }) {
+export async function listListings(user, { search, competency = 'all', age = 'all', priceMin, priceMax, narration = 'all', sort = 'best_selling', page = 1, limit = 8 }) {
   const keyword = search?.trim();
   const where = {
     ...SELLABLE,
-    ...(priceTierId !== 'all' && { priceTierId }),
+    ...((priceMin !== undefined || priceMax !== undefined) && {
+      priceVnd: { ...(priceMin !== undefined && { gte: BigInt(priceMin) }), ...(priceMax !== undefined && { lte: BigInt(priceMax) }) },
+    }),
     publishedStory: {
       ...(narration !== 'all' && { useTts: narration === 'with' }),
       topic: {
@@ -123,12 +124,12 @@ export async function listOwned(user) {
  * Gia + ti le nguoi ban nhan duoc CHOT vao order_item luc dat (SNAPSHOT, DBML order_items).
  */
 export async function checkoutListing(user, listingId) {
-  const l = await prisma.listing.findFirst({ where: { id: listingId, ...SELLABLE }, include: { priceTier: true } });
+  const l = await prisma.listing.findFirst({ where: { id: listingId, ...SELLABLE } });
   if (!l) throw ApiError.notFound('Không tìm thấy truyện đang bán.');
   if (l.sellerId === user.id) throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'Đây là truyện của ba mẹ, không cần mua.');
   if ((await ownedListingIds(user.id, [l.id])).size) throw new ApiError(StatusCodes.CONFLICT, 'Ba mẹ đã có truyện này.');
   const { sellerShareRate } = await loadMarketSettings(prisma);
-  const price = l.priceTier.priceVnd;
+  const price = l.priceVnd; // gia nguoi ban dat, chot vao order_item
   const sellerAmount = BigInt(Math.floor(Number(price) * sellerShareRate));
   return checkoutOrder(user, {
     price,

@@ -9,10 +9,12 @@ import { dispatchNarration, prepareNarration } from '../stories/stories.narratio
 import { loadReadiness, loadVoice } from '../stories/stories.narration.store.js';
 import {
   CLAIM_MINUTES,
+  PRICE_RULE_MESSAGE,
   aliasErrors,
   claimedByOther,
   leftoverNameErrors,
   reviewProgress,
+  validPriceVnd,
 } from './lib/publish.js';
 import { DECISIONS_BY_REVIEW_TYPE, LISTING_STATUS_BY_DECISION } from '../monitoring/lib/monitoring.js';
 import { closeOpenReports, issueStrikeTx } from '../monitoring/monitoring.service.js';
@@ -29,8 +31,7 @@ const formatListing = (l) => ({
   title: l.title,
   description: l.description,
   status: l.status,
-  priceVnd: vnd(l.priceTier?.priceVnd),
-  priceTierId: l.priceTierId,
+  priceVnd: vnd(l.priceVnd),
   hasAiContent: l.hasAiContent,
   hasNarration: Boolean(l.publishedStory?.useTts),
   cover: formatCover(l.publishedStory ?? {}, { imageKey: l.coverImageKey }),
@@ -44,7 +45,6 @@ const formatListing = (l) => ({
 });
 
 const LISTING_INCLUDE = {
-  priceTier: true,
   publishedStory: { select: { sourceStoryId: true, useTts: true, ...COVER_SELECT } },
   moderationReviews: { where: { decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, take: 1 },
 };
@@ -99,11 +99,6 @@ export async function decideSeller(moderator, userId, { approve }) {
 // Dang ban
 // ---------------------------------------------------------------------------
 
-export async function listPriceTiers() {
-  const tiers = await prisma.priceTier.findMany({ where: { isActive: true }, orderBy: { priceVnd: 'asc' } });
-  return tiers.map((t) => ({ id: t.id, label: t.label, priceVnd: vnd(t.priceVnd) }));
-}
-
 /** Ten that bi cam trong ban dang ban: moi nhan vat + moi be cua nguoi ban. */
 async function forbiddenNamesOf(userId) {
   const [characters, children] = await Promise.all([
@@ -114,7 +109,8 @@ async function forbiddenNamesOf(userId) {
 }
 
 /**
- * POST /listings { storyId, title, description?, priceTierId, aliases: [{ token, aliasName }] }
+ * POST /listings { storyId, title, description?, priceVnd, aliases: [{ token, aliasName }] }
+ * priceVnd: 0 = mien phi (don 0d) hoac 5.000-500.000, boi 1.000 (validPriceVnd).
  * Truyen rieng da hoan tat -> ban sao `published` (go ca nhan hoa) + listing `submitted` + luot duyet.
  * Ban rieng bat giong doc -> ban sao cung bat va SINH LAI giong doc bang ten chung (audio cu chua ten that,
  * khong dung lai duoc). Specialist chi nhan duyet khi giong doc xong (claimReview).
@@ -125,8 +121,7 @@ export async function createListing(user, body, narrationOptions) {
   const plan = await activePlan(user.id);
   if (!plan?.canSell) throw unprocessable('Gói hiện tại chưa cho phép đăng bán.');
 
-  const tier = await prisma.priceTier.findFirst({ where: { id: body.priceTierId, isActive: true } });
-  if (!tier) throw ApiError.badRequest('Mức giá không hợp lệ.');
+  if (!validPriceVnd(body.priceVnd)) throw unprocessable(PRICE_RULE_MESSAGE);
 
   const story = await prisma.story.findFirst({
     where: { id: body.storyId, ownerId: user.id, kind: 'private', deletedAt: null },
@@ -209,7 +204,7 @@ export async function createListing(user, body, narrationOptions) {
         title: body.title.trim(),
         description: body.description?.trim() || null,
         coverImageKey: coverImageKey(story), // canh bia da chon hoac canh 1, neu da co anh
-        priceTierId: tier.id,
+        priceVnd: BigInt(body.priceVnd),
         status: 'submitted',
         hasAiContent: story.length !== 'custom' || story.aiRequests.length > 0,
       },
@@ -251,7 +246,6 @@ export async function getQueue(moderator, { now = new Date() } = {}) {
     include: {
       listing: {
         include: {
-          priceTier: true,
           seller: { select: { displayName: true } },
           publishedStory: { select: { length: true, useTts: true, topic: { select: { title: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true } } } },
           _count: { select: { contentReports: { where: { status: 'open' } } } },
@@ -272,7 +266,7 @@ export async function getQueue(moderator, { now = new Date() } = {}) {
     listingId: r.listingId,
     title: r.listing.title,
     seller: r.listing.seller.displayName,
-    priceVnd: vnd(r.listing.priceTier.priceVnd),
+    priceVnd: vnd(r.listing.priceVnd),
     topic: r.listing.publishedStory.topic?.title ?? null,
     competency: r.listing.publishedStory.topic?.skill.caselCode ?? null,
     pageCount: r.listing.publishedStory._count.pages,
@@ -288,7 +282,7 @@ export async function getQueue(moderator, { now = new Date() } = {}) {
 async function loadReview(reviewId, db = prisma) {
   const review = await db.moderationReview.findUnique({
     where: { id: reviewId },
-    include: { listing: { include: { priceTier: true, seller: { select: { displayName: true } } } }, pageViews: true, checklistResults: true },
+    include: { listing: { include: { seller: { select: { displayName: true } } } }, pageViews: true },
   });
   if (!review) throw ApiError.notFound('Không tìm thấy lượt duyệt.');
   return review;
@@ -332,13 +326,10 @@ async function assertClaimed(moderator, review, now) {
   }
 }
 
-/** Chi tiet luot duyet: noi dung ban dang ban (ten chung), checklist, trang da xem, tien do. */
+/** Chi tiet luot duyet: noi dung ban dang ban (ten chung) kem gia ban (listing.priceVnd), trang da xem, tien do. */
 export async function getReview(moderator, reviewId, { now = new Date() } = {}) {
   const review = await loadReview(reviewId);
-  const [story, items] = await Promise.all([
-    prisma.story.findUniqueOrThrow({ where: { id: review.listing.publishedStoryId }, include: STORY_DETAIL_INCLUDE }),
-    prisma.checklistItem.findMany({ where: { isActive: true }, orderBy: { displayOrder: 'asc' } }),
-  ]);
+  const story = await prisma.story.findUniqueOrThrow({ where: { id: review.listing.publishedStoryId }, include: STORY_DETAIL_INCLUDE });
   const detail = formatStoryDetail(story, { voice: await loadVoice(prisma) });
   return {
     review: {
@@ -354,14 +345,8 @@ export async function getReview(moderator, reviewId, { now = new Date() } = {}) 
     listing: formatListing({ ...review.listing, publishedStory: { sourceStoryId: null } }),
     seller: review.listing.seller.displayName,
     story: detail,
-    checklist: items.map((i) => ({
-      id: i.id,
-      code: i.code,
-      description: i.description,
-      passed: review.checklistResults.find((r) => r.checklistItemId === i.id)?.passed ?? null,
-    })),
     pageViews: review.pageViews.map((v) => ({ pageId: v.pageId, viewedAt: v.viewedAt, comment: v.comment })),
-    progress: reviewProgress(detail.pages.map((p) => p.id), review.pageViews.map((v) => v.pageId), items.map((i) => i.id), review.checklistResults),
+    progress: reviewProgress(detail.pages.map((p) => p.id), review.pageViews.map((v) => v.pageId)),
   };
 }
 
@@ -381,11 +366,11 @@ export async function viewPage(moderator, reviewId, pageId, { comment } = {}, { 
 }
 
 /**
- * Quyet dinh. body: { decision, comment?, checklist: [{ itemId, passed }], issueStrike? }.
+ * Quyet dinh. body: { decision, comment?, issueStrike? }.
  * - Luot nop ban: approved | changes_requested | rejected (rejected + issueStrike -> canh cao nguon `rejection`).
  * - Luot hau kiem (bao cao / ngau nhien): approved = giu (truyen dang tam go -> ban lai) | taken_down = go han
  *   (listing archived, tu canh cao nguon `takedown`). Bao cao con mo cua truyen dong theo quyet dinh.
- * approved: phai xem 100% trang + dat du checklist. Quyet dinh khac: bat buoc nhan xet.
+ * approved: phai xem 100% trang (checklist su pham chi tren web, khong gui len). Quyet dinh khac: bat buoc nhan xet.
  */
 export async function decide(moderator, reviewId, body, { now = new Date() } = {}) {
   await prisma.$transaction(async (tx) => {
@@ -395,24 +380,11 @@ export async function decide(moderator, reviewId, body, { now = new Date() } = {
     if (!DECISIONS_BY_REVIEW_TYPE[review.reviewType].includes(body.decision)) {
       throw unprocessable('Quyết định không hợp lệ với loại lượt duyệt này.');
     }
-    const items = await tx.checklistItem.findMany({ where: { isActive: true }, select: { id: true } });
-    const known = new Set(items.map((i) => i.id));
-    for (const r of body.checklist ?? []) {
-      if (!known.has(r.itemId)) throw ApiError.badRequest('Mục checklist không hợp lệ.');
-      await tx.reviewChecklistResult.upsert({
-        where: { reviewId_checklistItemId: { reviewId, checklistItemId: r.itemId } },
-        create: { reviewId, checklistItemId: r.itemId, passed: r.passed },
-        update: { passed: r.passed },
-      });
-    }
-    const [pages, results] = await Promise.all([
-      tx.storyPage.findMany({ where: { storyId: review.listing.publishedStoryId }, select: { id: true } }),
-      tx.reviewChecklistResult.findMany({ where: { reviewId } }),
-    ]);
-    const progress = reviewProgress(pages.map((p) => p.id), review.pageViews.map((v) => v.pageId), items.map((i) => i.id), results);
+    const pages = await tx.storyPage.findMany({ where: { storyId: review.listing.publishedStoryId }, select: { id: true } });
+    const progress = reviewProgress(pages.map((p) => p.id), review.pageViews.map((v) => v.pageId));
     if (body.decision === 'approved') await assertNarrationReady(tx, review.listing.publishedStoryId);
     if (body.decision === 'approved' && !progress.canApprove) {
-      throw unprocessable(`Cần xem hết ${progress.pagesTotal} trang (đã xem ${progress.pagesViewed}) và đạt đủ ${progress.checklistTotal} mục checklist (đạt ${progress.checklistPassed}) trước khi duyệt.`);
+      throw unprocessable(`Cần xem hết ${progress.pagesTotal} trang (đã xem ${progress.pagesViewed}) trước khi duyệt.`);
     }
     const comment = body.comment?.trim() || null;
     if (body.decision !== 'approved' && !comment) throw unprocessable('Hãy ghi nhận xét để người bán biết cần sửa gì.');
@@ -433,6 +405,6 @@ export async function decide(moderator, reviewId, body, { now = new Date() } = {
 
 export default {
   getMySeller, applySeller, listSellerApplications, decideSeller,
-  listPriceTiers, createListing, getMyListings,
+  createListing, getMyListings,
   getQueue, claimReview, getReview, viewPage, decide,
 };

@@ -18,6 +18,9 @@
 //  - 2026-10-21 gop tang: ky nang con CHINH LA muc CASEL (bo casel_references; eq_sub_skills them
 //    casel_text_en + source casel/specialist)
 //  - 2026-10-22 ky nang con la danh muc chuan: khong them / xoa qua API, chi chinh ten / mo ta / tuoi / bat-tat
+//  - 2026-10-22 gon kiem duyet + gia: bo checklist_items / review_checklist_results (checklist su pham chi
+//    con tren web); bo price_tiers, listings.price_vnd tu dat (0 = mien phi, hoac 5.000-500.000 boi 1.000);
+//    bo thu vien nen backgrounds va story_scenes.background_id
 // =============================================================================
 
 
@@ -494,18 +497,6 @@ Table topic_sub_skills {
   Note: '1-3 ky nang con cung nang luc voi topic, dang bat va co mau dang bat (kiem o service)'
 }
 
-Table backgrounds {
-  id uuid [pk, default: `gen_random_uuid()`]
-  name varchar(120) [not null]
-  image_key varchar(300) [not null]
-  tags varchar(200)
-  is_active boolean [not null, default: true]
-  created_by uuid [not null]
-  created_at timestamptz [not null, default: `now()`]
-
-  Note: 'Thu vien nen mac dinh, dung khi use_ai_image = false'
-}
-
 Table ui_audio_assets {
   id uuid [pk, default: `gen_random_uuid()`]
   key varchar(80) [not null]
@@ -525,14 +516,6 @@ Table blocked_keywords {
   is_active boolean [not null, default: true]
   created_by uuid [not null]
   created_at timestamptz [not null, default: `now()`]
-}
-
-Table checklist_items {
-  id uuid [pk, default: `gen_random_uuid()`]
-  code varchar(40) [unique, not null]
-  description text [not null, note: '7 nguyen tac su pham']
-  display_order int [not null, default: 0]
-  is_active boolean [not null, default: true]
 }
 
 
@@ -622,7 +605,6 @@ Table story_scenes {
   scene_order int [not null]
   description text [not null, note: 'mo ta canh tieng Anh, khong ten rieng']
   image_key varchar(300) [note: 'khi use_ai_image = true']
-  background_id uuid [note: 'khi use_ai_image = false']
   image_status generation_status [not null, default: 'none']
 
   indexes {
@@ -866,13 +848,6 @@ Table seller_profiles {
   created_at timestamptz [not null, default: `now()`]
 }
 
-Table price_tiers {
-  id uuid [pk, default: `gen_random_uuid()`]
-  label varchar(50) [not null]
-  price_vnd bigint [unique, not null]
-  is_active boolean [not null, default: true]
-}
-
 Table listings {
   id uuid [pk, default: `gen_random_uuid()`]
   seller_id uuid [not null]
@@ -881,7 +856,7 @@ Table listings {
   title varchar(200) [not null]
   description text
   cover_image_key varchar(300)
-  price_tier_id uuid [not null]
+  price_vnd bigint [not null, note: '0 = mien phi (don 0d); con lai 5000..500000, boi so 1000 (kiem o service)']
   status listing_status [not null, default: 'submitted']
   has_ai_content boolean [not null, default: false, note: 'nhan co AI ho tro']
   purchase_count int [not null, default: 0]
@@ -1161,20 +1136,10 @@ Table moderation_reviews {
   }
 
   Note: '''
-  Chi quyet dinh approved khi da xem 100% trang va tick du checklist
+  Chi quyet dinh approved khi da xem 100% trang (checklist su pham chi hien tren web, khong luu)
   Partial unique: UNIQUE (listing_id) WHERE decided_at IS NULL (moi truyen mot luot duyet dang mo)
   CHECK: (decision IS NULL) = (decided_at IS NULL)
   '''
-}
-
-Table review_checklist_results {
-  review_id uuid [not null]
-  checklist_item_id uuid [not null]
-  passed boolean [not null]
-
-  indexes {
-    (review_id, checklist_item_id) [pk]
-  }
 }
 
 Table review_page_views {
@@ -1270,7 +1235,6 @@ Ref: auth_tokens.child_id > child_profiles.id [delete: cascade]
 Ref: child_profiles.parent_id > users.id [delete: restrict]
 Ref: characters.parent_id > users.id [delete: restrict]
 
-Ref: backgrounds.created_by > users.id [delete: restrict]
 Ref: blocked_keywords.created_by > users.id [delete: restrict]
 
 Ref: stories.owner_id > users.id [delete: restrict]
@@ -1294,7 +1258,6 @@ Ref: story_characters.story_id > stories.id [delete: cascade]
 Ref: story_characters.character_id > characters.id [delete: restrict]
 Ref: story_scenes.story_id > stories.id [delete: cascade]
 Ref: stories.cover_scene_id > story_scenes.id [delete: set null]
-Ref: story_scenes.background_id > backgrounds.id [delete: restrict]
 Ref: story_pages.story_id > stories.id [delete: cascade]
 Ref: story_pages.scene_id > story_scenes.id [delete: restrict]
 Ref: story_checkpoints.story_id > stories.id [delete: cascade]
@@ -1331,7 +1294,6 @@ Ref: seller_profiles.reviewed_by > users.id [delete: set null]
 Ref: listings.seller_id > seller_profiles.user_id [delete: restrict]
 Ref: listings.published_story_id - stories.id [delete: restrict]
 Ref: listings.previous_listing_id > listings.id [delete: set null]
-Ref: listings.price_tier_id > price_tiers.id [delete: restrict]
 Ref: entitlements.parent_id > users.id [delete: restrict]
 Ref: entitlements.listing_id > listings.id [delete: restrict]
 Ref: entitlements.order_item_id > order_items.id [delete: set null]
@@ -1358,8 +1320,6 @@ Ref: platform_settings.updated_by > users.id [delete: restrict]
 
 Ref: moderation_reviews.listing_id > listings.id [delete: restrict]
 Ref: moderation_reviews.moderator_id > users.id [delete: set null]
-Ref: review_checklist_results.review_id > moderation_reviews.id [delete: cascade]
-Ref: review_checklist_results.checklist_item_id > checklist_items.id [delete: restrict]
 Ref: review_page_views.review_id > moderation_reviews.id [delete: cascade]
 Ref: review_page_views.page_id > story_pages.id [delete: cascade]
 Ref: content_reports.reporter_id > users.id [delete: restrict]
@@ -1392,10 +1352,8 @@ TableGroup content_library {
   question_templates
   question_template_versions
   topic_sub_skills
-  backgrounds
   ui_audio_assets
   blocked_keywords
-  checklist_items
 }
 
 TableGroup stories_group {
@@ -1420,7 +1378,6 @@ TableGroup ai {
 
 TableGroup marketplace {
   seller_profiles
-  price_tiers
   listings
   entitlements
   product_reviews
@@ -1442,7 +1399,6 @@ TableGroup commerce {
 
 TableGroup moderation {
   moderation_reviews
-  review_checklist_results
   review_page_views
   content_reports
   creator_strikes

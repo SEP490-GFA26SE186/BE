@@ -32,8 +32,8 @@ const story = () => ({
     { storyId: 's1', token: '{NV3}', characterId: null, aliasName: 'Bạn nhỏ', isMain: false, character: null },
   ],
   scenes: [
-    { id: 'sc2', storyId: 's1', sceneOrder: 2, description: 'b', imageKey: null, backgroundId: null, imageStatus: 'none' },
-    { id: 'sc1', storyId: 's1', sceneOrder: 1, description: '', imageKey: null, backgroundId: null, imageStatus: 'none' },
+    { id: 'sc2', storyId: 's1', sceneOrder: 2, description: 'b', imageKey: null, imageStatus: 'none' },
+    { id: 'sc1', storyId: 's1', sceneOrder: 1, description: '', imageKey: null, imageStatus: 'none' },
   ],
   pages: [
     { id: 'p3', storyId: 's1', pageOrder: 3, sceneId: 'sc2', contentText: null, aiOriginalText: null, origin: 'human', audioKey: null, audioStatus: 'none', createdAt: t0, updatedAt: t0 },

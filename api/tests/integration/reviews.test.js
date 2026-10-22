@@ -7,7 +7,6 @@ const skip = !hasTestDb;
 let api;
 let topic;
 let store;
-let tiers;
 
 before(async () => {
   if (skip) return;
@@ -15,13 +14,11 @@ before(async () => {
   topic = await getSeededTopic();
   store = await import('../../src/modules/billing/billing.store.js');
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
-  await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
   const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => /^(market|moderation)\./.test(s.key))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
-  tiers = Object.fromEntries((await prisma.priceTier.findMany()).map((t) => [Number(t.priceVnd), t]));
 });
 
 after(async () => {
@@ -54,7 +51,7 @@ async function publishedListing(existingSeller) {
   for (const p of story.pages) await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} ở trang ${p.pageOrder}.` } });
   await call(s.token, 'POST', `/stories/${story.id}/review`);
   const created = await call(s.token, 'POST', '/listings', {
-    storyId: story.id, title: `Truyện thử đánh giá ${Date.now()}`, priceTierId: tiers[0].id, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
+    storyId: story.id, title: `Truyện thử đánh giá ${Date.now()}`, priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const { listing } = created.body.data;

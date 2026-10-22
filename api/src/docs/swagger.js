@@ -51,7 +51,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Sub-skills', description: 'Kỹ năng con do Specialist soạn, mỗi kỹ năng trỏ về một mục CASEL cùng năng lực' },
     { name: 'Question Templates', description: 'Mẫu câu hỏi có phiên bản do Specialist soạn: nháp, ban hành, bản ban hành bất biến' },
     { name: 'Stories', description: 'Tạo truyện từ chủ đề và nhân vật, nhờ AI viết chữ, chỉnh sửa trang và điểm dừng cảm xúc, phụ huynh xem xét trước khi cho bé đọc' },
-    { name: 'Content Library', description: 'Thư viện tài nguyên sư phạm: ảnh nền mặc định, âm thanh UI, tiêu chuẩn kiểm duyệt và cấu hình kịch bản' },
+    { name: 'Content Library', description: 'Thư viện tài nguyên: âm thanh UI và thống kê thư viện' },
     { name: 'Bookshelf', description: 'Quản lý kệ sách cá nhân của bé và theo dõi tiến độ đọc truyện' },
     { name: 'Payments', description: 'Mua gói qua payOS: tạo link, trạng thái đơn, webhook' },
     { name: 'Kid Mode', description: 'Bé đọc truyện trên giá, trả lời điểm dừng, BE chấm EQ (token kid_session)' },
@@ -1642,19 +1642,18 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     // ---- PUBLISHING + MODERATION (rev8 luong 3) ----
     '/sellers/me': { get: { tags: ['Publishing'], summary: '[Parent] Hồ sơ người bán của tôi', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ seller | null, planCanSell }' } } } },
     '/sellers/apply': { post: { tags: ['Publishing'], summary: '[Parent] Nộp hồ sơ người bán', description: 'Cần gói can_sell. Bị từ chối thì nộp lại được.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, bio: { type: 'string' }, expertise: { type: 'string' } } } } } }, responses: { 200: { description: '{ seller }' } } } },
-    '/listings/price-tiers': { get: { tags: ['Publishing'], summary: 'Bậc giá đăng bán', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ priceTiers: [{ id, label, priceVnd }] }' } } } },
-    '/listings/mine': { get: { tags: ['Publishing'], summary: '[Parent] Truyện tôi đăng bán', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ listings: [{ id, title, status, priceVnd, cover: StoryCover, lastDecision }] }' } } } },
-    '/listings': { post: { tags: ['Publishing'], summary: '[Seller] Đăng bán một truyện riêng đã hoàn tất', description: 'Tạo bản sao published đã gỡ cá nhân hoá: tên chung cho từng token (aliases), bỏ situation và audio, use_tts=false. 422 khi còn tên thật (kể cả trong tên mới) hoặc bí danh trùng / là tên thật.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['storyId', 'title', 'priceTierId', 'aliases'], properties: { storyId: { type: 'string', format: 'uuid' }, title: { type: 'string' }, description: { type: 'string' }, priceTierId: { type: 'string', format: 'uuid' }, aliases: { type: 'array', items: { type: 'object', properties: { token: { type: 'string', example: '{NV1}' }, aliasName: { type: 'string' } } } } } } } } }, responses: { 200: { description: '{ listing } — kèm `cover` (StoryCover; ảnh lấy từ listings.cover_image_key, không có thì bìa của bản đang bán)' } } } },
+    '/listings/mine': { get: { tags: ['Publishing'], summary: '[Parent] Truyện tôi đăng bán', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ listings: [{ id, title, status, priceVnd (0 = miễn phí), cover: StoryCover, lastDecision }] }' } } } },
+    '/listings': { post: { tags: ['Publishing'], summary: '[Seller] Đăng bán một truyện riêng đã hoàn tất', description: 'Tạo bản sao published đã gỡ cá nhân hoá: tên chung cho từng token (aliases), bỏ situation và audio, use_tts=false. 422 khi còn tên thật (kể cả trong tên mới) hoặc bí danh trùng / là tên thật.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['storyId', 'title', 'priceVnd', 'aliases'], properties: { storyId: { type: 'string', format: 'uuid' }, title: { type: 'string' }, description: { type: 'string' }, priceVnd: { type: 'integer', example: 29000, description: 'Giá người bán tự đặt (VND): 0 = miễn phí (đơn 0đ), hoặc 5.000–500.000 và là bội số 1.000. Sai → 400.' }, aliases: { type: 'array', items: { type: 'object', properties: { token: { type: 'string', example: '{NV1}' }, aliasName: { type: 'string' } } } } } } } } }, responses: { 200: { description: '{ listing } — kèm `cover` (StoryCover; ảnh lấy từ listings.cover_image_key, không có thì bìa của bản đang bán)' } } } },
     '/moderation/sellers': { get: { tags: ['Moderation'], summary: '[Specialist] Hồ sơ người bán theo trạng thái (?status=pending)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ sellers }' } } } },
     '/moderation/sellers/{userId}/decision': { post: { tags: ['Moderation'], summary: '[Specialist] Duyệt / từ chối hồ sơ người bán', security: [{ BearerAuth: [] }], parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['approve'], properties: { approve: { type: 'boolean' } } } } } }, responses: { 200: { description: '{ seller }' } } } },
     '/moderation/submissions': { get: { tags: ['Moderation'], summary: '[Specialist] Hàng đợi truyện chờ duyệt (cũ nhất trước)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ queue: [{ reviewId, listingId, title, seller, priceVnd, claimedBy }] }' } } } },
     '/moderation/submissions/{reviewId}/claim': { post: { tags: ['Moderation'], summary: '[Specialist] Nhận bài (giữ 30 phút)', description: 'Người khác đang giữ → 409.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
-    '/moderation/submissions/{reviewId}': { get: { tags: ['Moderation'], summary: '[Specialist] Chi tiết lượt duyệt: truyện (tên chung), checklist, trang đã xem, tiến độ', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ review, listing, story, checklist, pageViews, progress }' } } } },
+    '/moderation/submissions/{reviewId}': { get: { tags: ['Moderation'], summary: '[Specialist] Chi tiết lượt duyệt: truyện (tên chung), giá bán, trang đã xem, tiến độ', description: 'Checklist sư phạm chỉ hiển thị trên web, API không trả / không lưu. `listing.priceVnd` là giá Specialist duyệt cùng truyện. `progress = { pagesTotal, pagesViewed, canApprove }`.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ review, listing: { …, priceVnd }, seller, story, pageViews, progress }' } } } },
     '/moderation/submissions/{reviewId}/pages/{pageId}/view': { post: { tags: ['Moderation'], summary: '[Specialist] Đánh dấu đã xem trang (+ nhận xét)', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }, { name: 'pageId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { comment: { type: 'string' } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
-    '/moderation/submissions/{reviewId}/decision': { post: { tags: ['Moderation'], summary: '[Specialist] Quyết định', description: 'Lượt nộp bán: approved | changes_requested | rejected. Lượt hậu kiểm (report_followup / random_audit): approved = giữ / bán lại, taken_down = gỡ hẳn (archived + tự cảnh cáo). approved chỉ khi đã xem 100% trang và đạt đủ checklist; quyết định khác bắt buộc nhận xét.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'changes_requested', 'rejected', 'taken_down'] }, comment: { type: 'string' }, issueStrike: { type: 'boolean', description: 'rejected + true → cảnh cáo nguồn rejection' }, checklist: { type: 'array', items: { type: 'object', properties: { itemId: { type: 'string', format: 'uuid' }, passed: { type: 'boolean' } } } } } } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
+    '/moderation/submissions/{reviewId}/decision': { post: { tags: ['Moderation'], summary: '[Specialist] Quyết định', description: 'Lượt nộp bán: approved | changes_requested | rejected. Lượt hậu kiểm (report_followup / random_audit): approved = giữ / bán lại, taken_down = gỡ hẳn (archived + tự cảnh cáo). approved chỉ khi đã xem 100% trang; quyết định khác bắt buộc nhận xét. Body chỉ gồm decision / comment / issueStrike — gửi kèm trường khác (vd. checklist) → 400.', security: [{ BearerAuth: [] }], parameters: [{ name: 'reviewId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['decision'], properties: { decision: { type: 'string', enum: ['approved', 'changes_requested', 'rejected', 'taken_down'] }, comment: { type: 'string' }, issueStrike: { type: 'boolean', description: 'rejected + true → cảnh cáo nguồn rejection' } }, additionalProperties: false } } } }, responses: { 200: { description: 'chi tiết lượt duyệt' } } } },
 
     // ---- MARKET + RUT TIEN (rev8 luong 4, 6) ----
-    '/market/listings': { get: { tags: ['Market'], summary: 'Truyện đang bán (chỉ published)', security: [{ BearerAuth: [] }], parameters: [{ name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'competency', in: 'query', schema: { type: 'string' } }, { name: 'age', in: 'query', schema: { type: 'string' } }, { name: 'priceTierId', in: 'query', schema: { type: 'string' } }, { name: 'sort', in: 'query', schema: { type: 'string' } }, { name: 'page', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: '{ items: [{ id, title, topic, cover: StoryCover, totalPages, priceTier, seller, purchaseCount, owned }], pagination }' } } } },
+    '/market/listings': { get: { tags: ['Market'], summary: 'Truyện đang bán (chỉ published)', security: [{ BearerAuth: [] }], parameters: [{ name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'competency', in: 'query', schema: { type: 'string' } }, { name: 'age', in: 'query', schema: { type: 'string' } }, { name: 'priceMin', in: 'query', schema: { type: 'integer', minimum: 0 }, description: 'Giá tối thiểu (VND, gồm cả mức này)' }, { name: 'priceMax', in: 'query', schema: { type: 'integer', minimum: 0 }, description: 'Giá tối đa (VND); priceMax=0 → chỉ truyện miễn phí' }, { name: 'narration', in: 'query', schema: { type: 'string', enum: ['all', 'with', 'without'] } }, { name: 'sort', in: 'query', schema: { type: 'string', enum: ['best_selling', 'newest', 'rating', 'price_asc'] } }, { name: 'page', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: '{ items: [{ id, title, topic, cover: StoryCover, totalPages, priceVnd, seller, purchaseCount, owned }], pagination }' } } } },
     '/market/listings/{listingId}': { get: { tags: ['Market'], summary: 'Chi tiết truyện đang bán + trang đầu xem trước (tên chung)', security: [{ BearerAuth: [] }], parameters: [{ name: 'listingId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ listing } — kèm `cover` (StoryCover; ảnh lấy từ listings.cover_image_key, không có thì bìa của bản đang bán)' } } } },
     '/market/owned': { get: { tags: ['Market'], summary: '[Parent] Truyện đã mua / nhận (entitlement)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ items }' } } } },
     '/market/checkout': { post: { tags: ['Market'], summary: '[Parent] Mua / nhận truyện', description: 'Giá + tỉ lệ người bán (80%) chốt vào order_item. 0đ → nhận ngay. Có giá → link payOS, trả về /parent/marketplace/result?orderId=…; trạng thái qua GET /payments/orders/{orderId}. Mua truyện của mình → 422; đã có → 409.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['listingId'], properties: { listingId: { type: 'string', format: 'uuid' } } } } } }, responses: { 200: { description: '{ order, checkoutUrl }' } } } },
@@ -1748,105 +1747,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     ...reviewsPaths,
     ...checkpointReviewPaths,
     ...eqReportPaths,
-
-    // =========================================================================
-    // Content Library: Backgrounds
-    // =========================================================================
-    '/backgrounds': {
-      get: {
-        tags: ['Content Library'],
-        summary: '[Public / Parent] Lấy danh sách ảnh nền mặc định',
-        description: 'Dùng khi phụ huynh tạo truyện với `useAiImage = false` hoặc duyệt thư viện ảnh nền có sẵn.',
-        parameters: [
-          { name: 'tags', in: 'query', schema: { type: 'string' }, description: 'Lọc theo nhãn (VD: phòng ngủ, trường học, rừng cây)' },
-          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Tìm theo tên hoặc nhãn ảnh' },
-          { name: 'isActive', in: 'query', schema: { type: 'boolean' }, description: 'Chỉ lấy ảnh đang hoạt động (true/false)' },
-          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
-        ],
-        responses: {
-          200: { description: 'Danh sách ảnh nền phân trang' },
-        },
-      },
-      post: {
-        tags: ['Content Library'],
-        summary: '[Specialist / Admin] Tải lên / Tạo ảnh nền mặc định mới',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['name', 'imageKey'],
-                properties: {
-                  name: { type: 'string', example: 'Phòng khách ấm cúng ban ngày' },
-                  imageKey: { type: 'string', example: 'backgrounds/living-room-day.webp' },
-                  tags: { type: 'string', example: 'nha_cua,phong_khach,ban_ngay' },
-                  isActive: { type: 'boolean', default: true },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Thêm mới ảnh nền thành công' },
-        },
-      },
-    },
-
-    '/backgrounds/{id}': {
-      get: {
-        tags: ['Content Library'],
-        summary: 'Lấy chi tiết ảnh nền theo ID',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Chi tiết ảnh nền' },
-          404: { description: 'Không tìm thấy ảnh nền' },
-        },
-      },
-      put: {
-        tags: ['Content Library'],
-        summary: '[Specialist / Admin] Cập nhật thông tin ảnh nền',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  imageKey: { type: 'string' },
-                  tags: { type: 'string' },
-                  isActive: { type: 'boolean' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật thành công' },
-        },
-      },
-      delete: {
-        tags: ['Content Library'],
-        summary: '[Specialist / Admin] Xóa hoặc chuyển trạng thái ngưng hoạt động của ảnh nền',
-        description: 'Nếu ảnh nền đã gắn với trang truyện, hệ thống tự động tắt kích hoạt (`isActive: false`) để bảo toàn tính toàn vẹn dữ liệu.',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Xóa hoặc tắt kích hoạt thành công' },
-        },
-      },
-    },
 
     // =========================================================================
     // Content Library: UI Audio Assets
@@ -1958,105 +1858,13 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     },
 
     // =========================================================================
-    // Content Library: Checklist Items (7 Tiêu chuẩn sư phạm)
-    // =========================================================================
-    '/checklist-items': {
-      get: {
-        tags: ['Content Library'],
-        summary: 'Lấy danh sách 7 tiêu chuẩn sư phạm phục vụ kiểm duyệt truyện',
-        parameters: [
-          { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
-        ],
-        responses: {
-          200: { description: 'Danh sách tiêu chuẩn kiểm duyệt' },
-        },
-      },
-      post: {
-        tags: ['Content Library'],
-        summary: '[Specialist / Admin] Tạo mới tiêu chuẩn kiểm duyệt',
-        security: [{ BearerAuth: [] }],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['code', 'description'],
-                properties: {
-                  code: { type: 'string', example: 'NO_VIOLENCE' },
-                  description: { type: 'string', example: 'Không chứa hình ảnh hoặc hành vi bạo lực, xúc phạm thân thể' },
-                  displayOrder: { type: 'integer', default: 1 },
-                  isActive: { type: 'boolean', default: true },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          201: { description: 'Tạo mới thành công' },
-        },
-      },
-    },
-
-    '/checklist-items/{id}': {
-      get: {
-        tags: ['Content Library'],
-        summary: 'Lấy chi tiết tiêu chuẩn kiểm duyệt',
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Chi tiết' },
-        },
-      },
-      put: {
-        tags: ['Content Library'],
-        summary: '[Specialist / Admin] Cập nhật tiêu chuẩn kiểm duyệt',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  code: { type: 'string' },
-                  description: { type: 'string' },
-                  displayOrder: { type: 'integer' },
-                  isActive: { type: 'boolean' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          200: { description: 'Cập nhật thành công' },
-        },
-      },
-      delete: {
-        tags: ['Content Library'],
-        summary: '[Specialist / Admin] Xóa hoặc tắt kích hoạt tiêu chuẩn kiểm duyệt',
-        security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
-        ],
-        responses: {
-          200: { description: 'Xóa hoặc tắt kích hoạt thành công' },
-        },
-      },
-    },
-
-    // =========================================================================
     // Content Library: Stats & Bulk Keywords
     // =========================================================================
     '/content-library/stats': {
       get: {
         tags: ['Content Library'],
         summary: '[Specialist / Admin] Thống kê toàn bộ tài nguyên Content Library',
-        description: 'Tổng số kịch bản mẫu theo trạng thái, số ảnh nền, file âm thanh, tiêu chuẩn kiểm duyệt và từ khóa cấm.',
+        description: 'Số file âm thanh giao diện và từ khóa cấm: `{ uiAudioAssets: { total }, blockedKeywords: { total, active, inactive } }`.',
         security: [{ BearerAuth: [] }],
         responses: {
           200: { description: 'Báo cáo thống kê tổng hợp' },

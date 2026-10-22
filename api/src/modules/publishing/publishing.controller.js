@@ -9,7 +9,6 @@ export default {
   applySeller: ok((req) => svc.applySeller(req.user, req.body), StatusCodes.CREATED),
   listSellerApplications: ok(async (req) => ({ sellers: await svc.listSellerApplications(req.query) })),
   decideSeller: ok((req) => svc.decideSeller(req.user, req.params.userId, req.body)),
-  listPriceTiers: ok(async () => ({ priceTiers: await svc.listPriceTiers() })),
   createListing: ok((req) => svc.createListing(req.user, req.body), StatusCodes.CREATED),
   getMyListings: ok(async (req) => ({ listings: await svc.getMyListings(req.user) })),
   getQueue: ok(async (req) => ({ queue: await svc.getQueue(req.user) })),
