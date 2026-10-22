@@ -1,4 +1,4 @@
-// Kiem tra du lieu seed su pham (khong can DB): 40 muc CASEL (= 40 ky nang con source casel), 23 muc bat san (Phu luc A cua spec),
+// Kiem tra du lieu seed su pham (khong can DB): 40 muc CASEL (= 40 ky nang con), 23 muc bat san (Phu luc A cua spec),
 // mau cau hoi dung dang tra loi, topic seed gan ky nang con cung nang luc.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -191,18 +191,18 @@ test('platform_settings: tham so bao cao EQ mac dinh (spec muc 7)', () => {
 });
 
 // Prisma gia lap toi thieu cho seedPedagogy: kiem luat tao ky nang con / mau va co publish ma khong can DB.
-// existingSubs: { code: { id, source? } } — dong da co trong DB.
+// existingSubs: { code: { id, caselTextEn? } } — dong da co trong DB.
 function fakePrisma({ existingSubs = {}, templateCounts = {} } = {}) {
   const created = { subSkills: [], templates: [] };
   const updated = [];
-  const rows = Object.entries(existingSubs).map(([code, r]) => ({ code, source: 'casel', ...r }));
+  const rows = Object.entries(existingSubs).map(([code, r]) => ({ code, caselTextEn: null, ...r }));
   const prisma = {
     user: { findUnique: async () => ({ id: 'spec-1' }) },
     eqSkill: { findMany: async () => COMPETENCIES.map((c) => ({ id: `sk-${c}`, caselCode: c })) },
     eqSubSkill: {
       findMany: async ({ where }) => {
         const [byCode, byText] = where.OR;
-        return rows.filter((r) => byCode.code.in.includes(r.code) || (r.source === 'casel' && r.caselTextEn === byText.caselTextEn));
+        return rows.filter((r) => byCode.code.in.includes(r.code) || r.caselTextEn === byText.caselTextEn);
       },
       update: async ({ where, data }) => {
         updated.push({ id: where.id, data });
@@ -240,7 +240,7 @@ test('seedPedagogy: DB trong -> 40 ky nang con casel (23 bat, 17 tat ten tieng V
     const { prisma, created } = fakePrisma();
     await quiet(() => seedPedagogy(prisma, { publish }));
     assert.equal(created.subSkills.length, 40);
-    assert.ok(created.subSkills.every((d) => d.source === 'casel' && d.caselTextEn));
+    assert.ok(created.subSkills.every((d) => d.caselTextEn && !('source' in d)));
     assert.deepEqual(new Set(created.subSkills.map((d) => d.caselTextEn)), new Set(CASEL_REFERENCES.map((c) => c.textEn)));
     const active = created.subSkills.filter((d) => d.isActive);
     assert.equal(active.length, 23);
@@ -287,19 +287,21 @@ test('seedPedagogy: dong da co -> chi dat lai caselTextEn, khong ghi de ten / tu
   assert.ok(!created.templates.some((t) => t.subSkillId === 'sub-i'));
 });
 
-test('seedPedagogy: ma goc bi ky nang con chuyen gia chiem -> tao `<ma>_casel`; tim lai dong casel theo cau tieng Anh', async () => {
+test('seedPedagogy: tim lai dong da co theo cau tieng Anh (ma cu) hoac `<ma>_casel`, khong tao trung', async () => {
   const ref = CASEL_REFERENCES.find((c) => !SUB_SKILLS.some((x) => x.caselCode === c.code));
   const sub = SUB_SKILLS[0];
   const { prisma, created, updated } = fakePrisma({
     existingSubs: {
-      [ref.code]: { id: 'sub-spec', source: 'specialist' },
+      [ref.code]: { id: 'sub-plain', caselTextEn: 'legacy text' },
+      [`${ref.code}_casel`]: { id: 'sub-casel', caselTextEn: 'old wording' },
       old_custom_code: { id: 'sub-old', caselTextEn: caselByCode.get(sub.caselCode).textEn },
     },
     templateCounts: { 'sub-old': 2 },
   });
   await quiet(() => seedPedagogy(prisma, { publish: true }));
-  assert.ok(created.subSkills.some((d) => d.code === `${ref.code}_casel` && d.source === 'casel'));
-  assert.ok(!created.subSkills.some((d) => d.code === sub.code), 'khong tao trung dong casel da co ma cu');
+  assert.equal(created.subSkills.length, 38);
+  assert.ok(!created.subSkills.some((d) => d.code === sub.code || d.code.startsWith(ref.code)), 'khong tao trung dong da co');
+  assert.equal(updated.find((u) => u.id === 'sub-casel').data.caselTextEn, ref.textEn, 'uu tien `<ma>_casel` hon ma goc');
+  assert.ok(!updated.some((u) => u.id === 'sub-plain'));
   assert.ok(updated.some((u) => u.id === 'sub-old'));
-  assert.ok(!updated.some((u) => u.id === 'sub-spec'));
 });

@@ -21,6 +21,9 @@
 //  - 2026-10-22 gon kiem duyet + gia: bo checklist_items / review_checklist_results (checklist su pham chi
 //    con tren web); bo price_tiers, listings.price_vnd tu dat (0 = mien phi, hoac 5.000-500.000 boi 1.000);
 //    bo thu vien nen backgrounds va story_scenes.background_id
+//  - 2026-10-22 luoc bang/cot thua: product_review_tags -> product_reviews.tags review_tag[];
+//    bo admin_audit_logs.ip_address (khong ai ghi / doc); bo eq_sub_skills.source + enum sub_skill_source
+//    (ky nang con chi con danh muc CASEL co dinh), casel_text_en NOT NULL
 // =============================================================================
 
 
@@ -260,11 +263,6 @@ Enum answer_format {
   role_choice [note: '3 phuong an theo 3 vai; diem tung vai do phien ban mau quy dinh']
 }
 
-Enum sub_skill_source {
-  casel [note: 'muc goc khung CASEL (40 muc)']
-  specialist [note: 'chuyen gia su pham bo sung']
-}
-
 Enum template_status {
   draft
   published
@@ -408,8 +406,7 @@ Table eq_sub_skills {
   code varchar(60) [unique, not null]
   name_vi varchar(200) [not null]
   description_vi text [not null, note: 'loi cho phu huynh / AI']
-  casel_text_en text [note: 'nguyen van tieng Anh cua muc CASEL; bat buoc khi source = casel, khong sua qua API']
-  source sub_skill_source [not null, default: 'specialist', note: 'casel = 40 muc goc (seed); specialist chi con cho du lieu cu, API khong tao moi']
+  casel_text_en text [not null, note: 'nguyen van tieng Anh cua muc CASEL; khong sua qua API']
   age_min int [not null, default: 5]
   age_max int [not null, default: 8]
   is_active boolean [not null, default: true]
@@ -427,7 +424,7 @@ Table eq_sub_skills {
   Danh muc chuan (chot 2026-10-22): 40 muc goc CASEL tu seed; khong them / xoa qua API.
   Specialist chi sua name_vi, description_vi, age_min, age_max, is_active;
   skill_id / code / casel_text_en / display_order giu nguyen.
-  CHECK: age_min <= age_max; source <> 'casel' OR casel_text_en IS NOT NULL
+  CHECK: age_min <= age_max
   '''
 }
 
@@ -901,6 +898,7 @@ Table product_reviews {
   hidden_by uuid
   seller_reply text [note: 'nguoi ban phan hoi mot lan']
   seller_replied_at timestamptz
+  tags review_tag[] [not null, default: `'{}'`, note: 'the nguoi danh gia chon, khong trung (API dedupe khi ghi)']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
@@ -910,15 +908,6 @@ Table product_reviews {
   }
 
   Note: 'CHECK rating BETWEEN 1 AND 5. Chi nguoi da mua va con da nghe het moi duoc danh gia'
-}
-
-Table product_review_tags {
-  review_id uuid [not null]
-  tag review_tag [not null]
-
-  indexes {
-    (review_id, tag) [pk]
-  }
 }
 
 
@@ -1215,7 +1204,6 @@ Table admin_audit_logs {
   target_id uuid
   before_state jsonb
   after_state jsonb
-  ip_address inet
   created_at timestamptz [not null, default: `now()`]
 
   indexes {
@@ -1300,7 +1288,6 @@ Ref: entitlements.order_item_id > order_items.id [delete: set null]
 Ref: product_reviews.listing_id > listings.id [delete: cascade]
 Ref: product_reviews.parent_id > users.id [delete: restrict]
 Ref: product_reviews.hidden_by > users.id [delete: set null]
-Ref: product_review_tags.review_id > product_reviews.id [delete: cascade]
 
 Ref: subscriptions.parent_id > users.id [delete: restrict]
 Ref: subscriptions.plan_id > plans.id [delete: restrict]
@@ -1381,7 +1368,6 @@ TableGroup marketplace {
   listings
   entitlements
   product_reviews
-  product_review_tags
 }
 
 TableGroup commerce {

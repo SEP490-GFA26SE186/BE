@@ -1,6 +1,6 @@
 # Hướng dẫn đọc schema — rev 8
 
-49 bảng, chia 8 khối (dọn 2026-10-18: bỏ voucher, giỏ hàng, `prompt_templates`, `child_usage_sessions`; thêm `narration_clips`. 2026-10-20: thêm bảng sư phạm CASEL — `eq_sub_skills`, `question_templates`, `question_template_versions`, `topic_sub_skills`. 2026-10-21: gộp `casel_references` vào `eq_sub_skills` — kỹ năng con chính là mục CASEL). Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
+44 bảng, chia 8 khối (2026-10-22 còn bỏ `checklist_items`, `review_checklist_results`, `price_tiers`, `backgrounds`. dọn 2026-10-18: bỏ voucher, giỏ hàng, `prompt_templates`, `child_usage_sessions`; thêm `narration_clips`. 2026-10-20: thêm bảng sư phạm CASEL — `eq_sub_skills`, `question_templates`, `question_template_versions`, `topic_sub_skills`. 2026-10-21: gộp `casel_references` vào `eq_sub_skills` — kỹ năng con chính là mục CASEL. 2026-10-22: bỏ `product_review_tags` — thẻ đánh giá thành cột mảng `product_reviews.tags`; bỏ `admin_audit_logs.ip_address`, `eq_sub_skills.source`). Khoảng 15 bảng là xương sống; phần còn lại là danh mục cấu hình, bảng nối
 và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để xem ERD.
 
 ## 1. Tám khối
@@ -12,7 +12,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 | **Truyện** (8) | Một truyện gồm những gì? | `stories`, `story_pages`, `story_checkpoints` | `story_characters`, `story_scenes`, `checkpoint_options`, `narration_clips`, `bookshelf_items` |
 | **Học** (2) | Trẻ đã trả lời gì, mức EQ ra sao? | `play_sessions`, `checkpoint_answers` | (mức độ tính trực tiếp từ `checkpoint_answers`) |
 | **AI** (1) | Đã gọi AI bao nhiêu, tốn bao nhiêu? | `ai_requests` | (prompt nằm trong dịch vụ ai/) |
-| **Chợ truyện** (6) | Truyện nào đang bán, ai đã mua, đánh giá ra sao? | `listings`, `entitlements`, `product_reviews` | `seller_profiles`, `price_tiers`, `product_review_tags` |
+| **Chợ truyện** (6) | Truyện nào đang bán, ai đã mua, đánh giá ra sao? | `listings`, `entitlements`, `product_reviews` | `seller_profiles`, `price_tiers` |
 | **Tiền** (10) | Ai trả bao nhiêu, ví còn bao nhiêu? | `orders`, `order_items`, `subscriptions`, `wallets`, `wallet_ledger` | `plans`, `refund_requests`, `webhook_logs`, `withdrawal_requests`, `platform_settings` |
 | **Kiểm duyệt** (7) | Ai duyệt, ai bị báo cáo, ai làm gì? | `moderation_reviews`, `content_reports` | `review_checklist_results`, `review_page_views`, `creator_strikes`, `strike_appeals`, `admin_audit_logs` |
 
@@ -27,8 +27,7 @@ và nhật ký. File DBML: `schema_rev8.dbml` — dán vào dbdiagram.io để x
 
 **Tạo truyện**
 4. Chọn bài học "Con hay nổi giận" → đọc `topics`; kỹ năng con của bài → `topic_sub_skills` → `eq_sub_skills`
-   (kỹ năng con chính là một mục CASEL: `source = casel` là 40 mục gốc có `casel_text_en` nguyên văn tiếng Anh,
-   `source = specialist` là kỹ năng chuyên gia bổ sung).
+   (kỹ năng con chính là một mục CASEL: danh mục cố định 40 mục gốc, `casel_text_en` là nguyên văn tiếng Anh, bắt buộc).
 5. Hệ thống tạo `stories` (`private`, `length = medium`), gắn nhân vật + token `{NV1}`… →
    `story_characters`, dựng 8 trang → `story_pages`, 4 điểm dừng → `story_checkpoints`; điểm dừng chấm lấy mẫu đã ban hành của kỹ năng con → ghi `sub_skill_id`, `template_version_id`, `scored = true` (truyện tự viết và câu liên hệ bản thân: `scored = false`, không kỹ năng con). Specialist có thể gắn cờ `excluded` / `reviewed_ok_*` khi soát điểm dừng.
 6. "Viết giúp tôi" → một `ai_requests` (`story_text`) → điền chữ trang, cảnh (`story_scenes`),
@@ -107,10 +106,9 @@ DBML không diễn tả được; đã ghi trong `Note` của từng bảng, t�
 - `product_reviews`: `rating BETWEEN 1 AND 5`
 - `checkpoint_answers`: `attempts BETWEEN 1 AND 2`
 - `topics`, `eq_sub_skills`: `age_min <= age_max`
-- `eq_sub_skills`: `source <> 'casel' OR casel_text_en IS NOT NULL`
 
 **Validator ở tầng service** (khác bảng, CHECK không làm được)
-- `eq_sub_skills`: mục gốc CASEL (`source = casel`) không đổi `skill_id` / `code` / `casel_text_en`, không xoá (chỉ tắt); kỹ năng chuyên gia chỉ xoá khi chưa có mẫu / bài học / điểm dừng dùng; `topic_sub_skills`: 1–3 kỹ năng con cùng năng lực với topic.
+- `eq_sub_skills`: danh mục CASEL cố định — không thêm / xoá qua API (chỉ tắt), không đổi `skill_id` / `code` / `casel_text_en`; `product_reviews.tags`: không trùng, chỉ thẻ cho chọn (dedupe khi ghi); `topic_sub_skills`: 1–3 kỹ năng con cùng năng lực với topic.
 - `checkpoint_options`: `perspective` đúng 3 phương án, đúng 1 `is_correct`; `problem_solving` đủ 3 vai.
 - Truyện `custom`: 4–20 trang, 0–6 điểm dừng có chấm, không đặt sau trang 1, `reflection` ở cuối.
 - Chỉ đưa vào giá sách khi `reviewed_at IS NOT NULL`, và phụ huynh sở hữu truyện (riêng tư hoặc có `entitlements`).

@@ -320,14 +320,6 @@ enum AnswerFormat {
   @@map("answer_format")
 }
 
-/// Nguon goc ky nang con: muc goc CASEL hay chuyen gia bo sung
-enum SubSkillSource {
-  casel
-  specialist
-
-  @@map("sub_skill_source")
-}
-
 enum TemplateStatus {
   draft
   published
@@ -533,26 +525,24 @@ model Topic {
   @@map("topics")
 }
 
-/// @note Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21):
-/// @note source=casel: 40 muc goc CASEL (seed), casel_text_en bat buoc va khong sua qua API, khong xoa (chi tat)
-/// @note source=specialist: Specialist bo sung duoi 1 nang luc, casel_text_en tuy chon
-/// @note CHECK: age_min <= age_max; source <> 'casel' OR casel_text_en IS NOT NULL
+/// @note Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21): 40 muc goc CASEL (seed)
+/// @note Danh muc co dinh (chot 2026-10-22): khong them / xoa qua API, casel_text_en khong sua qua API, chi tat
+/// @note CHECK: age_min <= age_max
 model EqSubSkill {
-  id            String         @id @default(uuid()) @db.Uuid
-  skillId       String         @map("skill_id") @db.Uuid
-  code          String         @unique @db.VarChar(60)
-  nameVi        String         @map("name_vi") @db.VarChar(200)
-  descriptionVi String         @map("description_vi")
-  /// nguyen van tieng Anh cua muc CASEL (null voi ky nang con chuyen gia bo sung khong gan cau goc)
-  caselTextEn   String?        @map("casel_text_en")
-  source        SubSkillSource @default(specialist)
-  ageMin        Int            @default(5) @map("age_min")
-  ageMax        Int            @default(8) @map("age_max")
-  isActive      Boolean        @default(true) @map("is_active")
-  displayOrder  Int            @default(0) @map("display_order")
-  createdBy     String         @map("created_by") @db.Uuid
-  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id            String   @id @default(uuid()) @db.Uuid
+  skillId       String   @map("skill_id") @db.Uuid
+  code          String   @unique @db.VarChar(60)
+  nameVi        String   @map("name_vi") @db.VarChar(200)
+  descriptionVi String   @map("description_vi")
+  /// nguyen van tieng Anh cua muc CASEL
+  caselTextEn   String   @map("casel_text_en")
+  ageMin        Int      @default(5) @map("age_min")
+  ageMax        Int      @default(8) @map("age_max")
+  isActive      Boolean  @default(true) @map("is_active")
+  displayOrder  Int      @default(0) @map("display_order")
+  createdBy     String   @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   skill   EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
   creator User    @relation("SubSkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
@@ -1127,39 +1117,30 @@ model Entitlement {
 /// @note hidden_at: NULL = dang hien; an thi khong tinh vao diem
 /// @note Chi nguoi da mua va con da nghe het moi duoc danh gia (validator tang service)
 model ProductReview {
-  id              String    @id @default(uuid()) @db.Uuid
-  listingId       String    @map("listing_id") @db.Uuid
-  parentId        String    @map("parent_id") @db.Uuid
+  id              String      @id @default(uuid()) @db.Uuid
+  listingId       String      @map("listing_id") @db.Uuid
+  parentId        String      @map("parent_id") @db.Uuid
   rating          Int
   comment         String?
-  hiddenAt        DateTime? @map("hidden_at") @db.Timestamptz()
-  hiddenBy        String?   @map("hidden_by") @db.Uuid
-  sellerReply     String?   @map("seller_reply")
-  sellerRepliedAt DateTime? @map("seller_replied_at") @db.Timestamptz()
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  hiddenAt        DateTime?   @map("hidden_at") @db.Timestamptz()
+  hiddenBy        String?     @map("hidden_by") @db.Uuid
+  sellerReply     String?     @map("seller_reply")
+  sellerRepliedAt DateTime?   @map("seller_replied_at") @db.Timestamptz()
+  /// the nguoi danh gia chon, khong trung (API dedupe khi ghi)
+  tags            ReviewTag[] @default([])
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   listing      Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   author       User    @relation("ReviewAuthor", fields: [parentId], references: [id], onDelete: Restrict)
   hiddenByUser User?   @relation("ReviewHiddenBy", fields: [hiddenBy], references: [id], onDelete: SetNull)
 
   // -- back-references --
-  tags           ProductReviewTag[]
   contentReports ContentReport[]
 
   @@unique([listingId, parentId])
   @@index([listingId, hiddenAt])
   @@map("product_reviews")
-}
-
-model ProductReviewTag {
-  reviewId String    @map("review_id") @db.Uuid
-  tag      ReviewTag
-
-  review ProductReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-
-  @@id([reviewId, tag])
-  @@map("product_review_tags")
 }
 
 // =============================================================================
@@ -1492,7 +1473,6 @@ model AdminAuditLog {
   targetId    String?  @map("target_id") @db.Uuid
   beforeState Json?    @map("before_state") @db.JsonB
   afterState  Json?    @map("after_state") @db.JsonB
-  ipAddress   String?  @map("ip_address") @db.Inet
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)

@@ -79,8 +79,10 @@ test('danh gia: chua mua / chua doc het -> 422; doc het -> danh gia, diem truyen
   assert.equal(r.body.data.created, true);
   assert.equal(Number((await prisma.listing.findUnique({ where: { id: listing.id } })).ratingAvg), 4);
 
+  assert.deepEqual((await prisma.productReview.findUnique({ where: { id: r.body.data.review.id } })).tags, ['child_liked', 'clear_lesson'], 'cot mang, khong trung');
   const again = await call(buyer.token, 'PUT', path, { rating: 2, tags: [] });
   assert.equal(again.body.data.created, false);
+  assert.deepEqual(again.body.data.review.tags, []);
   const l = await prisma.listing.findUnique({ where: { id: listing.id } });
   assert.deepEqual([Number(l.ratingAvg), l.ratingCount], [2, 1]);
   assert.equal(Number((await prisma.sellerProfile.findUnique({ where: { userId: seller.user.id } })).ratingAvg), 2);
@@ -94,6 +96,7 @@ test('danh gia: chua mua / chua doc het -> 422; doc het -> danh gia, diem truyen
   assert.equal(list.reviews[0].sellerReply, 'Cảm ơn ba mẹ!');
   assert.match(list.reviews[0].author, /^Ba mẹ |^Phụ huynh$/);
   assert.equal(list.distribution[2], 1);
+  assert.ok(list.reviews.every((x) => Array.isArray(x.tags)));
 });
 
 test('bao cao danh gia -> Specialist thay trong hang bao cao, an danh gia -> bao cao resolved, diem tinh lai', { skip }, async () => {

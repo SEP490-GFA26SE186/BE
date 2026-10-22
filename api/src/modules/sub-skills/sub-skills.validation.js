@@ -7,7 +7,6 @@ const list = z.object({
     skillId: z.string().uuid().optional(),
     search: z.string().max(200).optional(),
     isActive: z.enum(['true', 'false']).optional(),
-    source: z.enum(['casel', 'specialist']).optional(),
   }),
 });
 // Chi cac truong dieu chinh duoc; strict -> gui nang luc / ma / cau goc tieng Anh la 400

@@ -89,7 +89,7 @@ export async function createFixedSlotTopic({ formats = FIXED_FORMATS } = {}) {
     const sub = await prisma.eqSubSkill.create({
       data: {
         skillId, code: `it_fixed_${tag}_${i}`, nameVi: `Kỹ năng cố định ${tag} ${i}`,
-        descriptionVi: 'x', displayOrder: i, createdBy: user.id,
+        descriptionVi: 'x', caselTextEn: 'Fixture CASEL sentence', displayOrder: i, createdBy: user.id,
       },
     });
     await prisma.topicSubSkill.create({ data: { topicId: topic.id, subSkillId: sub.id } });

@@ -1,6 +1,5 @@
 // Ky nang con (eq_sub_skills) CHINH LA muc CASEL (1 tang, chot 2026-10-21): 40 muc goc CASEL tu seed.
 // La danh muc chuan (chot 2026-10-22): Specialist chi chinh dien giai tieng Viet, do tuoi va bat/tat; khong them / xoa.
-// source=specialist chi con de tuong thich du lieu cu, API khong tao moi.
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 
@@ -20,7 +19,6 @@ const base = (r) => ({
   nameVi: r.nameVi,
   descriptionVi: r.descriptionVi,
   caselTextEn: r.caselTextEn,
-  source: r.source,
   ageMin: r.ageMin,
   ageMax: r.ageMax,
   isActive: r.isActive,
@@ -46,13 +44,12 @@ const publishedCounts = async (ids) => {
   return new Map(rows.map((r) => [r.subSkillId, r._count._all]));
 };
 
-/** Phu huynh: chi ban dang dung, khong kem so dem. Specialist / Admin: tat ca + so dem, loc skillId / search / isActive / source. */
-const listSubSkills = async (user, { skillId, search, isActive, source } = {}) => {
+/** Phu huynh: chi ban dang dung, khong kem so dem. Specialist / Admin: tat ca + so dem, loc skillId / search / isActive. */
+const listSubSkills = async (user, { skillId, search, isActive } = {}) => {
   const manager = MANAGERS.has(user?.role);
   const rows = await prisma.eqSubSkill.findMany({
     where: {
       ...(skillId && { skillId }),
-      ...(source && { source }),
       ...(!manager && { isActive: true }),
       ...(manager && isActive !== undefined && { isActive: isActive === true || isActive === 'true' }),
       ...(search?.trim() && { nameVi: { contains: search.trim(), mode: 'insensitive' } }),

@@ -57,15 +57,14 @@ export default {
       tags: ['Sub-skills'],
       summary: 'Danh sách kỹ năng con',
       description:
-        'Kỹ năng con chính là mục CASEL (`caselTextEn` là nguyên văn tiếng Anh). Đây là danh mục chuẩn: không thêm / xoá qua API, chỉ điều chỉnh bằng PUT.\n**Phụ huynh:** chỉ kỹ năng con đang dùng, không kèm số đếm.\n**Specialist / Admin:** tất cả + `templatesCount`, `publishedTemplatesCount`, `topicsCount`, `checkpointsCount`; lọc `skillId`, `search`, `isActive`, `source`.',
+        'Kỹ năng con chính là mục CASEL (`caselTextEn` là nguyên văn tiếng Anh). Đây là danh mục chuẩn: không thêm / xoá qua API, chỉ điều chỉnh bằng PUT.\n**Phụ huynh:** chỉ kỹ năng con đang dùng, không kèm số đếm.\n**Specialist / Admin:** tất cả + `templatesCount`, `publishedTemplatesCount`, `topicsCount`, `checkpointsCount`; lọc `skillId`, `search`, `isActive`.',
       security: bearer,
       parameters: [
         { name: 'skillId', in: 'query', schema: { type: 'string', format: 'uuid' } },
         { name: 'search', in: 'query', schema: { type: 'string' } },
         { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
-        { name: 'source', in: 'query', schema: { type: 'string', enum: ['casel', 'specialist'] } },
       ],
-      responses: { 200: { description: 'Mảng `[{ id, skillId, skill, code, nameVi, descriptionVi, caselTextEn, source, ageMin, ageMax, isActive, displayOrder, ...counts }]` trong `data`' } },
+      responses: { 200: { description: 'Mảng `[{ id, skillId, skill, code, nameVi, descriptionVi, caselTextEn, ageMin, ageMax, isActive, displayOrder, ...counts }]` trong `data`' } },
     },
   },
   '/sub-skills/{id}': {
@@ -188,7 +187,7 @@ export default {
         { name: 'search', in: 'query', schema: { type: 'string' } },
         { name: 'isActive', in: 'query', schema: { type: 'boolean' } },
       ],
-      responses: { 200: { description: 'Mảng bài học trong `data`. Phụ huynh: `subSkills: [{ id, nameVi }]`; Specialist / Admin: `subSkills: [{ id, nameVi, caselTextEn, source }]`' } },
+      responses: { 200: { description: 'Mảng bài học trong `data`. Phụ huynh: `subSkills: [{ id, nameVi }]`; Specialist / Admin: `subSkills: [{ id, nameVi, caselTextEn }]`' } },
     },
     post: {
       tags: ['Topics'],
