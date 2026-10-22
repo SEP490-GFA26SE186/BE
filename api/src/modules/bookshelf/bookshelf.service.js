@@ -3,6 +3,7 @@ import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { loadReadiness, notReadyMessage } from '../stories/stories.narration.store.js';
 import { buildShelf, readingProgress } from './lib/shelf.js';
+import { COVER_SELECT, formatCover } from '../stories/lib/cover.js';
 
 /**
  * Verify child access permission for current user
@@ -56,6 +57,7 @@ const getBookshelf = async (user, query) => {
           length: true,
           useAiImage: true,
           useTts: true,
+          ...COVER_SELECT,
           topic: { select: { title: true, skill: { select: { caselCode: true } } } },
           _count: { select: { pages: true } },
         },
@@ -85,6 +87,7 @@ const getBookshelf = async (user, query) => {
       useAiImage: story.useAiImage,
       // topic_id tuy chon voi truyen tu viet (custom)
       topic: story.topic ? { title: story.topic.title, competency: story.topic.skill.caselCode } : null,
+      cover: formatCover(story),
       addedAt,
       readingProgress: readingProgress(
         session && { ...session, currentPageOrder: session.currentPage?.pageOrder ?? null },

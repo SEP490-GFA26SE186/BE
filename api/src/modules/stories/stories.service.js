@@ -17,6 +17,7 @@ import {
 import { loadStoryForRead, loadOwnedStory, lockForWrite } from './stories.access.js';
 import { VOICE_KEY } from './stories.narration.store.js';
 import { blockedErrors, keywordIssues, storyTextTargets } from './lib/keywords.js';
+import { hasReadyImage } from './lib/cover.js';
 
 export { formatStoryDetail };
 
@@ -481,6 +482,28 @@ const deleteStory = async (user, storyId) => {
   await prisma.story.update({ where: { id: storyId }, data: { deletedAt: new Date() } });
 };
 
+/**
+ * PUT /stories/:id/cover { sceneId } — chon canh lam anh bia (chi chu truyen, truyen rieng).
+ * Canh phai thuoc truyen va da co anh, khong thi 422. null -> ve mac dinh (canh 1).
+ */
+const setCover = async (user, storyId, sceneId) => {
+  const story = await loadOwnedStory(user, storyId);
+  if (story.kind !== 'private') throw ApiError.notFound('Không tìm thấy truyện.');
+  if (sceneId) {
+    const scene = await prisma.storyScene.findFirst({
+      where: { id: sceneId, storyId },
+      select: { imageKey: true, imageStatus: true },
+    });
+    if (!hasReadyImage(scene)) {
+      throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'Cảnh này chưa có ảnh', [
+        { path: 'sceneId', message: scene ? 'Cảnh chưa vẽ xong ảnh' : 'Cảnh không thuộc truyện này' },
+      ]);
+    }
+  }
+  await prisma.story.update({ where: { id: storyId }, data: { coverSceneId: sceneId ?? null } });
+  return getDetail(prisma, storyId);
+};
+
 export default {
   createStory,
   getStories,
@@ -488,4 +511,5 @@ export default {
   updateStory,
   bindCharacters,
   deleteStory,
+  setCover,
 };

@@ -4,6 +4,7 @@
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import bookshelfService from '../bookshelf/bookshelf.service.js';
+import { COVER_SELECT, formatCover } from '../stories/lib/cover.js';
 import { ageOf, formatChild, summarizeReading, vnDate } from './lib/childFormat.js';
 import { buildEqLevels } from './lib/eqLevels.js';
 import { buildConversation, buildEvidence, buildTrend } from './lib/eqJourney.js';
@@ -337,16 +338,17 @@ const getChildOverview = async (parentId, childId) => {
     prisma.playSession.findFirst({
       where: { childId },
       orderBy: { lastActivityAt: 'desc' },
-      select: { lastActivityAt: true, story: { select: { id: true, title: true } } },
+      select: { lastActivityAt: true, story: { select: { id: true, title: true, ...COVER_SELECT } } },
     }),
   ]);
+  const lastStory = lastSession?.story;
   return {
     profile,
     todayUsage,
     readingStats: {
       booksInBookshelf: profile.booksCount,
       completedStories: profile.completedSessionsCount,
-      lastReadStory: lastSession?.story ?? null,
+      lastReadStory: lastStory ? { id: lastStory.id, title: lastStory.title, cover: formatCover(lastStory) } : null,
       lastReadAt: lastSession?.lastActivityAt ?? null,
     },
     eqReport,

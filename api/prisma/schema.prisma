@@ -719,6 +719,8 @@ model Story {
   kind          StoryKind   @default(private)
   sourceStoryId String?     @map("source_story_id") @db.Uuid
   topicId       String?     @map("topic_id") @db.Uuid
+  /// anh bia; NULL = canh 1
+  coverSceneId  String?     @map("cover_scene_id") @db.Uuid
   length        StoryLength @default(medium)
   entry         StoryEntry  @default(topic)
   title         String      @db.VarChar(200)
@@ -740,6 +742,7 @@ model Story {
   owner       User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: Restrict)
   topic       Topic? @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  coverScene  StoryScene? @relation("StoryCover", fields: [coverSceneId], references: [id], onDelete: SetNull)
 
   // -- back-references --
   narrationClips  NarrationClip[]
@@ -810,6 +813,7 @@ model StoryScene {
   // -- back-references --
   pages      StoryPage[]
   aiRequests AiRequest[]
+  coverOf    Story[]     @relation("StoryCover")
 
   @@unique([storyId, sceneOrder])
   @@map("story_scenes")

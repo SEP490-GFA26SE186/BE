@@ -228,3 +228,25 @@ test('ban dang ban co giong doc: sinh lai bang ten chung; Specialist chi nhan du
   const textOnly = (await call(buyer.token, 'GET', '/market/listings?narration=without&sort=newest&limit=50')).body.data.items;
   assert.ok(!textOnly.some((i) => i.id === listing.id));
 });
+
+test('dang ban: anh bia theo canh da chon -> listings.cover_image_key + cover_scene_id cua ban sao', { skip }, async () => {
+  const s = await approvedSeller();
+  const first = await prisma.storyScene.findFirstOrThrow({ where: { storyId: s.story.id }, orderBy: { sceneOrder: 'asc' } });
+  await prisma.storyScene.update({ where: { id: first.id }, data: { imageKey: 'https://img.test/c1.png', imageStatus: 'ready' } });
+  const picked = await prisma.storyScene.create({
+    data: { storyId: s.story.id, sceneOrder: 50, description: 'Cover scene.', imageKey: 'https://img.test/c2.png', imageStatus: 'ready' },
+  });
+  assert.equal((await call(s.token, 'PUT', `/stories/${s.story.id}/cover`, { sceneId: picked.id })).status, 200);
+
+  const ok = await call(s.token, 'POST', '/listings', listingBody(s));
+  assert.equal(ok.status, 201, JSON.stringify(ok.body));
+  const { listing } = ok.body.data;
+  assert.equal(listing.cover.imageUrl, 'https://img.test/c2.png');
+  const row = await prisma.listing.findUniqueOrThrow({ where: { id: listing.id }, include: { publishedStory: { include: { coverScene: true } } } });
+  assert.equal(row.coverImageKey, 'https://img.test/c2.png');
+  assert.equal(row.publishedStory.coverScene.sceneOrder, 50);
+  assert.notEqual(row.publishedStory.coverSceneId, picked.id);
+
+  const mine = await call(s.token, 'GET', '/listings/mine');
+  assert.equal(mine.body.data.listings.find((l) => l.id === listing.id).cover.imageUrl, 'https://img.test/c2.png');
+});

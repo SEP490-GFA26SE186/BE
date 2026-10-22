@@ -4,6 +4,7 @@
 
 import { assetUrl } from '../../../clients/assetUrl.js';
 import { childReadiness } from './narration.js';
+import { COVER_SELECT, formatCover } from './cover.js';
 
 const tokenNumber = (token) => Number(/\d+/.exec(token)?.[0] ?? Number.MAX_SAFE_INTEGER);
 const byKey = (key) => (a, b) => a[key] - b[key];
@@ -12,7 +13,7 @@ const byKey = (key) => (a, b) => a[key] - b[key];
 export const STORY_DETAIL_INCLUDE = {
   topic: { select: { id: true, title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { id: true, name: true } } } },
-  subSkills: { orderBy: { position: 'asc' }, include: { subSkill: { select: { id: true, nameVi: true } } } },
+  subSkills: { orderBy: { position: 'asc' }, include: { subSkill: { select: { id: true, nameVi: true, skill: { select: { caselCode: true } } } } } },
   scenes: true,
   pages: true,
   checkpoints: { include: { options: true } },
@@ -23,7 +24,8 @@ export const STORY_DETAIL_INCLUDE = {
 export const STORY_SUMMARY_INCLUDE = {
   topic: { select: { id: true, title: true, skill: { select: { caselCode: true } } } },
   storyCharacters: { include: { character: { select: { id: true, name: true } } } },
-  subSkills: { orderBy: { position: 'asc' }, include: { subSkill: { select: { id: true, nameVi: true } } } },
+  subSkills: { orderBy: { position: 'asc' }, include: { subSkill: { select: { id: true, nameVi: true, skill: { select: { caselCode: true } } } } } },
+  scenes: COVER_SELECT.scenes, // chi canh da co anh — du de chon anh bia
   _count: { select: { pages: true, checkpoints: true } },
 };
 
@@ -71,6 +73,7 @@ const formatHeader = (story) => {
     createdAt: story.createdAt,
     updatedAt: story.updatedAt,
     characters,
+    cover: formatCover(story),
   };
 };
 
@@ -86,6 +89,7 @@ export function formatStoryDetail(story, { voice = '' } = {}) {
   const readiness = childReadiness(story, story.narrationClips ?? [], voice);
   return {
     ...formatHeader(story),
+    coverSceneId: story.coverSceneId ?? null, // canh phu huynh chon lam bia; null = mac dinh (canh 1)
     narration: readiness.narration,
     readiness: { ready: readiness.ready, reason: readiness.reason },
     scenes: [...(story.scenes ?? [])].sort(byKey('sceneOrder')).map((s) => ({

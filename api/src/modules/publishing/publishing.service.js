@@ -4,6 +4,7 @@ import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { formatStoryDetail, STORY_DETAIL_INCLUDE } from '../stories/lib/storyFormat.js';
 import { findReviewGaps } from '../stories/lib/editorRules.js';
+import { COVER_SELECT, coverImageKey, formatCover } from '../stories/lib/cover.js';
 import { dispatchNarration, prepareNarration } from '../stories/stories.narration.service.js';
 import { loadReadiness, loadVoice } from '../stories/stories.narration.store.js';
 import {
@@ -32,6 +33,7 @@ const formatListing = (l) => ({
   priceTierId: l.priceTierId,
   hasAiContent: l.hasAiContent,
   hasNarration: Boolean(l.publishedStory?.useTts),
+  cover: formatCover(l.publishedStory ?? {}, { imageKey: l.coverImageKey }),
   publishedStoryId: l.publishedStoryId,
   sourceStoryId: l.publishedStory?.sourceStoryId ?? null,
   submittedAt: l.submittedAt,
@@ -43,7 +45,7 @@ const formatListing = (l) => ({
 
 const LISTING_INCLUDE = {
   priceTier: true,
-  publishedStory: { select: { sourceStoryId: true, useTts: true } },
+  publishedStory: { select: { sourceStoryId: true, useTts: true, ...COVER_SELECT } },
   moderationReviews: { where: { decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, take: 1 },
 };
 
@@ -166,6 +168,10 @@ export async function createListing(user, body, narrationOptions) {
       const created = await tx.storyScene.create({ data: { storyId: copy.id, sceneOrder: s.sceneOrder, description: s.description, imageKey: ready ? s.imageKey : null, imageStatus: ready ? 'ready' : 'none' } });
       sceneId.set(s.id, created.id);
     }
+    // Anh bia theo truyen goc: canh da chon -> canh tuong ung cua ban sao.
+    if (story.coverSceneId && sceneId.has(story.coverSceneId)) {
+      await tx.story.update({ where: { id: copy.id }, data: { coverSceneId: sceneId.get(story.coverSceneId) } });
+    }
     const pageId = new Map();
     for (const p of story.pages) {
       const created = await tx.storyPage.create({
@@ -202,6 +208,7 @@ export async function createListing(user, body, narrationOptions) {
         publishedStoryId: copy.id,
         title: body.title.trim(),
         description: body.description?.trim() || null,
+        coverImageKey: coverImageKey(story), // canh bia da chon hoac canh 1, neu da co anh
         priceTierId: tier.id,
         status: 'submitted',
         hasAiContent: story.length !== 'custom' || story.aiRequests.length > 0,

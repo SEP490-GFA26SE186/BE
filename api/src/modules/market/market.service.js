@@ -5,6 +5,7 @@ import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { checkoutOrder } from '../billing/billing.service.js';
 import { loadMarketSettings } from '../billing/billing.store.js';
+import { COVER_SELECT, formatCover } from '../stories/lib/cover.js';
 
 const vnd = (v) => (v == null ? null : Number(v));
 const SORTS = {
@@ -18,7 +19,7 @@ const LISTING_INCLUDE = {
   priceTier: true,
   seller: { select: { userId: true, displayName: true, ratingAvg: true, totalSales: true } },
   publishedStory: {
-    select: { id: true, length: true, useTts: true, topic: { select: { title: true, ageMin: true, ageMax: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true, checkpoints: true } } },
+    select: { id: true, length: true, useTts: true, ...COVER_SELECT, topic: { select: { title: true, ageMin: true, ageMax: true, skill: { select: { caselCode: true } } } }, _count: { select: { pages: true, checkpoints: true } } },
   },
 };
 
@@ -35,6 +36,8 @@ const formatCard = (l, owned = false) => ({
         ageMax: l.publishedStory.topic.ageMax,
       }
     : null,
+  // Anh bia: listings.cover_image_key (chot luc dang ban), khong co thi theo bia cua ban dang ban.
+  cover: formatCover(l.publishedStory, { imageKey: l.coverImageKey }),
   totalPages: l.publishedStory._count.pages,
   checkpointCount: l.publishedStory._count.checkpoints,
   priceTier: { id: l.priceTier.id, label: l.priceTier.label, priceVnd: vnd(l.priceTier.priceVnd) },

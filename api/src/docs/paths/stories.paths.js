@@ -38,7 +38,7 @@ const storyDetailExample = {
   id: '7b1e4c1a-0d5e-4c55-9a53-1f1c2d3e4f50',
   kind: 'private',
   topicId: '11111111-2222-3333-4444-555555555555',
-  topic: { id: '11111111-2222-3333-4444-555555555555', title: 'Chia sẻ đồ chơi' },
+  topic: { id: '11111111-2222-3333-4444-555555555555', title: 'Chia sẻ đồ chơi', competency: 'relationship_skills' },
   length: 'short',
   entry: 'topic',
   scored: true,
@@ -53,6 +53,9 @@ const storyDetailExample = {
   reviewedAt: null,
   createdAt: '2026-09-30T08:00:00.000Z',
   updatedAt: '2026-09-30T08:05:00.000Z',
+  // Anh bia (StoryCover): canh da chon / canh 1 neu da co anh; null -> Web ve bia theo mau nang luc
+  cover: { imageUrl: null, competency: 'relationship_skills' },
+  coverSceneId: null, // chi co o chi tiet; null = mac dinh (canh 1)
   characters: [
     { token: '{NV1}', characterId: 'aaaaaaaa-0000-4000-8000-000000000001', name: 'Bo', isMain: true },
     { token: '{NV2}', characterId: 'aaaaaaaa-0000-4000-8000-000000000002', name: 'Mẹ Lan', isMain: false },
@@ -229,7 +232,7 @@ const storiesPaths = {
         { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 } },
       ],
       responses: {
-        200: resp('Danh sách truyện (phân trang); mỗi phần tử là tóm tắt kèm `characters` và `pageCount`'),
+        200: resp('Danh sách truyện (phân trang); mỗi phần tử là tóm tắt kèm `characters`, `pageCount` và `cover` (`StoryCover`)'),
         401: err('Chưa đăng nhập'),
       },
     },
@@ -295,6 +298,41 @@ const storiesPaths = {
         401: err('Chưa đăng nhập'),
         403: err('Không phải chủ truyện'),
         404: err('Không tìm thấy truyện'),
+      },
+    },
+  },
+
+  '/stories/{id}/cover': {
+    put: {
+      tags: ['Stories'],
+      summary: '[Parent] Chọn ảnh bìa (ảnh một cảnh)',
+      description:
+        `${OWNER} Chỉ truyện riêng (\`kind = private\`), chưa xoá.\n` +
+        'Ảnh bìa = ảnh một cảnh của truyện (1024x1024, không chữ). `sceneId` phải thuộc truyện và ảnh đã vẽ xong ' +
+        '(`imageStatus = ready`), không thì `422` "Cảnh này chưa có ảnh". `sceneId = null` → về mặc định (cảnh 1). ' +
+        'Trả chi tiết truyện (như `GET /stories/{id}`) với `coverSceneId` và `cover` mới.',
+      security: bearer,
+      parameters: [idParam],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['sceneId'],
+              properties: { sceneId: { ...uuid, nullable: true, description: 'ID cảnh làm bìa; null = cảnh 1' } },
+            },
+            example: { sceneId: 'bbbbbbbb-0000-4000-8000-000000000001' },
+          },
+        },
+      },
+      responses: {
+        200: detailResponse('Đã đổi ảnh bìa'),
+        400: err('`sceneId` thiếu hoặc không phải uuid'),
+        401: err('Chưa đăng nhập'),
+        403: err('Không phải phụ huynh / không phải chủ truyện'),
+        404: err('Không tìm thấy truyện'),
+        422: err('Cảnh này chưa có ảnh (chưa vẽ xong, hoặc không thuộc truyện)'),
       },
     },
   },
