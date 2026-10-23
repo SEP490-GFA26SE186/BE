@@ -320,14 +320,6 @@ enum AnswerFormat {
   @@map("answer_format")
 }
 
-/// Nguon goc ky nang con: muc goc CASEL hay chuyen gia bo sung
-enum SubSkillSource {
-  casel
-  specialist
-
-  @@map("sub_skill_source")
-}
-
 enum TemplateStatus {
   draft
   published
@@ -385,7 +377,6 @@ model User {
   templateVersionsPublished QuestionTemplateVersion[] @relation("TemplateVersionPublisher")
   checkpointsExcluded       StoryCheckpoint[]         @relation("CheckpointExcluder")
   checkpointsReviewedOk     StoryCheckpoint[]         @relation("CheckpointReviewer")
-  backgroundsCreated        Background[]              @relation("BackgroundCreator")
   blockedKeywordsCreated    BlockedKeyword[]          @relation("KeywordCreator")
   stories                   Story[]
   aiRequests                AiRequest[]
@@ -534,26 +525,24 @@ model Topic {
   @@map("topics")
 }
 
-/// @note Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21):
-/// @note source=casel: 40 muc goc CASEL (seed), casel_text_en bat buoc va khong sua qua API, khong xoa (chi tat)
-/// @note source=specialist: Specialist bo sung duoi 1 nang luc, casel_text_en tuy chon
-/// @note CHECK: age_min <= age_max; source <> 'casel' OR casel_text_en IS NOT NULL
+/// @note Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21): 40 muc goc CASEL (seed)
+/// @note Danh muc co dinh (chot 2026-10-22): khong them / xoa qua API, casel_text_en khong sua qua API, chi tat
+/// @note CHECK: age_min <= age_max
 model EqSubSkill {
-  id            String         @id @default(uuid()) @db.Uuid
-  skillId       String         @map("skill_id") @db.Uuid
-  code          String         @unique @db.VarChar(60)
-  nameVi        String         @map("name_vi") @db.VarChar(200)
-  descriptionVi String         @map("description_vi")
-  /// nguyen van tieng Anh cua muc CASEL (null voi ky nang con chuyen gia bo sung khong gan cau goc)
-  caselTextEn   String?        @map("casel_text_en")
-  source        SubSkillSource @default(specialist)
-  ageMin        Int            @default(5) @map("age_min")
-  ageMax        Int            @default(8) @map("age_max")
-  isActive      Boolean        @default(true) @map("is_active")
-  displayOrder  Int            @default(0) @map("display_order")
-  createdBy     String         @map("created_by") @db.Uuid
-  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id            String   @id @default(uuid()) @db.Uuid
+  skillId       String   @map("skill_id") @db.Uuid
+  code          String   @unique @db.VarChar(60)
+  nameVi        String   @map("name_vi") @db.VarChar(200)
+  descriptionVi String   @map("description_vi")
+  /// nguyen van tieng Anh cua muc CASEL
+  caselTextEn   String   @map("casel_text_en")
+  ageMin        Int      @default(5) @map("age_min")
+  ageMax        Int      @default(8) @map("age_max")
+  isActive      Boolean  @default(true) @map("is_active")
+  displayOrder  Int      @default(0) @map("display_order")
+  createdBy     String   @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   skill   EqSkill @relation(fields: [skillId], references: [id], onDelete: Restrict)
   creator User    @relation("SubSkillCreator", fields: [createdBy], references: [id], onDelete: Restrict)
@@ -645,24 +634,6 @@ model TopicSubSkill {
   @@map("topic_sub_skills")
 }
 
-/// @note Thu vien nen mac dinh, dung khi stories.use_ai_image = false
-model Background {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @db.VarChar(120)
-  imageKey  String   @map("image_key") @db.VarChar(300)
-  tags      String?  @db.VarChar(200)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdBy String   @map("created_by") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
-
-  creator User @relation("BackgroundCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-
-  // -- back-references --
-  storyScenes StoryScene[]
-
-  @@map("backgrounds")
-}
-
 model UiAudioAsset {
   id          String @id @default(uuid()) @db.Uuid
   key         String @db.VarChar(80)
@@ -685,20 +656,6 @@ model BlockedKeyword {
   creator User @relation("KeywordCreator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@map("blocked_keywords")
-}
-
-/// @note description: 7 nguyen tac su pham
-model ChecklistItem {
-  id           String  @id @default(uuid()) @db.Uuid
-  code         String  @unique @db.VarChar(40)
-  description  String
-  displayOrder Int     @default(0) @map("display_order")
-  isActive     Boolean @default(true) @map("is_active")
-
-  // -- back-references --
-  reviewResults ReviewChecklistResult[]
-
-  @@map("checklist_items")
 }
 
 // =============================================================================
@@ -739,9 +696,9 @@ model Story {
   updatedAt     DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt     DateTime?   @map("deleted_at") @db.Timestamptz()
 
-  owner       User   @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  sourceStory Story? @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: Restrict)
-  topic       Topic? @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  owner       User        @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  sourceStory Story?      @relation("StorySource", fields: [sourceStoryId], references: [id], onDelete: Restrict)
+  topic       Topic?      @relation(fields: [topicId], references: [id], onDelete: Restrict)
   coverScene  StoryScene? @relation("StoryCover", fields: [coverSceneId], references: [id], onDelete: SetNull)
 
   // -- back-references --
@@ -799,16 +756,14 @@ model StoryCharacter {
 /// @note Toi da 4 canh moi truyen; cac trang cung canh dung chung mot tranh
 /// @note description: mo ta canh tieng Anh, khong ten rieng
 model StoryScene {
-  id           String           @id @default(uuid()) @db.Uuid
-  storyId      String           @map("story_id") @db.Uuid
-  sceneOrder   Int              @map("scene_order")
-  description  String
-  imageKey     String?          @map("image_key") @db.VarChar(300)
-  backgroundId String?          @map("background_id") @db.Uuid
-  imageStatus  GenerationStatus @default(none) @map("image_status")
+  id          String           @id @default(uuid()) @db.Uuid
+  storyId     String           @map("story_id") @db.Uuid
+  sceneOrder  Int              @map("scene_order")
+  description String
+  imageKey    String?          @map("image_key") @db.VarChar(300)
+  imageStatus GenerationStatus @default(none) @map("image_status")
 
-  story      Story       @relation(fields: [storyId], references: [id], onDelete: Cascade)
-  background Background? @relation(fields: [backgroundId], references: [id], onDelete: Restrict)
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
   // -- back-references --
   pages      StoryPage[]
@@ -1100,18 +1055,6 @@ model SellerProfile {
   @@map("seller_profiles")
 }
 
-model PriceTier {
-  id       String  @id @default(uuid()) @db.Uuid
-  label    String  @db.VarChar(50)
-  priceVnd BigInt  @unique @map("price_vnd")
-  isActive Boolean @default(true) @map("is_active")
-
-  // -- back-references --
-  listings Listing[]
-
-  @@map("price_tiers")
-}
-
 /// @note published_story_id: stories.kind = 'published'
 /// @note Bo dem (purchase_count, rating_*) cap nhat trong cung transaction + cron doi soat hang dem
 model Listing {
@@ -1122,7 +1065,8 @@ model Listing {
   title             String        @db.VarChar(200)
   description       String?
   coverImageKey     String?       @map("cover_image_key") @db.VarChar(300)
-  priceTierId       String        @map("price_tier_id") @db.Uuid
+  /// 0 = mien phi (don 0d); con lai 5000..500000, boi so 1000 (kiem o service)
+  priceVnd          BigInt        @map("price_vnd")
   status            ListingStatus @default(submitted)
   hasAiContent      Boolean       @default(false) @map("has_ai_content")
   purchaseCount     Int           @default(0) @map("purchase_count")
@@ -1136,7 +1080,6 @@ model Listing {
   seller          SellerProfile @relation(fields: [sellerId], references: [userId], onDelete: Restrict)
   publishedStory  Story         @relation(fields: [publishedStoryId], references: [id], onDelete: Restrict)
   previousListing Listing?      @relation("ListingVersion", fields: [previousListingId], references: [id], onDelete: SetNull)
-  priceTier       PriceTier     @relation(fields: [priceTierId], references: [id], onDelete: Restrict)
 
   // -- back-references --
   nextListings      Listing[]          @relation("ListingVersion")
@@ -1174,39 +1117,30 @@ model Entitlement {
 /// @note hidden_at: NULL = dang hien; an thi khong tinh vao diem
 /// @note Chi nguoi da mua va con da nghe het moi duoc danh gia (validator tang service)
 model ProductReview {
-  id              String    @id @default(uuid()) @db.Uuid
-  listingId       String    @map("listing_id") @db.Uuid
-  parentId        String    @map("parent_id") @db.Uuid
+  id              String      @id @default(uuid()) @db.Uuid
+  listingId       String      @map("listing_id") @db.Uuid
+  parentId        String      @map("parent_id") @db.Uuid
   rating          Int
   comment         String?
-  hiddenAt        DateTime? @map("hidden_at") @db.Timestamptz()
-  hiddenBy        String?   @map("hidden_by") @db.Uuid
-  sellerReply     String?   @map("seller_reply")
-  sellerRepliedAt DateTime? @map("seller_replied_at") @db.Timestamptz()
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  hiddenAt        DateTime?   @map("hidden_at") @db.Timestamptz()
+  hiddenBy        String?     @map("hidden_by") @db.Uuid
+  sellerReply     String?     @map("seller_reply")
+  sellerRepliedAt DateTime?   @map("seller_replied_at") @db.Timestamptz()
+  /// the nguoi danh gia chon, khong trung (API dedupe khi ghi)
+  tags            ReviewTag[] @default([])
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   listing      Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   author       User    @relation("ReviewAuthor", fields: [parentId], references: [id], onDelete: Restrict)
   hiddenByUser User?   @relation("ReviewHiddenBy", fields: [hiddenBy], references: [id], onDelete: SetNull)
 
   // -- back-references --
-  tags           ProductReviewTag[]
   contentReports ContentReport[]
 
   @@unique([listingId, parentId])
   @@index([listingId, hiddenAt])
   @@map("product_reviews")
-}
-
-model ProductReviewTag {
-  reviewId String    @map("review_id") @db.Uuid
-  tag      ReviewTag
-
-  review ProductReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-
-  @@id([reviewId, tag])
-  @@map("product_review_tags")
 }
 
 // =============================================================================
@@ -1426,7 +1360,7 @@ model PlatformSetting {
 // 8. MODERATION & MONITORING
 // =============================================================================
 
-/// @note Chi quyet dinh 'approved' khi da xem 100% trang va tick du checklist
+/// @note Chi quyet dinh 'approved' khi da xem 100% trang (checklist su pham chi tren web)
 model ModerationReview {
   id             String               @id @default(uuid()) @db.Uuid
   listingId      String               @map("listing_id") @db.Uuid
@@ -1443,24 +1377,11 @@ model ModerationReview {
   moderator User?   @relation("ModReviewModerator", fields: [moderatorId], references: [id], onDelete: SetNull)
 
   // -- back-references --
-  checklistResults ReviewChecklistResult[]
-  pageViews        ReviewPageView[]
+  pageViews ReviewPageView[]
 
   @@index([decidedAt, createdAt])
   @@index([listingId])
   @@map("moderation_reviews")
-}
-
-model ReviewChecklistResult {
-  reviewId        String  @map("review_id") @db.Uuid
-  checklistItemId String  @map("checklist_item_id") @db.Uuid
-  passed          Boolean
-
-  review        ModerationReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  checklistItem ChecklistItem    @relation(fields: [checklistItemId], references: [id], onDelete: Restrict)
-
-  @@id([reviewId, checklistItemId])
-  @@map("review_checklist_results")
 }
 
 /// @note comment: nhan xet gan vao trang (bao gom diem dung ngay sau trang)
@@ -1552,7 +1473,6 @@ model AdminAuditLog {
   targetId    String?  @map("target_id") @db.Uuid
   beforeState Json?    @map("before_state") @db.JsonB
   afterState  Json?    @map("after_state") @db.JsonB
-  ipAddress   String?  @map("ip_address") @db.Inet
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)

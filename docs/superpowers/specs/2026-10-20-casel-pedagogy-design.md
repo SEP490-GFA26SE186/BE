@@ -90,12 +90,12 @@ Việc mới của Specialist:
 | id, skill_id (FK `eq_skills`) | thuộc đúng 1 năng lực, bắt buộc |
 | code | duy nhất |
 | name_vi, description_vi | lời cho phụ huynh/AI |
-| casel_text_en | nguyên văn tiếng Anh của mục CASEL; bắt buộc khi `source = casel`, tuỳ chọn khi `specialist` |
-| source (`casel` \| `specialist`) | `casel` = 40 mục gốc của khung (seed); `specialist` = chuyên gia bổ sung |
+| casel_text_en | nguyên văn tiếng Anh của mục CASEL; bắt buộc (NOT NULL) |
 | age_min, age_max | độ tuổi phù hợp |
 | is_active, display_order, created_by, timestamps | |
 
-- **Mục gốc CASEL** (`source = casel`, đủ 40 mục SA 9, SM 7, SoA 8, RS 9, RDM 7 — xem trang CASEL ở
+- **Cập nhật 2026-10-22:** bỏ cột `source` / enum `sub_skill_source` — kỹ năng con chỉ còn là danh mục CASEL cố định.
+- **Mục gốc CASEL** (đủ 40 mục SA 9, SM 7, SoA 8, RS 9, RDM 7 — xem trang CASEL ở
   mục 3): seed từ `api/prisma/data/casel.js`. Specialist **sửa được** tên/mô tả tiếng Việt, tuổi,
   bật/tắt; **không sửa** năng lực, mã, câu tiếng Anh, thứ tự (400); **không thêm / xoá**, chỉ tắt.
 - Seed: 23 mục hợp lứa 5–8 (Phụ lục A) bật sẵn với tên/mô tả Việt do Claude soạn và mẫu câu hỏi; 17

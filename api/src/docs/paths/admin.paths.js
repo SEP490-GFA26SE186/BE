@@ -90,21 +90,6 @@ export default {
       responses: { 200: { description: '{ plan }' }, 422: { description: 'Vi phạm ràng buộc gói Miễn phí' } },
     },
   },
-  '/admin/price-tiers': {
-    get: { tags: ['Admin'], summary: '[Admin] Bậc giá truyện + số truyện dùng', security: bearer, responses: { 200: { description: '{ tiers }' } } },
-    post: { tags: ['Admin'], summary: '[Admin] Thêm bậc giá', security: bearer, requestBody: json(obj({ label: { type: 'string' }, priceVnd: { type: 'integer' } }, ['label', 'priceVnd'])), responses: { 201: { description: '{ tier }' }, 409: { description: 'Trùng số tiền' } } },
-  },
-  '/admin/price-tiers/{tierId}': {
-    put: {
-      tags: ['Admin'],
-      summary: '[Admin] Sửa nhãn / bật tắt / số tiền bậc giá',
-      description: 'Bậc giá đã có truyện dùng thì không đổi số tiền (422) — tạo bậc mới.',
-      security: bearer,
-      parameters: [path('tierId')],
-      requestBody: json(obj({ label: { type: 'string' }, priceVnd: { type: 'integer' }, isActive: { type: 'boolean' } })),
-      responses: { 200: { description: '{ tier }' } },
-    },
-  },
   '/admin/settings': {
     get: { tags: ['Admin'], summary: '[Admin] Cấu hình được sửa (chi phí AI, chợ, giám sát)', security: bearer, responses: { 200: { description: '{ groups, settings: [{ key, group, label, unit, type, min, max, value, isDefault, updatedAt, updatedBy }] }' } } },
   },

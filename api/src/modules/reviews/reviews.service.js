@@ -21,7 +21,7 @@ const formatReview = (r, viewerId) => ({
   id: r.id,
   rating: r.rating,
   comment: r.comment,
-  tags: r.tags.map((t) => t.tag),
+  tags: r.tags,
   author: authorLabel(r.author?.fullName),
   mine: r.parentId === viewerId,
   sellerReply: r.sellerReply,
@@ -59,7 +59,7 @@ const loadListing = async (db, listingId) => {
   return listing;
 };
 
-const REVIEW_INCLUDE = { tags: true, author: { select: { fullName: true } } };
+const REVIEW_INCLUDE = { author: { select: { fullName: true } } };
 
 /** GET /market/listings/:id/reviews — danh gia chua bi an, moi nhat truoc + quyen danh gia cua nguoi xem. */
 export async function listReviews(user, listingId, { page = 1, limit = 10 } = {}) {
@@ -95,13 +95,11 @@ export async function upsertReview(user, listingId, { rating, comment, tags = []
     }
     const existing = await tx.productReview.findUnique({ where: { listingId_parentId: { listingId, parentId: user.id } } });
     if (existing?.hiddenAt) throw new ApiError(StatusCodes.FORBIDDEN, 'Đánh giá của ba mẹ đã bị ẩn do vi phạm quy định, không sửa được.');
-    const data = { rating, comment: comment?.trim() || null };
+    // Cot mang product_reviews.tags: bo trung, chi giu the duoc chon (giu thu tu nguoi dung chon)
+    const data = { rating, comment: comment?.trim() || null, tags: [...new Set(tags)].filter((t) => REVIEW_TAGS.includes(t)) };
     const review = existing
       ? await tx.productReview.update({ where: { id: existing.id }, data })
       : await tx.productReview.create({ data: { ...data, listingId, parentId: user.id } });
-    await tx.productReviewTag.deleteMany({ where: { reviewId: review.id } });
-    const unique = [...new Set(tags)].filter((t) => REVIEW_TAGS.includes(t));
-    if (unique.length) await tx.productReviewTag.createMany({ data: unique.map((tag) => ({ reviewId: review.id, tag })) });
     await recomputeRatings(tx, listingId);
     const full = await tx.productReview.findUniqueOrThrow({ where: { id: review.id }, include: REVIEW_INCLUDE });
     return { review: formatReview(full, user.id), created: !existing };

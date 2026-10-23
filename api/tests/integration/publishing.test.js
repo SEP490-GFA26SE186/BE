@@ -7,7 +7,6 @@ const skip = !hasTestDb;
 let api;
 let topic;
 let store;
-let tiers;
 
 before(async () => {
   if (skip) return;
@@ -15,8 +14,6 @@ before(async () => {
   topic = await getSeededTopic();
   store = await import('../../src/modules/billing/billing.store.js');
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
-  await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
-  tiers = await prisma.priceTier.findMany({ orderBy: { priceVnd: 'asc' } });
 });
 
 after(async () => {
@@ -65,7 +62,7 @@ async function approvedSeller(opts) {
 const listingBody = (s, over = {}) => ({
   storyId: s.story.id,
   title: 'Bé và chậu hoa',
-  priceTierId: tiers[1].id,
+  priceVnd: 19000,
   aliases: [{ token: '{NV1}', aliasName: 'Bống' }, { token: '{NV2}', aliasName: 'Bà nội' }],
   ...over,
 });
@@ -138,7 +135,7 @@ test('dang ban: ban sao giu subSkillId, templateVersionId, scored, excluded cua 
   assert.equal(copy.reviewedOkBy, null);
 });
 
-test('duyet: nhan bai, nguoi khac khong nhan duoc; chua xem du -> 422; xem du + checklist -> published', { skip }, async () => {
+test('duyet: nhan bai, nguoi khac khong nhan duoc; chua xem du -> 422; gui checklist -> 400; xem du -> published', { skip }, async () => {
   const s = await approvedSeller();
   const { listing } = (await call(s.token, 'POST', '/listings', listingBody(s))).body.data;
   const mod = s.mod;
@@ -152,27 +149,44 @@ test('duyet: nhan bai, nguoi khac khong nhan duoc; chua xem du -> 422; xem du + 
   const detail = claimed.body.data;
   assert.equal(detail.review.claimedByMe, true);
   assert.deepEqual(detail.story.characters.map((c) => c.name).sort(), ['Bà nội', 'Bống']);
-  assert.equal(detail.checklist.length, 7);
+  assert.equal(detail.checklist, undefined, 'checklist su pham chi tren web');
+  assert.equal(detail.listing.priceVnd, 19000, 'Specialist thay gia ban');
+  assert.equal(item.priceVnd, 19000);
   assert.equal((await call(other.token, 'POST', `/moderation/submissions/${item.reviewId}/claim`)).status, 409);
   assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).status, 'in_review');
 
-  const allPassed = detail.checklist.map((c) => ({ itemId: c.id, passed: true }));
-  const early = await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/decision`, { decision: 'approved', checklist: allPassed });
+  const early = await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/decision`, { decision: 'approved' });
   assert.equal(early.status, 422);
 
   for (const pg of detail.story.pages) {
     await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/pages/${pg.id}/view`, pg.pageOrder === 2 ? { comment: 'Ổn' } : {});
   }
-  const oneFail = allPassed.map((c, i) => (i === 0 ? { ...c, passed: false } : c));
-  assert.equal((await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/decision`, { decision: 'approved', checklist: oneFail })).status, 422);
+  const withChecklist = await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/decision`, { decision: 'approved', checklist: [] });
+  assert.equal(withChecklist.status, 400, 'body khong con truong checklist');
 
-  const done = await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/decision`, { decision: 'approved', checklist: allPassed });
+  const done = await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/decision`, { decision: 'approved' });
   assert.equal(done.status, 200, JSON.stringify(done.body));
   assert.equal(done.body.data.progress.canApprove, true);
   const row = await prisma.listing.findUnique({ where: { id: listing.id } });
   assert.equal(row.status, 'published');
   assert.ok(row.publishedAt);
   assert.equal((await call(mod.token, 'POST', `/moderation/submissions/${item.reviewId}/decision`, { decision: 'rejected', comment: 'x' })).status, 409);
+});
+
+test('gia tu dat: priceVnd 0 hoac 5.000-500.000 boi 1.000; sai -> 400; listing tra priceVnd', { skip }, async () => {
+  const s = await approvedSeller();
+  for (const priceVnd of [4000, 5500, 501000, -1000, 19000.5, '19000', undefined]) {
+    const res = await call(s.token, 'POST', '/listings', listingBody(s, { priceVnd }));
+    assert.equal(res.status, 400, `priceVnd=${priceVnd} -> ${JSON.stringify(res.body)}`);
+  }
+  assert.equal((await call(s.token, 'POST', '/listings', { ...listingBody(s), priceTierId: '00000000-0000-4000-8000-000000000000', priceVnd: undefined })).status, 400, 'priceTierId khong con dung');
+  const res = await call(s.token, 'POST', '/listings', listingBody(s, { priceVnd: 500000 }));
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  assert.equal(res.body.data.listing.priceVnd, 500000);
+  assert.equal(res.body.data.listing.priceTierId, undefined);
+  assert.equal((await prisma.listing.findUnique({ where: { id: res.body.data.listing.id } })).priceVnd, 500000n);
+  const mine = (await call(s.token, 'GET', '/listings/mine')).body.data.listings;
+  assert.equal(mine.find((l) => l.id === res.body.data.listing.id).priceVnd, 500000);
 });
 
 test('yeu cau sua: bat buoc nhan xet; nguoi ban thay quyet dinh + nhan xet', { skip }, async () => {

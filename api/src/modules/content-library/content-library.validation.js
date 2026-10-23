@@ -4,72 +4,6 @@ const KEYWORD_SEVERITIES = ['block', 'warn'];
 const CHARACTER_ROLES = ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'];
 
 // =============================================================================
-// Backgrounds Validations
-// =============================================================================
-
-const getBackgrounds = z.object({
-  query: z.object({
-    tags: z.string().trim().optional(),
-    search: z.string().trim().optional(),
-    isActive: z
-      .string()
-      .transform((val) => val === 'true')
-      .optional(),
-    page: z
-      .string()
-      .regex(/^\d+$/)
-      .transform(Number)
-      .default('1'),
-    limit: z
-      .string()
-      .regex(/^\d+$/)
-      .transform(Number)
-      .default('20'),
-  }),
-});
-
-const getBackgroundById = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid background ID format'),
-  }),
-});
-
-const createBackground = z.object({
-  body: z.object({
-    name: z
-      .string({ required_error: 'Background name is required' })
-      .trim()
-      .min(1, 'Name cannot be empty')
-      .max(120, 'Name must not exceed 120 characters'),
-    imageKey: z
-      .string({ required_error: 'Image key is required' })
-      .trim()
-      .min(1, 'Image key cannot be empty')
-      .max(300, 'Image key must not exceed 300 characters'),
-    tags: z.string().trim().max(200, 'Tags must not exceed 200 characters').optional(),
-    isActive: z.boolean().default(true),
-  }),
-});
-
-const updateBackground = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid background ID format'),
-  }),
-  body: z.object({
-    name: z.string().trim().min(1).max(120).optional(),
-    imageKey: z.string().trim().min(1).max(300).optional(),
-    tags: z.string().trim().max(200).nullable().optional(),
-    isActive: z.boolean().optional(),
-  }),
-});
-
-const deleteBackground = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid background ID format'),
-  }),
-});
-
-// =============================================================================
 // UI Audio Assets Validations
 // =============================================================================
 
@@ -141,81 +75,14 @@ const deleteUiAudioAsset = z.object({
 });
 
 // =============================================================================
-// Checklist Items Validations
-// =============================================================================
-
-const getChecklistItems = z.object({
-  query: z.object({
-    isActive: z
-      .string()
-      .transform((val) => val === 'true')
-      .optional(),
-  }),
-});
-
-const getChecklistItemById = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid checklist item ID format'),
-  }),
-});
-
-const createChecklistItem = z.object({
-  body: z.object({
-    code: z
-      .string({ required_error: 'Checklist item code is required' })
-      .trim()
-      .min(1, 'Code cannot be empty')
-      .max(40, 'Code must not exceed 40 characters')
-      .regex(/^[A-Z0-9_]+$/, 'Code must be UPPERCASE letters, numbers, or underscores'),
-    description: z.string({ required_error: 'Description is required' }).trim().min(1),
-    displayOrder: z.number().int().default(0),
-    isActive: z.boolean().default(true),
-  }),
-});
-
-const updateChecklistItem = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid checklist item ID format'),
-  }),
-  body: z.object({
-    code: z
-      .string()
-      .trim()
-      .min(1)
-      .max(40)
-      .regex(/^[A-Z0-9_]+$/, 'Code must be UPPERCASE letters, numbers, or underscores')
-      .optional(),
-    description: z.string().trim().min(1).optional(),
-    displayOrder: z.number().int().optional(),
-    isActive: z.boolean().optional(),
-  }),
-});
-
-const deleteChecklistItem = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid checklist item ID format'),
-  }),
-});
-
-// =============================================================================
 // Blocked Keywords Enhancements (Bulk & Update)
 // =============================================================================
 
 export default {
-  getBackgrounds,
-  getBackgroundById,
-  createBackground,
-  updateBackground,
-  deleteBackground,
   getUiAudioAssets,
   getUiAudioAssetByKey,
   getUiAudioAssetById,
   createUiAudioAsset,
   updateUiAudioAsset,
   deleteUiAudioAsset,
-  getChecklistItems,
-  getChecklistItemById,
-  createChecklistItem,
-  updateChecklistItem,
-  deleteChecklistItem,
 };

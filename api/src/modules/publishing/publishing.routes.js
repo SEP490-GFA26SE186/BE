@@ -9,7 +9,6 @@ sellersRouter.get('/me', auth, authorize('parent'), c.getMySeller);
 sellersRouter.post('/apply', auth, authorize('parent'), validate(v.applySeller), c.applySeller);
 
 export const listingsRouter = Router();
-listingsRouter.get('/price-tiers', auth, c.listPriceTiers);
 listingsRouter.get('/mine', auth, authorize('parent'), c.getMyListings);
 listingsRouter.post('/', auth, authorize('parent'), validate(v.createListing), c.createListing);
 

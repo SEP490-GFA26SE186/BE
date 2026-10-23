@@ -24,6 +24,13 @@ const REMOVED = [
   ['GET', '/api/v1/reports/platform/overview'],
   ['GET', '/api/v1/moderation/reviews/queue'],
   ['GET', '/api/v1/moderation/checklist-items'],
+  // Gon kiem duyet + gia (2026-10-22): checklist chi tren web, gia tu dat, bo thu vien nen
+  ['GET', '/api/v1/checklist-items'],
+  ['GET', '/api/v1/content-library/checklist-items'],
+  ['GET', '/api/v1/listings/price-tiers'],
+  ['GET', '/api/v1/admin/price-tiers'],
+  ['GET', '/api/v1/backgrounds'],
+  ['GET', '/api/v1/content-library/backgrounds'],
   ['POST', '/api/v1/subscriptions/subscribe-free'],
   ['POST', '/api/v1/subscriptions/cancel'],
   ['GET', '/api/v1/child-profiles'],

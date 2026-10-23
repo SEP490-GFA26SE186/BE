@@ -1,6 +1,6 @@
 // =============================================================================
 // Seed: du lieu su pham CASEL (spec 2026-10-20-casel-pedagogy §5)
-//   eq_sub_skills (40 muc CASEL, source=casel), question_templates + question_template_versions.
+//   eq_sub_skills (40 muc CASEL, danh muc co dinh), question_templates + question_template_versions.
 //   Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21).
 //
 // Phai chay sau seedEqSkills (skill_id) va truoc seedTopics (topic_sub_skills tro vao eq_sub_skills).
@@ -50,20 +50,24 @@ export async function seedPedagogy(prisma, { publish = false } = {}) {
   }
   const skillIdByCode = Object.fromEntries(skills.map((s) => [s.caselCode, s.id]));
 
-  // 1+2. 40 muc CASEL = 40 ky nang con source=casel; 23 muc co ban soan san (data/pedagogy.js) thi
+  // 1+2. 40 muc CASEL = 40 ky nang con (danh muc co dinh); 23 muc co ban soan san (data/pedagogy.js) thi
   //      lay ten/mo ta/tuoi/ma cua ban do va bat; 17 muc con lai tat, ten = textVi.
   const subByCasel = new Map(SUB_SKILLS.map((s) => [s.caselCode, s]));
   const counts = { subSkills: 0, templates: 0 };
   for (const ref of CASEL_REFERENCES) {
     const sub = subByCasel.get(ref.code);
     const code = sub?.code ?? ref.code;
-    // Tim dong casel da co: theo ma (migration 20261029 dat `<code>_casel` khi ma goc da bi ky nang con
-    // chuyen gia chiem) hoac theo nguyen van tieng Anh (migration giu ma cu cua ky nang con da gan muc nay).
+    // Tim dong da co: uu tien theo nguyen van tieng Anh (migration 20261029 giu ma cu cua ky nang con da
+    // gan muc nay), roi `<code>_casel` (migration do dat khi ma goc da bi chiem), roi dung ma.
     const candidates = await prisma.eqSubSkill.findMany({
-      where: { OR: [{ code: { in: [code, `${code}_casel`] } }, { source: 'casel', caselTextEn: ref.textEn }] },
-      select: { id: true, code: true, source: true },
+      where: { OR: [{ code: { in: [code, `${code}_casel`] } }, { caselTextEn: ref.textEn }] },
+      select: { id: true, code: true, caselTextEn: true },
     });
-    let subRow = candidates.find((r) => r.source === 'casel') ?? null;
+    let subRow =
+      candidates.find((r) => r.caselTextEn === ref.textEn) ??
+      candidates.find((r) => r.code === `${code}_casel`) ??
+      candidates.find((r) => r.code === code) ??
+      null;
     let createdNow = false;
     if (subRow) {
       // Chi (dat lai) nguyen van tieng Anh; ten/mo ta/tuoi/bat-tat la cua Specialist, khong ghi de.
@@ -71,9 +75,8 @@ export async function seedPedagogy(prisma, { publish = false } = {}) {
     } else {
       subRow = await prisma.eqSubSkill.create({
         data: {
-          code: candidates.some((r) => r.code === code) ? `${code}_casel` : code,
+          code,
           skillId: skillIdByCode[ref.skill],
-          source: 'casel',
           caselTextEn: ref.textEn,
           nameVi: sub?.nameVi ?? ref.textVi,
           descriptionVi: sub?.descriptionVi ?? ref.textVi,

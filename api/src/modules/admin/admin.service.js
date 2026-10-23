@@ -1,4 +1,4 @@
-// Quan tri (rev8): tai khoan, goi + bac gia, cau hinh nen tang, nhat ky. Moi thay doi ghi admin_audit_logs.
+// Quan tri (rev8): tai khoan, goi, cau hinh nen tang, nhat ky. Moi thay doi ghi admin_audit_logs.
 import bcrypt from 'bcryptjs';
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
@@ -104,7 +104,7 @@ export async function createModerator(admin, { email, username, fullName, passwo
 }
 
 // ---------------------------------------------------------------------------
-// Goi + bac gia
+// Goi
 // ---------------------------------------------------------------------------
 
 const formatAdminPlan = (p, subscribers) => ({
@@ -157,42 +157,6 @@ export async function updatePlan(admin, planId, data) {
   }, TX);
 }
 
-export async function listPriceTiers() {
-  const [tiers, counts] = await Promise.all([
-    prisma.priceTier.findMany({ orderBy: { priceVnd: 'asc' } }),
-    prisma.listing.groupBy({ by: ['priceTierId'], _count: { _all: true } }),
-  ]);
-  const by = new Map(counts.map((c) => [c.priceTierId, c._count._all]));
-  return { tiers: tiers.map((t) => ({ id: t.id, label: t.label, priceVnd: vnd(t.priceVnd), isActive: t.isActive, listingsCount: by.get(t.id) ?? 0 })) };
-}
-
-export async function createPriceTier(admin, { label, priceVnd }) {
-  if (await prisma.priceTier.findUnique({ where: { priceVnd: BigInt(priceVnd) } })) throw new ApiError(StatusCodes.CONFLICT, 'Đã có bậc giá với số tiền này.');
-  return prisma.$transaction(async (tx) => {
-    const t = await tx.priceTier.create({ data: { label: label.trim(), priceVnd: BigInt(priceVnd) } });
-    await audit(tx, admin.id, 'price_tier.create', 'price_tier', t.id, null, { label, priceVnd });
-    return { tier: { id: t.id, label: t.label, priceVnd: vnd(t.priceVnd), isActive: t.isActive, listingsCount: 0 } };
-  }, TX);
-}
-
-/** Sua nhan / bat tat. Doi so tien chi khi chua co truyen nao dung (gia truyen dang ban = gia bac). */
-export async function updatePriceTier(admin, tierId, data) {
-  const tier = await prisma.priceTier.findUnique({ where: { id: tierId } });
-  if (!tier) throw ApiError.notFound('Không tìm thấy bậc giá.');
-  const used = await prisma.listing.count({ where: { priceTierId: tierId } });
-  if (data.priceVnd !== undefined && BigInt(data.priceVnd) !== tier.priceVnd) {
-    if (used) throw unprocessable(`Bậc giá đang có ${used} truyện dùng nên không đổi được số tiền. Hãy tạo bậc giá mới.`);
-    if (await prisma.priceTier.findUnique({ where: { priceVnd: BigInt(data.priceVnd) } })) throw new ApiError(StatusCodes.CONFLICT, 'Đã có bậc giá với số tiền này.');
-  }
-  return prisma.$transaction(async (tx) => {
-    const t = await tx.priceTier.update({
-      where: { id: tierId },
-      data: { ...(data.label !== undefined && { label: data.label.trim() }), ...(data.isActive !== undefined && { isActive: data.isActive }), ...(data.priceVnd !== undefined && { priceVnd: BigInt(data.priceVnd) }) },
-    });
-    await audit(tx, admin.id, 'price_tier.update', 'price_tier', tierId, { label: tier.label, priceVnd: vnd(tier.priceVnd), isActive: tier.isActive }, data);
-    return { tier: { id: t.id, label: t.label, priceVnd: vnd(t.priceVnd), isActive: t.isActive, listingsCount: used } };
-  }, TX);
-}
 
 // ---------------------------------------------------------------------------
 // Cau hinh
@@ -247,6 +211,6 @@ export async function listAuditLogs({ action, actorId, page = 1, limit = 30 } = 
 
 export default {
   overview, listAccounts, setAccountActive, createModerator,
-  listAdminPlans, createPlan, updatePlan, listPriceTiers, createPriceTier, updatePriceTier,
+  listAdminPlans, createPlan, updatePlan,
   getSettings, updateSetting, listAuditLogs,
 };
