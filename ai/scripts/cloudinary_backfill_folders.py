@@ -9,7 +9,8 @@ the DB do not change.
     .venv312/Scripts/python scripts/cloudinary_backfill_folders.py --confirm  # apply
 
 Reads CLOUDINARY_CLOUD_NAME / _API_KEY / _API_SECRET / _FOLDER from ai/.env (Settings).
-On the server: docker compose exec ai python scripts/cloudinary_backfill_folders.py [--confirm]
+Not in the ai image (only app/ is copied): run it from a dev machine; for prod files set
+CLOUDINARY_FOLDER=storyweaver-prod in the environment (same Cloudinary account).
 """
 
 import argparse
