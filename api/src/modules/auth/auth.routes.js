@@ -24,12 +24,9 @@ router.post('/kid-mode/enter', auth, validate(authValidation.enterKidMode), auth
 router.post('/kid-mode/exit', validate(authValidation.exitKidMode), authController.exitKidMode);
 
 // ---- Email Verification ----
-router.post(
-  '/send-verification-email',
-  validate(authValidation.sendVerificationEmail),
-  authController.sendVerificationEmail,
-);
-router.post('/verify-email', validate(authValidation.verifyEmail), authController.verifyEmail);
-router.get('/verify-email', validate(authValidation.verifyEmail), authController.verifyEmail);
+// Phai dang nhap: chi gui ma toi email cua chinh tai khoan, khong nhan email tuy y
+router.post('/send-verification-email', auth, authController.sendVerificationEmail);
+// Phai dang nhap: ma chi xac thuc dung tai khoan dang dang nhap (ma cua tai khoan khac -> 400)
+router.post('/verify-email', auth, validate(authValidation.verifyEmail), authController.verifyEmail);
 
 export default router;
