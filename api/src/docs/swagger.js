@@ -752,56 +752,24 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     '/auth/send-verification-email': {
       post: {
         tags: ['Email Verification'],
-        summary: '[Public] Yêu cầu gửi lại email xác thực',
-        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nYêu cầu gửi lại liên kết kích hoạt tài khoản qua dịch vụ Brevo transactional email.',
-        security: [],
-        description: 'Gửi link xác minh email qua Brevo. Có thể truyền email hoặc dùng Bearer token.',
-        requestBody: {
-          required: false,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  email: { type: 'string', format: 'email', example: 'hoangnam@example.com' },
-                },
-              },
-            },
-          },
-        },
+        summary: '[Auth] Gửi lại mã xác thực email',
+        description: '**Quyền truy cập:** Đã đăng nhập (tài khoản chưa xác thực vẫn gọi được).\nGửi mã xác thực mới (hiệu lực 24 giờ) tới email của chính tài khoản đang đăng nhập; mã cũ chưa dùng bị vô hiệu. Không có body.\nPhải cách mã gần nhất (kể cả mã gửi lúc đăng ký) ít nhất 60 giây, sớm hơn trả 429 kèm `errors[0].retryAfterSeconds`.\nThành công: `data.retryAfterSeconds` = số giây phải chờ trước lần gửi tiếp.',
+        security: [{ BearerAuth: [] }],
         responses: {
-          200: { description: 'Email xác thực đã được gửi đi' },
+          200: { description: 'Đã gửi mã xác thực. data: { retryAfterSeconds: 60 }' },
           400: { description: 'Email đã được xác thực trước đó' },
+          401: { description: 'Chưa đăng nhập' },
+          429: { description: 'Gửi lại quá sớm. errors: [{ path: "retryAfterSeconds", message, retryAfterSeconds }]' },
         },
       },
     },
 
     '/auth/verify-email': {
-      get: {
-        tags: ['Email Verification'],
-        summary: '[Public] Xác thực Email qua link (dành cho trình duyệt)',
-        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nNhấp link trong email để kích hoạt tài khoản, hiển thị giao diện HTML thân thiện.',
-        security: [],
-        parameters: [
-          {
-            name: 'token',
-            in: 'query',
-            required: true,
-            schema: { type: 'string' },
-            description: 'Token xác thực gửi trong email',
-            example: 'a1b2c3d4e5f67890123456789abcdef0',
-          },
-        ],
-        responses: {
-          200: { description: 'Xác thực email thành công' },
-          400: { description: 'Token không hợp lệ hoặc đã hết hạn' },
-        },
-      },
       post: {
         tags: ['Email Verification'],
-        summary: '[Public] Xác thực Email qua API (dành cho Mobile App / Frontend)',
-        description: '**Quyền truy cập:** `Public` (Không yêu cầu đăng nhập).\nGửi token xác thực email qua JSON body để nhận kết quả dạng REST API chuẩn.',
-        security: [],
+        summary: '[Auth] Xác thực Email bằng mã trong email',
+        description: '**Quyền truy cập:** Đã đăng nhập (tài khoản chưa xác thực vẫn gọi được).\nEmail xác thực chỉ chứa mã (token, hiệu lực 24 giờ). Người dùng dán mã vào trang Xác thực email, Web gửi lên qua JSON body. Mã chỉ xác thực đúng tài khoản đang đăng nhập: mã của tài khoản khác trả 400.',
+        security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -818,7 +786,8 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         },
         responses: {
           200: { description: 'Xác thực email thành công' },
-          400: { description: 'Token không hợp lệ hoặc đã hết hạn' },
+          400: { description: 'Mã không hợp lệ, đã dùng, hết hạn hoặc thuộc tài khoản khác' },
+          401: { description: 'Chưa đăng nhập' },
         },
       },
     },

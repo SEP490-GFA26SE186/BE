@@ -110,22 +110,10 @@ const forgotPassword = z.object({ body: z.object({ email: z.string().trim().emai
 const resetPassword = z.object({ body: z.object({ token: z.string().trim().min(1, 'Nhập mã khôi phục').max(200), newPassword }) });
 const changePassword = z.object({ body: z.object({ currentPassword: z.string().min(1, 'Account password is incorrect'), newPassword }) });
 
-const sendVerificationEmail = z.object({
-  body: z.object({
-    email: z.string().email('Invalid email address').optional(),
-  }),
-});
-
 const verifyEmail = z.object({
-  query: z.object({
-    token: z.string().optional(),
-  }),
   body: z.object({
-    token: z.string().optional(),
+    token: z.string({ error: 'Vui lòng nhập mã xác thực' }).trim().min(1, 'Vui lòng nhập mã xác thực'),
   }),
-}).refine((data) => data.query?.token || data.body?.token, {
-  message: 'Verification token is required in query (?token=...) or request body',
-  path: ['token'],
 });
 
 export default {
@@ -140,6 +128,5 @@ export default {
   changeKidPin,
   enterKidMode,
   exitKidMode,
-  sendVerificationEmail,
   verifyEmail,
 };

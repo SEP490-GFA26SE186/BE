@@ -1,0 +1,16 @@
+---
+title: WEB (Kid Mode)
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 70}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "lineColor": "#555555"}}}%%
+flowchart LR
+  Enter["Enter Kid Mode<br/>from My Children"]:::start --> KL["Kid Layout<br/>No sidebar + Big buttons"]
+  KL --> Shelf["Kid Bookshelf<br/>Story covers"]
+  Shelf --> Reader["Story Reader<br/>Pages + Illustrations + Narration"]
+  Reader --> CP(["Checkpoint Question<br/>Answer choices"])
+  Reader --> Done(["Story Complete Dialog<br/>Read again / Bookshelf"])
+  Done --> Shelf
+  KL --> Gate(["Parent Gate Dialog<br/>Kid PIN"])
+  Gate --> Parent["Parent Portal<br/>see WEB (Parent / Seller)"]:::ext
+  classDef default fill:#EEEEEE,stroke:#999999,color:#111111
+  classDef start fill:#FFE0A3,stroke:#333333,color:#111111
+  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111

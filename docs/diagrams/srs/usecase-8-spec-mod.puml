@@ -1,0 +1,28 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #EEF3FB
+skinparam usecaseBorderColor #4A6FA5
+actor "Specialist" as Specialist
+rectangle "StoryWeaver AI – Specialist – moderation and monitoring" {
+  usecase "UC-42\nReview seller application" as UC42
+  usecase "UC-43\nModerate submission" as UC43
+  usecase "UC-44\nHandle content reports" as UC44
+  usecase "UC-45\nSuspend listing" as UC45
+  usecase "UC-46\nIssue strike" as UC46
+  usecase "UC-47\nPerform random audit" as UC47
+  usecase "UC-48\nHide review" as UC48
+  usecase "UC-49\nBlock AI usage" as UC49
+}
+Specialist --> UC42
+Specialist --> UC43
+Specialist --> UC44
+Specialist --> UC45
+Specialist --> UC46
+Specialist --> UC47
+Specialist --> UC48
+Specialist --> UC49
+@enduml

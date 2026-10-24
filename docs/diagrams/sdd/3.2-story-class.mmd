@@ -1,0 +1,71 @@
+classDiagram
+  class StoriesRoutes {
+    +POST stories()
+    +PUT pages(pageId)
+    +PUT checkpoints(cpId)
+    +POST generate(id)
+    +GET generation(id)
+    +POST review(id)
+  }
+  class StoriesService {
+    +createStory(user, body)
+    +updateStory(user, id, body)
+    +bindCharacters(user, id, ids)
+    +tokenizeOrReject(text, ctx)
+    +assertNoBlockedKeywords(tx, storyId)
+  }
+  class StoriesEditorService {
+    +addPage() deletePage()
+    +addCheckpoint() deleteCheckpoint()
+    +reviewStory(user, id)
+  }
+  class GenerationService {
+    +startGeneration(user, storyId)
+    +getGeneration(user, storyId)
+    +getAiPricing()
+  }
+  class GenerationStore {
+    +markProcessing(id, attempt)
+    +loadGenerationInput(id)
+    +persistAiResult(id, response)
+    +finalizeFailure(id, code)
+  }
+  class CreditLedger {
+    +holdCredit(tx, userId, amount, aiRequestId)
+    +consumeCredit(tx, userId, aiRequestId)
+    +releaseCredit(tx, userId, aiRequestId)
+  }
+  class AiQueue {
+    +add(name, data, jobId)
+  }
+  class AiProcessor {
+    +process(job)
+  }
+  class AiClient {
+    +callAi(jobName, payload)
+  }
+  class Story {
+    uuid id
+    StoryKind kind
+    StoryLength length
+    StoryStatus status
+    string situation
+    datetime reviewedAt
+  }
+  class AiRequest {
+    uuid id
+    AiRequestType requestType
+    AiRequestStatus status
+    int creditsCharged
+    string idempotencyKey
+  }
+  StoriesRoutes --> StoriesService
+  StoriesRoutes --> StoriesEditorService
+  StoriesRoutes --> GenerationService
+  GenerationService --> CreditLedger
+  GenerationService --> AiQueue
+  AiQueue --> AiProcessor
+  AiProcessor --> GenerationStore
+  AiProcessor --> AiClient
+  GenerationStore --> CreditLedger
+  Story "1" --> "*" AiRequest

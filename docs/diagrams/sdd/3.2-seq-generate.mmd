@@ -1,0 +1,32 @@
+sequenceDiagram
+  actor P as Parent
+  participant API as GenerationService
+  participant DB as PostgreSQL
+  participant Q as Redis/BullMQ
+  participant WK as AI Worker
+  participant AI as AI Service (FastAPI)
+  P->>API: POST /stories/:id/generate
+  API->>DB: load owned story, check not custom, AI not blocked
+  API->>API: assertNoLeftoverNames (real names must be tokens)
+  API->>DB: BEGIN, UPDATE stories SET status=generating WHERE status!=generating
+  alt 0 rows
+    API-->>P: 409 Story is being generated
+  end
+  API->>DB: insert ai_requests(queued), holdCredit (FOR UPDATE wallet)
+  alt insufficient credit
+    API-->>P: 402 rollback
+  end
+  API->>DB: COMMIT
+  API->>Q: add(story_text, ai_request_id)
+  alt enqueue fails
+    API->>DB: finalizeFailure -> releaseCredit, story back to draft
+    API-->>P: 503 credit refunded
+  end
+  API-->>P: 202 {aiRequestId}
+  Q->>WK: job
+  WK->>DB: markProcessing (queued -> processing)
+  WK->>AI: POST /v1/story/generate (template slots + {NVx} tokens only)
+  AI-->>WK: pages, scenes, checkpoints (JSON)
+  WK->>DB: persistAiResult: write pages/checkpoints, story ready, consumeCredit
+  P->>API: GET /stories/:id/generation (poll)
+  API-->>P: status succeeded / failed + message

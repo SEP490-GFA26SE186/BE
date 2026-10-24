@@ -1,0 +1,23 @@
+sequenceDiagram
+  actor P as User
+  participant W as Web App
+  participant R as AuthRoutes
+  participant S as AuthService
+  participant T as TokenService
+  participant DB as PostgreSQL
+  P->>W: Enter email/username + password
+  W->>R: POST /api/v1/auth/login
+  R->>R: validate(loginSchema)
+  R->>S: login(identifier, password)
+  S->>DB: find user by email or username
+  alt user not found or wrong password
+    S-->>W: 401 Invalid email/username or password
+  else account deactivated
+    S-->>W: 403 Account has been deactivated
+  else valid
+    S->>T: generateAuthTokens(user)
+    T->>DB: insert auth_tokens (refresh, hashed)
+    T-->>S: access + refresh token
+    S-->>W: 200 user + tokens
+    W->>P: Redirect to role home
+  end

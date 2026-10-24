@@ -1,0 +1,8 @@
+stateDiagram-v2
+  [*] --> draft : Parent creates story
+  draft --> generating : AI write requested (credit held)
+  generating --> ready : AI result persisted (credit consumed)
+  generating --> draft : AI failed / stale / enqueue failed (credit released)
+  draft --> ready : All pages written (custom story)
+  ready --> generating : Regenerate (not yet played)
+  ready --> draft : Page text cleared

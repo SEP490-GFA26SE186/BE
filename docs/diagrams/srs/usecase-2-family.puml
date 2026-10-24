@@ -1,0 +1,20 @@
+@startuml
+!pragma layout smetana
+left to right direction
+skinparam dpi 180
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam usecaseBackgroundColor #EEF3FB
+skinparam usecaseBorderColor #4A6FA5
+actor "Parent" as Parent
+rectangle "StoryWeaver AI – Family profile" {
+  usecase "UC-05\nManage child profiles" as UC05
+  usecase "UC-06\nManage family characters" as UC06
+  usecase "UC-07\nGenerate character portrait" as UC07
+  usecase "UC-08\nSet / change Kid exit PIN" as UC08
+}
+Parent --> UC05
+Parent --> UC06
+Parent --> UC07
+Parent --> UC08
+@enduml

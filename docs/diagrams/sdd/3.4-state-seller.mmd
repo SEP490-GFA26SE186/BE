@@ -1,0 +1,7 @@
+stateDiagram-v2
+  [*] --> pending : Parent applies (plan can sell)
+  pending --> approved : Specialist approves
+  pending --> rejected : Specialist rejects
+  rejected --> pending : Parent re-applies
+  approved --> suspended : Active strikes reach strike_limit
+  suspended --> approved : Appeal approved and active strikes below limit

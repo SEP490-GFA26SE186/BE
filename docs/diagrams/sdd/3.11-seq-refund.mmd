@@ -1,0 +1,17 @@
+sequenceDiagram
+  actor P as Parent
+  actor A as Admin
+  participant API as RefundsService
+  participant DB as PostgreSQL
+  P->>API: GET /payments/orders (refundable + deadline per item)
+  P->>API: POST /payments/order-items/:id/refund {reason}
+  API->>DB: paid, price > 0, within market.refund_window_days, no request yet
+  API->>DB: insert refund_requests(pending)
+  A->>API: POST /admin/refunds/:id/decision {approve, bankTransactionRef | note}
+  alt approve
+    API->>DB: order_item refunded, revoke entitlement or cancel subscription
+    API->>DB: earning_reversal (if seller earning not withdrawn)
+    API->>DB: admin_audit_logs refund.approved
+  else reject
+    API->>DB: refund rejected with note
+  end

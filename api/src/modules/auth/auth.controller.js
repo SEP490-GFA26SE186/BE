@@ -96,19 +96,16 @@ const exitKidMode = catchAsync(async (req, res) => {
 // =============================================================================
 
 const sendVerificationEmail = catchAsync(async (req, res) => {
-  const result = await authService.sendVerificationEmail({
-    userId: req.user?.id,
-    email: req.body.email,
-  });
+  const result = await authService.sendVerificationEmail(req.user.id);
 
   return ApiResponse.success(res, {
     message: result.message,
+    data: { retryAfterSeconds: result.retryAfterSeconds },
   });
 });
 
 const verifyEmail = catchAsync(async (req, res) => {
-  const token = req.query.token || req.body.token;
-  const result = await authService.verifyEmail(token);
+  const result = await authService.verifyEmail(req.body.token, req.user.id);
 
   return ApiResponse.success(res, {
     message: result.message,

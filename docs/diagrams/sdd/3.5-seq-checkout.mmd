@@ -1,0 +1,28 @@
+sequenceDiagram
+  actor P as Parent
+  participant W as Web App
+  participant API as BillingService
+  participant DB as PostgreSQL
+  participant PO as payOS
+  P->>W: Choose plan
+  W->>API: POST /payments/plans/checkout {planId}
+  API->>DB: insert orders(pending, expiresAt) + order_items(snapshot price)
+  API->>PO: paymentRequests.create(orderCode, amount, returnUrl)
+  alt payOS error
+    API->>DB: order failed
+    API-->>W: 503
+  end
+  API-->>W: checkoutUrl
+  W->>PO: Redirect, parent pays by VietQR
+  PO->>API: POST /payments/payos/webhook
+  API->>DB: insert webhook_logs
+  API->>PO: webhooks.verify(signature)
+  alt invalid signature / unknown order / amount mismatch
+    API-->>PO: 200 not processed (logged)
+  else valid
+    API->>DB: fulfillOrder: UPDATE orders SET paid WHERE status IN (pending, expired)
+    API->>DB: startPeriod: close old subscription, new active period, credit_grant
+    API-->>PO: 200 processed
+  end
+  PO-->>W: Redirect to /parent/billing/result
+  W->>API: GET /payments/orders/:id (syncs with payOS if still pending)

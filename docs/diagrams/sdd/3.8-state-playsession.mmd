@@ -1,0 +1,5 @@
+stateDiagram-v2
+  [*] --> in_progress : Child opens a ready story
+  in_progress --> in_progress : Progress saved / answer recorded
+  in_progress --> completed : Child finishes the story
+  completed --> [*]

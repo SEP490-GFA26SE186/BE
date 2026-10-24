@@ -1,0 +1,6 @@
+stateDiagram-v2
+  [*] --> active : Register (Free) / plan order paid
+  active --> expired : period_end passed
+  active --> cancelled : Replaced by new plan / refund approved
+  expired --> [*]
+  cancelled --> [*]

@@ -189,14 +189,33 @@ export const revokeRefreshToken = async (rawRefreshToken) => {
 /**
  * Generate an email verification token (expires in 24 hours)
  * @param {string} userId
+ * @param {Object} [options]
+ * @param {number} [options.cooldownSeconds] Chan gui lai neu ma gan nhat tao chua du so giay nay (429)
  * @returns {Promise<string>} Raw verification token
  */
-export const generateEmailVerificationToken = async (userId) => {
+export const generateEmailVerificationToken = async (userId, { cooldownSeconds = 0 } = {}) => {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
   await prisma.$transaction(async (tx) => {
+    if (cooldownSeconds > 0) {
+      // Khoa dong user: hai request gui lai cung luc khong cung lot qua kiem tra
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+      const latest = await tx.authToken.findFirst({
+        where: { userId, type: 'email_verify' },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+      const waitMs = latest ? latest.createdAt.getTime() + cooldownSeconds * 1000 - Date.now() : 0;
+      if (waitMs > 0) {
+        const retryAfterSeconds = Math.ceil(waitMs / 1000);
+        throw ApiError.tooManyRequests(`Vui lòng đợi ${retryAfterSeconds} giây trước khi gửi lại mã`, [
+          { path: 'retryAfterSeconds', message: `Vui lòng đợi ${retryAfterSeconds} giây trước khi gửi lại mã`, retryAfterSeconds },
+        ]);
+      }
+    }
+
     // Invalidate any previous unconsumed verification tokens for this user
     await tx.authToken.updateMany({
       where: {
@@ -226,30 +245,40 @@ export const generateEmailVerificationToken = async (userId) => {
 /**
  * Verify and consume an email verification token
  * @param {string} rawToken
+ * @param {string} userId Nguoi dang dang nhap — token phai thuoc dung nguoi nay
  * @returns {Promise<Object>} Verified user
  */
-export const verifyEmailToken = async (rawToken) => {
+export const verifyEmailToken = async (rawToken, userId) => {
   const tokenHash = hashToken(rawToken);
 
   const tokenRecord = await prisma.authToken.findUnique({
     where: { tokenHash },
-    include: { user: true },
   });
 
-  if (!tokenRecord || tokenRecord.type !== 'email_verify' || tokenRecord.consumedAt !== null) {
-    throw ApiError.badRequest('Invalid or already used verification token');
+  // Token cua tai khoan khac -> cung bao "khong hop le", khong lo token do co ton tai
+  if (
+    !tokenRecord ||
+    tokenRecord.type !== 'email_verify' ||
+    tokenRecord.userId !== userId ||
+    tokenRecord.consumedAt !== null
+  ) {
+    throw ApiError.badRequest('Mã xác thực không hợp lệ hoặc đã được sử dụng');
   }
 
   if (tokenRecord.expiresAt < new Date()) {
-    throw ApiError.badRequest('Email verification token has expired. Please request a new one.');
+    throw ApiError.badRequest('Mã xác thực đã hết hạn. Vui lòng yêu cầu gửi lại mã.');
   }
 
   // Atomically mark token consumed and verify user email
   const updatedUser = await prisma.$transaction(async (tx) => {
-    await tx.authToken.update({
-      where: { id: tokenRecord.id },
+    // Dieu kien consumedAt null: hai request cung luc chi mot cai dung duoc token
+    const consumed = await tx.authToken.updateMany({
+      where: { id: tokenRecord.id, consumedAt: null },
       data: { consumedAt: new Date() },
     });
+    if (consumed.count === 0) {
+      throw ApiError.badRequest('Mã xác thực không hợp lệ hoặc đã được sử dụng');
+    }
 
     return await tx.user.update({
       where: { id: tokenRecord.userId },

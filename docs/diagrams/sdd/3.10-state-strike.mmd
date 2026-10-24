@@ -1,0 +1,8 @@
+stateDiagram-v2
+  [*] --> Active : Strike issued (report, rejection, takedown)
+  Active --> Appealed : Seller appeals
+  Appealed --> Revoked : Admin approves appeal
+  Appealed --> Active : Admin rejects appeal
+  Active --> Expired : strike_valid_days passed
+  Revoked --> [*]
+  Expired --> [*]
