@@ -117,7 +117,7 @@ services:
         AI_EXTRAS: ${AI_EXTRAS:-}
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      # Chu (mock | gemini | claude | claude_code) va giong doc (mock | vieneu) chon rieng. Anh chi co mock.
+      # Chu (mock | gemini | claude | claude_code) va giong doc (mock | vieneu) chon rieng.
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       TTS_PROVIDER: ${TTS_PROVIDER:-mock}
       # Chi khi TTS_PROVIDER=vieneu. De trong = mac dinh ai/app/config.py (Kim Thanh, fp32, 120 s, mp3).
@@ -149,6 +149,10 @@ services:
       SCENE_DESCRIPTION_MAX_WORDS: ${SCENE_DESCRIPTION_MAX_WORDS:-}
       IMAGE_PROFILE_PORTRAIT: ${IMAGE_PROFILE_PORTRAIT:-}
       IMAGE_PROFILE_SCENE: ${IMAGE_PROFILE_SCENE:-}
+      # Anh that (profile cf-*): Workers AI qua REST. Profile khong co bo loc san can IMAGE_SAFETY=human_review.
+      IMAGE_SAFETY: ${IMAGE_SAFETY:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
       PRICE_TEXT_INPUT_PER_MTOK_MICROS: ${PRICE_TEXT_INPUT_PER_MTOK_MICROS:-}
       PRICE_TEXT_OUTPUT_PER_MTOK_MICROS: ${PRICE_TEXT_OUTPUT_PER_MTOK_MICROS:-}
       LOG_LEVEL: ${LOG_LEVEL:-}

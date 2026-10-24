@@ -2,6 +2,8 @@
 
 > **Dev mới clone về:** làm theo [SETUP.md](SETUP.md) — Postgres local + API/worker trong Docker,
 > AI chạy trên máy với Claude CLI (`claude_code`) và VieNeu-TTS. File này là tài liệu tham khảo chi tiết.
+>
+> **Deploy:** [DEPLOY.md](DEPLOY.md) — một máy Google Cloud (api, worker, ai, Postgres, Redis, Caddy) + Web trên Cloudflare Pages.
 
 Backend gồm **hai source riêng biệt** trong cùng một repo:
 
