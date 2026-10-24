@@ -6,7 +6,6 @@ import processAiJob from './workers/ai.processor.js';
 import processNarrationJob from './workers/narration.processor.js';
 import { runBillingCycle } from './modules/billing/billing.store.js';
 import { releaseDueEarnings } from './modules/wallets/earningLedger.js';
-import { syncProcessingWithdrawals } from './modules/market/withdrawals.service.js';
 import { scheduleRandomAudits } from './modules/monitoring/monitoring.service.js';
 
 // Bien chi worker can. Container `api` khong duoc cap AI_SERVICE_URL, nen moi
@@ -55,7 +54,6 @@ const step = async (name, fn) => {
 const billingTick = async () => {
   const r = (await step('chu ky goi', () => runBillingCycle(prisma))) ?? {};
   r.earningsReleased = await step('mo khoa doanh thu', () => releaseDueEarnings(prisma)); // het han giu (3 ngay)
-  r.payoutsChecked = await step('dong bo chi ho', () => syncProcessingWithdrawals()); // lenh chi ho payOS -> paid / that bai
   r.auditsCreated = (await step('kiem tra ngau nhien', () => scheduleRandomAudits(prisma)))?.created; // moi tuan mot dot
   if (r.granted || r.renewedFree || r.expired || r.ordersExpired || r.earningsReleased || r.auditsCreated || r.failed) console.log('[billing]', JSON.stringify(r));
 };

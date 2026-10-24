@@ -43,13 +43,10 @@ services:
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
       BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-StoryWeaver AI}
-      # payOS (thu tien goi / truyen). PAYOS_PAYOUT_* chi khi chi ho dung kenh rieng.
+      # payOS: chi thu tien goi / truyen. Rut tien nguoi ban: Admin chuyen khoan tay.
       PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
       PAYOS_API_KEY: ${PAYOS_API_KEY:-}
       PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
-      PAYOS_PAYOUT_CLIENT_ID: ${PAYOS_PAYOUT_CLIENT_ID:-}
-      PAYOS_PAYOUT_API_KEY: ${PAYOS_PAYOUT_API_KEY:-}
-      PAYOS_PAYOUT_CHECKSUM_KEY: ${PAYOS_PAYOUT_CHECKSUM_KEY:-}
       # Ma hoa so tai khoan ngan hang nguoi ban (32 byte hex/base64). Production bat buoc; dev trong = suy tu JWT_SECRET.
       BANK_DATA_KEY: ${BANK_DATA_KEY:-}
       # Trang Web payOS tra nguoi dung ve (returnUrl / cancelUrl).

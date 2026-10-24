@@ -185,7 +185,7 @@ Enum request_status {
 
 Enum withdrawal_status {
   requested
-  processing [note: 'Admin da duyet, lenh chi ho payOS dang chay (2026-10-18)']
+  processing [note: 'Chi ho payOS cu (2026-10-18). Tu 2026-10-24 Admin chuyen khoan tay: requested -> paid, khong con sinh processing']
   paid
   rejected
   cancelled
@@ -836,7 +836,7 @@ Table seller_profiles {
   reviewed_by uuid
   reviewed_at timestamptz
   bank_name varchar(100)
-  bank_bin varchar(20) [note: 'ma BIN ngan hang (VietQR) — chi ho payOS dung BIN (2026-10-18)']
+  bank_bin varchar(20) [note: 'ma BIN ngan hang (VietQR) — Admin dung de tao ma QR chuyen khoan']
   bank_account_number varchar(255) [note: 'ma hoa khi luu']
   bank_account_holder varchar(150)
   bank_updated_at timestamptz [note: 'chan rut tien 24 gio sau khi doi']
@@ -1080,7 +1080,7 @@ Table withdrawal_requests {
   status withdrawal_status [not null, default: 'requested']
   handled_by uuid [note: 'admin']
   handled_at timestamptz
-  bank_transaction_ref varchar(100) [note: 'id lenh chi ho payOS (payouts)']
+  bank_transaction_ref varchar(100) [note: 'ma giao dich ngan hang Admin nhap khi danh dau da chuyen (tuy chon)']
   reject_reason text
   created_at timestamptz [not null, default: `now()`]
 

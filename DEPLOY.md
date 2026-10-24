@@ -80,11 +80,10 @@ free -h
 
 ## 4. Lấy code + tạo `.env`
 
-Repo BE là private: tạo **Personal access token** trên GitHub (Settings → Developer settings → Fine-grained
-tokens, quyền Contents: Read-only cho repo BE) để clone; khi `git` hỏi mật khẩu thì dán token.
+Repo BE public nên clone thẳng, không cần token. Vì public: **không bao giờ commit `.env`** (đã có trong `.gitignore`).
 
 ```bash
-git clone -b feature/ai-core https://github.com/SEP490-GFA26SE186/BE.git storyweaver
+git clone -b main https://github.com/SEP490-GFA26SE186/BE.git storyweaver
 cd storyweaver
 ```
 
@@ -186,7 +185,7 @@ docker compose exec -e NODE_ENV=development api node prisma/seed_demo.js
 
 1. Cloudflare → **Workers & Pages → Create → Pages → Connect to Git** → chọn repo **Web**.
 2. Cấu hình build:
-   - Production branch: `feature/integration` (hoặc nhánh nhóm chốt)
+   - Production branch: `main`
    - Framework preset: **React (Vite)** — Build command `npm run build`, Output directory `dist`
    - Environment variables:
      - `VITE_API_URL` = `https://api.storyweaver.id.vn/api/v1`
