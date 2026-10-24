@@ -20,6 +20,9 @@ services:
       POSTGRES_USER: storyweaver
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?can POSTGRES_PASSWORD trong .env}
       POSTGRES_DB: storyweaver
+    ports:
+      # Chi mo cho chinh may chu (127.0.0.1), KHONG ra Internet. DBeaver noi vao qua SSH tunnel (DEPLOY-UPDATE.md).
+      - "127.0.0.1:5432:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:

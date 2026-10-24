@@ -183,21 +183,36 @@ docker compose exec -e NODE_ENV=development api node prisma/seed_demo.js
 
 ## 6. Web lên Cloudflare Pages
 
-1. Cloudflare → **Workers & Pages → Create → Pages → Connect to Git** → chọn repo **Web**.
-2. Cấu hình build:
-   - Production branch: `main`
-   - Framework preset: **React (Vite)** — Build command `npm run build`, Output directory `dist`
-   - Environment variables:
-     - `VITE_API_URL` = `https://api.storyweaver.id.vn/api/v1`
-     - `NODE_VERSION` = `22`
-3. Save and Deploy → được địa chỉ `xxx.pages.dev`.
-4. Project Pages → **Custom domains → Set up a custom domain** → `storyweaver.id.vn` (Cloudflare tự tạo bản
-   ghi DNS + chứng chỉ). Thêm `www.storyweaver.id.vn` nếu muốn.
+Đang dùng **Wrangler** (tải bản build từ laptop): repo Web nằm trong organization GitHub, nối Pages với GitHub cần
+owner của org duyệt GitHub App Cloudflare.
+
+Trên laptop (Git Bash):
+
+```bash
+cd <thu-muc>/Web
+git checkout main && git pull
+npm ci
+VITE_API_URL="https://api.storyweaver.id.vn/api/v1" npm run build
+ls dist/_redirects                 # phai co
+npx wrangler login                 # mo trinh duyet, bam Allow
+npx wrangler pages deploy dist --project-name storyweaver --branch main
+```
+
+Lần đầu Wrangler hỏi tạo project `storyweaver` → Yes, production branch `main`. Xong được địa chỉ
+`xxx.storyweaver.pages.dev`.
+
+Gắn domain: Workers & Pages → `storyweaver` → **Custom domains → Set up a custom domain** → `storyweaver.id.vn` →
+Activate (Cloudflare tự tạo bản ghi DNS + chứng chỉ). Thêm `www.storyweaver.id.vn` nếu muốn. Không tự tạo bản ghi
+cho tên miền chính trong DNS.
 
 Repo Web có `public/_redirects` (`/* /index.html 200`) để mở thẳng link như `/parent/billing/result` không bị
-404. `VITE_API_URL` được gắn lúc build: đổi giá trị thì phải **Retry deployment**.
+404. `VITE_API_URL` được gắn lúc build: quên đặt → Web gọi nhầm `storyweaver.id.vn/api/v1`.
 
-Mỗi lần push lên nhánh production, Pages tự build lại.
+**Muốn Pages tự build khi push** (thay Wrangler): owner org `SEP490-GFA26SE186` cài GitHub App "Cloudflare Workers
+and Pages" cho repo Web, rồi Cloudflare → Workers & Pages → Create → Pages → Connect to Git; build `npm run build`,
+output `dist`, biến `VITE_API_URL` = `https://api.storyweaver.id.vn/api/v1`, `NODE_VERSION` = `22`.
+
+Cập nhật về sau: [DEPLOY-UPDATE.md](DEPLOY-UPDATE.md) mục 4.1.
 
 ## 7. payOS
 
@@ -212,6 +227,8 @@ Lưu, rồi thử mua một gói rẻ nhất để kiểm tra luồng trả về
 ---
 
 ## Việc thường ngày
+
+Đầy đủ hơn (cập nhật từng phần, đổi `.env`, rollback, sự cố): [DEPLOY-UPDATE.md](DEPLOY-UPDATE.md).
 
 ```bash
 cd ~/storyweaver
