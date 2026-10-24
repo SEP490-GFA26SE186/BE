@@ -1,0 +1,68 @@
+# =============================================================================
+# PRODUCTION tren mot may (Google Cloud VM / VPS) — xem DEPLOY.md.
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml   (trong .env o root, Linux dung dau :)
+#   docker compose up -d --build
+#
+# Khac ban dev:
+# - Postgres chay cung may, mat khau lay tu .env, KHONG mo cong ra ngoai.
+# - api khong mo cong 3000 ra ngoai: request vao qua Caddy (80/443, tu xin HTTPS cho SITE_DOMAIN).
+# - Web KHONG o day: deploy len Cloudflare Pages, goi API qua https://SITE_DOMAIN/api/v1
+#   (CORS_ORIGIN = domain Pages).
+# =============================================================================
+
+x-prod-db-url: &prod-db-url postgresql://storyweaver:${POSTGRES_PASSWORD:?can POSTGRES_PASSWORD trong .env}@postgres:5432/storyweaver?schema=public
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: storyweaver
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?can POSTGRES_PASSWORD trong .env}
+      POSTGRES_DB: storyweaver
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storyweaver -d storyweaver"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: *prod-db-url
+      DIRECT_URL: *prod-db-url
+    ports: !reset []
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: *prod-db-url
+      DIRECT_URL: *prod-db-url
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      # Domain tro ve IP tinh cua may (vd. 34-87-1-2.sslip.io hoac api.<domain cua ban>).
+      SITE_DOMAIN: ${SITE_DOMAIN:?can SITE_DOMAIN trong .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pg-data:
+  caddy-data:
