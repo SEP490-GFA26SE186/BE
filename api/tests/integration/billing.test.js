@@ -168,3 +168,30 @@ test('chu ky goi: goi thang het ky -> credit het han, ve Mien phi; goi nam giua 
   assert.equal((await activeSub(y.user.id)).plan.code, 'FAMILY_YEAR');
   assert.equal(await balance(y.user.id), 20, 'thang moi: credit du het han, cap 20');
 });
+
+test('gia han: mua lai dung goi dang dung -> cong them thoi han vao ngay het han, khong tao ky moi, khong cap credit them', { skip }, async () => {
+  const payos = fakePayos();
+  setPayosClient(payos);
+  const f = await parentWithFree();
+  const pay = async () => {
+    const res = await api.request('POST', '/payments/plans/checkout', { token: f.token, body: { planId: plans.FAMILY_MONTH.id } });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const req = payos.state.created.at(-1);
+    payos.state.status.set(req.orderCode, { status: 'PAID', amountPaid: 49000 });
+    const got = await api.request('GET', `/payments/orders/${res.body.data.order.id}`, { token: f.token });
+    assert.equal(got.body.data.order.status, 'paid');
+  };
+  await pay();
+  const first = await activeSub(f.user.id);
+  const credits = await balance(f.user.id);
+
+  await pay(); // gia han
+  const renewed = await activeSub(f.user.id);
+  assert.equal(renewed.id, first.id, 'cung mot ky, khong tao moi');
+  assert.equal(renewed.periodStart.getTime(), first.periodStart.getTime());
+  const expected = new Date(first.periodEnd);
+  expected.setUTCMonth(expected.getUTCMonth() + 1);
+  assert.equal(renewed.periodEnd.toISOString().slice(0, 10), expected.toISOString().slice(0, 10), 'het han + 1 thang');
+  assert.equal(await balance(f.user.id), credits, 'credit thang toi cap theo lich, khong cap ngay');
+  assert.equal(await prisma.subscription.count({ where: { parentId: f.user.id, status: 'active' } }), 1);
+});

@@ -948,6 +948,7 @@ Table subscriptions {
   Partial index: (next_credit_grant_at) WHERE status = active — cron cap credit
   Cron hang ngay: toi next_credit_grant_at -> credit_expire phan con lai, credit_grant thang moi.
   Nang goi giua ky: ky moi bat dau ngay, cap du credit goi moi, credit con lai giu mot lan.
+  Gia han (mua lai dung goi tra phi dang dung): period_end += duration_months, khong tao ky moi (2026-10-25).
   Goi Mien phi cung la mot dong subscriptions.
   '''
 }

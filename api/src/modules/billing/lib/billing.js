@@ -3,6 +3,7 @@
 // - Tra truoc, gia han thu cong (payOS VietQR khong tru tien dinh ky).
 // - Moi goi cap `credits_per_month` moi thang (ke ca goi nam); credit du het han khi sang thang moi.
 // - Mua / nang goi giua ky: ky moi bat dau ngay, cap du credit goi moi, credit con lai GIU mot lan.
+// - Gia han: mua lai dung goi tra phi dang dung -> cong them thoi han vao ngay het han (billing.store fulfillOrder).
 // - Goi Mien phi cung la mot dong subscriptions, tu gia han hang thang.
 
 export const FREE_PLAN_CODE = 'FREE';

@@ -1,7 +1,7 @@
 // Doc / ghi goi, don, ky cap credit (rev8). `tx` la transaction client Prisma.
 import { expireCredit, grantCredit } from '../wallets/creditLedger.js';
 import { recordEarning } from '../wallets/earningLedger.js';
-import { FREE_PLAN_CODE, cycleAction, monthsBetween, newPeriod } from './lib/billing.js';
+import { FREE_PLAN_CODE, addMonths, cycleAction, monthsBetween, newPeriod } from './lib/billing.js';
 
 const TX = { timeout: 20000 };
 
@@ -94,6 +94,13 @@ export async function fulfillOrder(tx, orderId, { transactionId = null, now = ne
   const order = await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: { include: { plan: true } } } });
   for (const item of order.items) {
     if (item.itemType === 'plan' && item.plan) {
+      // Gia han (mua lai dung goi tra phi dang dung): cong them thoi han vao ngay het han, khong mat ngay con lai.
+      // Credit hang thang van cap deu toi ngay het han moi (cycleAction). Goi khac -> doi goi ngay nhu cu.
+      const active = await tx.subscription.findFirst({ where: { parentId: order.buyerId, status: 'active' } });
+      if (active && active.planId === item.plan.id && item.plan.code !== FREE_PLAN_CODE) {
+        await tx.subscription.update({ where: { id: active.id }, data: { periodEnd: addMonths(active.periodEnd, item.plan.durationMonths) } });
+        continue;
+      }
       await startPeriod(tx, { parentId: order.buyerId, plan: item.plan, orderItemId: item.id, now, replacedStatus: 'cancelled' });
     } else if (item.itemType === 'listing') {
       await deliverListing(tx, { buyerId: order.buyerId, item, now });
