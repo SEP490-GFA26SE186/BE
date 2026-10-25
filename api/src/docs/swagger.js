@@ -1695,6 +1695,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     },
     '/kid/sessions/{sessionId}/complete': { post: { tags: ['Kid Mode'], summary: '[Kid Session] Đọc xong (idempotent)', security: [{ BearerAuth: [] }], parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ session }' } } } },
 
+    '/subscriptions/me/credit-history': { get: { tags: ['Plans'], summary: '[Auth] Lịch sử credit cộng / trừ (sổ cái)', description: 'Mới nhất trước. Bỏ dòng credit_consume (0 credit). context: { kind: ai, requestType, storyTitle, characterName } | { kind: plan, planName }.', security: [{ BearerAuth: [] }], parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 50 } }], responses: { 200: { description: '{ entries, pagination }' } } } },
     '/subscriptions/me': {
       get: {
         tags: ['Plans & Subscriptions'],

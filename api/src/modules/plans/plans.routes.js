@@ -18,6 +18,7 @@ plansRouter.get('/:id', plansController.getPlanById);
 // ==========================================
 
 subscriptionsRouter.get('/me', auth, plansController.getMySubscription);
+subscriptionsRouter.get('/me/credit-history', auth, plansController.getCreditHistory);
 
 export default {
   plansRouter,
