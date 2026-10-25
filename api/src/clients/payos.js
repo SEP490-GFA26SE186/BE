@@ -1,11 +1,10 @@
 // payOS (SDK chinh thuc @payos/node 2.x). Khoi tao luoi: thieu khoa thi chi loi khi that su goi.
-// Thu tien (payment-requests) dung PAYOS_CLIENT_ID / PAYOS_API_KEY / PAYOS_CHECKSUM_KEY.
-// Chi ho (payouts) dung bo PAYOS_PAYOUT_* neu co, khong thi dung chung bo tren (cung kenh).
+// Chi dung de thu tien (payment-requests): PAYOS_CLIENT_ID / PAYOS_API_KEY / PAYOS_CHECKSUM_KEY.
+// Rut tien nguoi ban do Admin chuyen khoan tay (khong dung chi ho payOS tu 2026-10-24).
 import { PayOS } from '@payos/node';
 import env from '../config/env.js';
 
 let collect;
-let payout;
 
 export class PaymentConfigError extends Error {}
 
@@ -19,17 +18,7 @@ const build = ({ clientId, apiKey, checksumKey }) => {
 /** Client thu tien. Test tiem client gia bang setPayosClient. */
 export const payosCollect = () => (collect ??= build(env.payos));
 
-export const payosPayout = () =>
-  (payout ??= build({
-    clientId: env.payos.payout.clientId ?? env.payos.clientId,
-    apiKey: env.payos.payout.apiKey ?? env.payos.apiKey,
-    checksumKey: env.payos.payout.checksumKey ?? env.payos.checksumKey,
-  }));
-
 /** Chi cho test. */
 export const setPayosClient = (client) => {
   collect = client;
-};
-export const setPayosPayoutClient = (client) => {
-  payout = client;
 };
