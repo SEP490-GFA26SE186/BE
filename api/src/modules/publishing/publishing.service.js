@@ -6,7 +6,7 @@ import { formatStoryDetail, STORY_DETAIL_INCLUDE } from '../stories/lib/storyFor
 import { findReviewGaps } from '../stories/lib/editorRules.js';
 import { COVER_SELECT, coverImageKey, formatCover } from '../stories/lib/cover.js';
 import { dispatchNarration, prepareNarration } from '../stories/stories.narration.service.js';
-import { loadReadiness, loadVoice } from '../stories/stories.narration.store.js';
+import { loadReadiness, loadVoice, reuseNarration } from '../stories/stories.narration.store.js';
 import {
   CLAIM_MINUTES,
   PRICE_RULE_MESSAGE,
@@ -133,7 +133,8 @@ async function forbiddenNamesOf(userId) {
  * priceVnd: 0 = mien phi (don 0d) hoac 5.000-500.000, boi 1.000 (validPriceVnd).
  * Truyen rieng da hoan tat -> ban sao `published` (go ca nhan hoa) + listing `submitted` + luot duyet.
  * Ban rieng bat giong doc -> ban sao cung bat va SINH LAI giong doc bang ten chung (audio cu chua ten that,
- * khong dung lai duoc). Specialist chi nhan duyet khi giong doc xong (claimReview).
+ * khong dung lai duoc). Phien ban moi (previousListingId) dung lai audio cua ban dang ban o doan chu khong doi
+ * (reuseNarration), chi doc lai doan da sua. Specialist chi nhan duyet khi giong doc xong (claimReview).
  */
 export async function createListing(user, body, narrationOptions, { previousListingId = null } = {}) {
   const seller = await prisma.sellerProfile.findUnique({ where: { userId: user.id } });
@@ -231,6 +232,10 @@ export async function createListing(user, body, narrationOptions, { previousList
       },
     });
     await tx.moderationReview.create({ data: { listingId: created.id, reviewType: 'submission' } });
+    if (previousListingId && story.useTts) {
+      const live = await tx.listing.findUniqueOrThrow({ where: { id: previousListingId }, select: { publishedStoryId: true } });
+      await reuseNarration(tx, copy.id, live.publishedStoryId, await loadVoice(tx));
+    }
     return {
       listing: await tx.listing.findUniqueOrThrow({ where: { id: created.id }, include: LISTING_INCLUDE }),
       jobs: await prepareNarration(tx, copy.id),
