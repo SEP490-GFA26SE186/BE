@@ -185,7 +185,7 @@ Enum request_status {
 
 Enum withdrawal_status {
   requested
-  processing [note: 'Chi ho payOS cu (2026-10-18). Tu 2026-10-24 Admin chuyen khoan tay: requested -> paid, khong con sinh processing']
+  processing
   paid
   rejected
   cancelled
