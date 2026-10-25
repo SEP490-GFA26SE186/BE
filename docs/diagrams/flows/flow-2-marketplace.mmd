@@ -1,0 +1,73 @@
+---
+title: "Flow 2: Marketplace - Publish, Buy & Payout"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
+flowchart LR
+  subgraph SEL["SELLER (Parent)"]
+    EA(("👤 Seller")):::actor
+    E0["Apply as seller<br/>(plan allows selling)"]
+    E1["Submit a reviewed private story:<br/>price 0 or 5,000-500,000 VND, aliases"]
+    E2["Listing live<br/>on Marketplace"]
+    E3["Request withdrawal<br/>(bank set, >= minimum)"]
+    E4["Payout received"]
+  end
+  subgraph SPEC["SPECIALIST"]
+    MA(("👤 Specialist")):::actor
+    M0{"Approve seller?"}
+    M1["Claim review, view 100% pages<br/>+ 7-rule pedagogy checklist"]
+    M2{"Decision?"}
+  end
+  subgraph SYS["⚙ SYSTEM (Backend API + Cron)"]
+    B1{"Real names / family<br/>details left?"}
+    B2["De-personalized copy, regenerate<br/>narration, listing = submitted"]
+    B3["Order pending,<br/>snapshot price + seller share"]
+    B4{"Payment verified?"}
+    B5["Grant entitlement,<br/>80% seller earning (pending),<br/>20% platform"]
+    B6["Cron: release earning<br/>after hold days"]
+    B7["Hold withdrawal amount"]
+  end
+  subgraph BUY["BUYER (Parent)"]
+    UA(("👤 Buyer")):::actor
+    U0["Browse: competency,<br/>age, price + sort"]
+    U1["Buy one story"]
+    U2["Add to child's bookshelf"]
+    U3["Rate story<br/>(after child finished)"]
+  end
+  subgraph PAY["⚙ payOS"]
+    Y1["VietQR payment<br/>+ signed webhook"]
+    Y2["Payout to bank"]
+  end
+  subgraph ADM["ADMIN"]
+    AA(("👤 Admin")):::actor
+    A1{"Approve withdrawal?"}
+  end
+
+  EA --> E0 --> M0
+  M0 -- "Yes" --> E1
+  M0 -- "No: re-apply" --> E0
+  E1 --> B1
+  B1 -- "Yes: 422, fix" --> E1
+  B1 -- "No" --> B2 --> M1
+  MA --> M1 --> M2
+  M2 -- "Changes requested /<br/>rejected: new listing" --> E1
+  M2 -- "Approved" --> E2
+
+  E2 --> U0
+  UA --> U0 --> U1 --> B3
+  B3 -- "Price 0: paid now" --> U2
+  B3 -- "Price > 0" --> Y1 --> B4
+  B4 -- "No: expired / failed" --> U1
+  B4 -- "Yes" --> B5 --> U2 --> U3
+  U2 -.-> F4(["Flow 4: Learning"]):::ext
+
+  B5 --> B6 --> E3 --> B7 --> A1
+  AA --> A1
+  A1 -- "Yes" --> Y2 --> E4
+  A1 -- "No: amount released" --> E3
+
+  M2 -. "rejected: strike" .-> F3(["Flow 3: Trust & Safety"]):::ext
+  E2 -. "reports, refunds" .-> F3
+
+  classDef default fill:#EEEEEE,stroke:#999999,color:#111111
+  classDef actor fill:#FFE0A3,stroke:#333333,stroke-width:2px,color:#111111
+  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111
