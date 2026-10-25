@@ -3,6 +3,7 @@
 // Hinh dang tra ve khop src/services/childService.js ben Web (mock da viet theo rev8).
 
 import { assetUrl } from '../../../clients/assetUrl.js';
+import { portraitFailureOf } from '../../characters/lib/portraitFailure.js';
 
 const VN_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -24,7 +25,10 @@ export function ageOf(birthDate, now = new Date()) {
 function formatCharacter(character) {
   if (!character || character.deletedAt) return null;
   const { id, name, appearance, portraitImageKey, portraitStatus } = character;
-  return { id, name, appearance, portraitImageKey, portraitImageUrl: assetUrl(portraitImageKey), portraitStatus };
+  return {
+    id, name, appearance, portraitImageKey, portraitImageUrl: assetUrl(portraitImageKey), portraitStatus,
+    portraitFailure: portraitFailureOf(character),
+  };
 }
 
 /** child_profiles + include { character, _count: { bookshelfItems, playSessions(completed) } } -> ho so cho client. */

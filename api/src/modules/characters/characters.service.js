@@ -1,6 +1,7 @@
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import { assetUrl } from '../../clients/assetUrl.js';
+import { LAST_PORTRAIT_REQUEST, portraitFailureOf } from './lib/portraitFailure.js';
 
 // Default free quota if user has no paid subscription
 const DEFAULT_FREE_MAX_CHARACTERS = 5;
@@ -23,6 +24,7 @@ const formatCharacterResponse = (character) => {
     genPrompt: character.genPrompt,
     genSeed: character.genSeed !== null && character.genSeed !== undefined ? character.genSeed.toString() : null,
     portraitStatus: character.portraitStatus,
+    portraitFailure: portraitFailureOf(character),
     createdAt: character.createdAt,
     updatedAt: character.updatedAt,
     // So truyen rieng (chua xoa) dang dung nhan vat — doi ten se doi ten trong cac truyen nay.
@@ -129,6 +131,7 @@ const createCharacter = async (parentId, characterData) => {
       portraitStatus: portraitImageKey ? 'ready' : 'none',
     },
     include: {
+      aiRequests: LAST_PORTRAIT_REQUEST,
       child: {
         select: {
           id: true,
@@ -164,6 +167,7 @@ const getCharacters = async (parentId, filter = {}) => {
       createdAt: 'desc',
     },
     include: {
+      aiRequests: LAST_PORTRAIT_REQUEST,
       child: {
         select: {
           id: true,
@@ -192,6 +196,7 @@ const getCharacterById = async (parentId, characterId) => {
       deletedAt: null,
     },
     include: {
+      aiRequests: LAST_PORTRAIT_REQUEST,
       child: {
         select: {
           id: true,
@@ -268,6 +273,7 @@ const updateCharacter = async (parentId, characterId, updateData) => {
       ...(updateData.genPrompt !== undefined && { genPrompt: updateData.genPrompt }),
     },
     include: {
+      aiRequests: LAST_PORTRAIT_REQUEST,
       child: {
         select: {
           id: true,
