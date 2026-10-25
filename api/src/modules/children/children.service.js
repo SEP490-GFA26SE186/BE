@@ -9,6 +9,7 @@ import { ageOf, formatChild, summarizeReading, vnDate } from './lib/childFormat.
 import { buildEqLevels } from './lib/eqLevels.js';
 import { buildConversation, buildEvidence, buildTrend } from './lib/eqJourney.js';
 import { recommendTopics } from './lib/recommend.js';
+import { LAST_PORTRAIT_REQUEST } from '../characters/lib/portraitFailure.js';
 import { loadReportSettings } from '../pedagogy-settings/pedagogy-settings.service.js';
 
 // Supabase o xa: moi truy van vai tram ms, mac dinh 5 s cua Prisma khong du cho 4-5 truy van
@@ -19,7 +20,7 @@ const TX_OPTIONS = { timeout: 20000 };
 const DEFAULT_FREE_MAX_CHILDREN = 2;
 
 const CHILD_INCLUDE = {
-  character: true,
+  character: { include: { aiRequests: LAST_PORTRAIT_REQUEST } },
   _count: {
     select: {
       bookshelfItems: true,

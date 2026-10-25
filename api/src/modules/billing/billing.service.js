@@ -15,7 +15,8 @@ const ORDER_INCLUDE = { items: { include: { plan: true, listing: { select: { id:
 
 const unavailable = (error) => {
   console.error('[payos]', error);
-  if (error instanceof PaymentConfigError) return ApiError.internal(error.message);
+  // Thieu cau hinh khoa thanh toan: chi tiet ky thuat nam o log, phu huynh chi thay thong bao chung.
+  if (error instanceof PaymentConfigError) return new ApiError(StatusCodes.SERVICE_UNAVAILABLE, 'Thanh toán chưa sẵn sàng. Ba mẹ thử lại sau nhé.');
   return new ApiError(StatusCodes.BAD_GATEWAY, 'Cổng thanh toán đang tạm gián đoạn. Ba mẹ thử lại sau ít phút nhé.');
 };
 

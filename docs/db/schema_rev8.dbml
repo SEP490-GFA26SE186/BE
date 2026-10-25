@@ -185,7 +185,7 @@ Enum request_status {
 
 Enum withdrawal_status {
   requested
-  processing [note: 'Chi ho payOS cu (2026-10-18). Tu 2026-10-24 Admin chuyen khoan tay: requested -> paid, khong con sinh processing']
+  processing
   paid
   rejected
   cancelled
@@ -849,7 +849,7 @@ Table listings {
   id uuid [pk, default: `gen_random_uuid()`]
   seller_id uuid [not null]
   published_story_id uuid [unique, not null, note: 'stories.kind = published']
-  previous_listing_id uuid [note: 'phien ban truoc']
+  previous_listing_id uuid [note: 'phien ban truoc: duyet ban moi -> quyen doc / danh gia / bo dem / gia sach chuyen sang, ban truoc archived']
   title varchar(200) [not null]
   description text
   cover_image_key varchar(300)
@@ -948,6 +948,7 @@ Table subscriptions {
   Partial index: (next_credit_grant_at) WHERE status = active — cron cap credit
   Cron hang ngay: toi next_credit_grant_at -> credit_expire phan con lai, credit_grant thang moi.
   Nang goi giua ky: ky moi bat dau ngay, cap du credit goi moi, credit con lai giu mot lan.
+  Gia han (mua lai dung goi tra phi dang dung): period_end += duration_months, khong tao ky moi (2026-10-25).
   Goi Mien phi cung la mot dong subscriptions.
   '''
 }

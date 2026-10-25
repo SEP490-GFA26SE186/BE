@@ -6,7 +6,7 @@ import { formatStoryDetail, STORY_DETAIL_INCLUDE } from '../stories/lib/storyFor
 import { findReviewGaps } from '../stories/lib/editorRules.js';
 import { COVER_SELECT, coverImageKey, formatCover } from '../stories/lib/cover.js';
 import { dispatchNarration, prepareNarration } from '../stories/stories.narration.service.js';
-import { loadReadiness, loadVoice } from '../stories/stories.narration.store.js';
+import { loadReadiness, loadVoice, reuseNarration } from '../stories/stories.narration.store.js';
 import {
   CLAIM_MINUTES,
   PRICE_RULE_MESSAGE,
@@ -37,6 +37,7 @@ const formatListing = (l) => ({
   cover: formatCover(l.publishedStory ?? {}, { imageKey: l.coverImageKey }),
   publishedStoryId: l.publishedStoryId,
   sourceStoryId: l.publishedStory?.sourceStoryId ?? null,
+  previousListingId: l.previousListingId ?? null, // phien ban moi thay cho listing nay khi duoc duyet
   submittedAt: l.submittedAt,
   publishedAt: l.publishedAt,
   lastDecision: l.moderationReviews?.[0]
@@ -77,6 +78,25 @@ export async function applySeller(user, { displayName, bio, expertise }) {
   return { seller: formatSeller(seller) };
 }
 
+/**
+ * PUT /sellers/me — sua ho so ban khi dang cho duyet hoac da duyet (khong can duyet lai: biet danh chi la ten
+ * hien thi; Specialist van thay ho so moi o trang duyet nguoi ban). Bi tu choi -> nop lai bang /apply.
+ */
+export async function updateMySeller(user, { displayName, bio, expertise }) {
+  const existing = await prisma.sellerProfile.findUnique({ where: { userId: user.id } });
+  if (!existing) throw ApiError.notFound('Ba mẹ chưa có hồ sơ bán.');
+  if (!['pending', 'approved'].includes(existing.status)) {
+    throw new ApiError(StatusCodes.CONFLICT, existing.status === 'suspended' ? 'Tài khoản bán đang bị tạm khoá.' : 'Hồ sơ bị từ chối: hãy nộp lại hồ sơ.');
+  }
+  const data = {
+    ...(displayName !== undefined && { displayName: displayName.trim() }),
+    ...(bio !== undefined && { bio: bio.trim() || null }),
+    ...(expertise !== undefined && { expertise: expertise.trim() || null }),
+  };
+  const seller = await prisma.sellerProfile.update({ where: { userId: user.id }, data });
+  return { seller: formatSeller(seller) };
+}
+
 export async function listSellerApplications({ status = 'pending' } = {}) {
   const rows = await prisma.sellerProfile.findMany({
     where: { status },
@@ -113,9 +133,10 @@ async function forbiddenNamesOf(userId) {
  * priceVnd: 0 = mien phi (don 0d) hoac 5.000-500.000, boi 1.000 (validPriceVnd).
  * Truyen rieng da hoan tat -> ban sao `published` (go ca nhan hoa) + listing `submitted` + luot duyet.
  * Ban rieng bat giong doc -> ban sao cung bat va SINH LAI giong doc bang ten chung (audio cu chua ten that,
- * khong dung lai duoc). Specialist chi nhan duyet khi giong doc xong (claimReview).
+ * khong dung lai duoc). Phien ban moi (previousListingId) dung lai audio cua ban dang ban o doan chu khong doi
+ * (reuseNarration), chi doc lai doan da sua. Specialist chi nhan duyet khi giong doc xong (claimReview).
  */
-export async function createListing(user, body, narrationOptions) {
+export async function createListing(user, body, narrationOptions, { previousListingId = null } = {}) {
   const seller = await prisma.sellerProfile.findUnique({ where: { userId: user.id } });
   if (seller?.status !== 'approved') throw ApiError.forbidden('Ba mẹ cần được duyệt hồ sơ người bán trước khi đăng bán.');
   const plan = await activePlan(user.id);
@@ -207,9 +228,14 @@ export async function createListing(user, body, narrationOptions) {
         priceVnd: BigInt(body.priceVnd),
         status: 'submitted',
         hasAiContent: story.length !== 'custom' || story.aiRequests.length > 0,
+        previousListingId,
       },
     });
     await tx.moderationReview.create({ data: { listingId: created.id, reviewType: 'submission' } });
+    if (previousListingId && story.useTts) {
+      const live = await tx.listing.findUniqueOrThrow({ where: { id: previousListingId }, select: { publishedStoryId: true } });
+      await reuseNarration(tx, copy.id, live.publishedStoryId, await loadVoice(tx));
+    }
     return {
       listing: await tx.listing.findUniqueOrThrow({ where: { id: created.id }, include: LISTING_INCLUDE }),
       jobs: await prepareNarration(tx, copy.id),
@@ -217,6 +243,64 @@ export async function createListing(user, body, narrationOptions) {
   }, TX);
   await dispatchNarration(jobs, narrationOptions); // Redis loi -> clip failed, nguoi ban bam thu lai
   return { listing: await withNarration(formatListing(listing)) };
+}
+
+// ---------------------------------------------------------------------------
+// Phien ban (phieu dang ky: "manage published versions")
+// ---------------------------------------------------------------------------
+
+const PENDING_VERSION = ['submitted', 'in_review'];
+
+/**
+ * POST /listings/:listingId/versions { storyId?, title, description?, priceVnd, aliases } — dang phien ban moi
+ * cua truyen DANG BAN. Ban dang ban van ban binh thuong trong luc phien ban moi cho duyet. `storyId` mac dinh
+ * la truyen rieng goc (nguoi ban sua truyen goc roi cap nhat). Moi luc mot phien ban cho duyet.
+ */
+export async function createListingVersion(user, listingId, body, narrationOptions) {
+  const live = await prisma.listing.findFirst({
+    where: { id: listingId, sellerId: user.id },
+    include: { publishedStory: { select: { sourceStoryId: true } } },
+  });
+  if (!live) throw ApiError.notFound('Không tìm thấy truyện đang bán.');
+  if (live.status !== 'published') throw new ApiError(StatusCodes.CONFLICT, 'Chỉ cập nhật phiên bản cho truyện đang bán.');
+  const pending = await prisma.listing.findFirst({ where: { previousListingId: live.id, status: { in: PENDING_VERSION } }, select: { id: true } });
+  if (pending) throw new ApiError(StatusCodes.CONFLICT, 'Truyện này đang có một phiên bản mới chờ duyệt.');
+  const storyId = body.storyId ?? live.publishedStory.sourceStoryId;
+  if (!storyId) throw unprocessable('Chọn truyện dùng cho phiên bản mới.');
+  return createListing(user, { ...body, storyId }, narrationOptions, { previousListingId: live.id });
+}
+
+/**
+ * Phien ban moi duoc duyet -> thay ban cu: quyen doc, danh gia, bo dem chuyen sang ban moi; gia sach cua be
+ * doi sang ban moi; ban cu `archived` (het hien tren cho). Lich su doc / diem EQ giu tren truyen cu.
+ */
+async function promoteVersion(tx, listing) {
+  const prev = await tx.listing.findUnique({ where: { id: listing.previousListingId } });
+  if (!prev || !['published', 'suspended'].includes(prev.status)) return;
+  await tx.entitlement.updateMany({ where: { listingId: prev.id }, data: { listingId: listing.id } });
+  await tx.productReview.updateMany({ where: { listingId: prev.id }, data: { listingId: listing.id } });
+  await tx.bookshelfItem.updateMany({ where: { storyId: prev.publishedStoryId }, data: { storyId: listing.publishedStoryId } });
+  await tx.listing.update({
+    where: { id: listing.id },
+    data: {
+      purchaseCount: { increment: prev.purchaseCount },
+      freeClaimCount: { increment: prev.freeClaimCount },
+      ratingAvg: prev.ratingAvg,
+      ratingCount: prev.ratingCount,
+    },
+  });
+  await tx.listing.update({ where: { id: prev.id }, data: { status: 'archived' } });
+}
+
+/** Phien ban dang ban hien tai cua mot listing (di theo chuoi previous_listing_id ve phia moi nhat). */
+export async function currentVersion(db, listingId) {
+  let current = await db.listing.findUnique({ where: { id: listingId } });
+  for (let i = 0; current && i < 20; i += 1) {
+    const next = await db.listing.findFirst({ where: { previousListingId: current.id, status: { in: ['published', 'suspended'] } } });
+    if (!next) break;
+    current = next;
+  }
+  return current;
 }
 
 /** Tien do giong doc cua ban dang ban (nguoi ban + Specialist thay; Specialist chi duyet khi xong). */
@@ -394,6 +478,9 @@ export async function decide(moderator, reviewId, body, { now = new Date() } = {
       where: { id: review.listingId },
       data: { status: LISTING_STATUS_BY_DECISION[body.decision], ...(body.decision === 'approved' && !review.listing.publishedAt && { publishedAt: now }) },
     });
+    if (body.decision === 'approved' && review.reviewType === 'submission' && review.listing.previousListingId) {
+      await promoteVersion(tx, review.listing);
+    }
     if (review.reviewType !== 'submission') await closeOpenReports(tx, moderator.id, review.listingId, body.decision, now);
     const strikeSource = body.decision === 'taken_down' ? 'takedown' : body.decision === 'rejected' && body.issueStrike ? 'rejection' : null;
     if (strikeSource) {
@@ -404,7 +491,7 @@ export async function decide(moderator, reviewId, body, { now = new Date() } = {
 }
 
 export default {
-  getMySeller, applySeller, listSellerApplications, decideSeller,
-  createListing, getMyListings,
+  getMySeller, applySeller, updateMySeller, listSellerApplications, decideSeller,
+  createListing, createListingVersion, getMyListings,
   getQueue, claimReview, getReview, viewPage, decide,
 };

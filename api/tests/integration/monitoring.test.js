@@ -40,7 +40,7 @@ async function withPlan(code) {
 }
 
 /** Nguoi ban da duyet + truyen mien phi dang ban. Truyen ban them cung nguoi ban: truyen `seller`. */
-async function publishedListing(existingSeller) {
+async function publishedListing(existingSeller, { decidedAt = new Date() } = {}) {
   const s = existingSeller ?? (await withPlan('FAMILY_MONTH'));
   if (!existingSeller) await prisma.sellerProfile.create({ data: { userId: s.user.id, displayName: `Người bán ${Date.now()}`, status: 'approved' } });
   const child = await createChild(s.user.id, 'Bin');
@@ -55,7 +55,7 @@ async function publishedListing(existingSeller) {
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const { listing } = created.body.data;
-  await prisma.moderationReview.updateMany({ where: { listingId: listing.id }, data: { decision: 'approved', decidedAt: new Date() } });
+  await prisma.moderationReview.updateMany({ where: { listingId: listing.id }, data: { decision: 'approved', decidedAt } });
   await prisma.listing.update({ where: { id: listing.id }, data: { status: 'published', publishedAt: new Date() } });
   return { seller: s, listing };
 }
@@ -181,12 +181,14 @@ test('canh cao: du 3 -> khoa tai khoan ban (an truyen khoi cho); khang nghi -> A
 
 test('kiem tra ngau nhien: Specialist tao dot -> luot random_audit tren truyen dang ban, khong trung luot dang mo', { skip }, async () => {
   const mod = await createUser({ role: 'specialist' });
-  await publishedListing();
-  const run = await call(mod.token, 'POST', '/moderation/audits/run', { count: 2 });
+  const { listing: fresh } = await publishedListing(); // vua duyet xong -> khong bi chon kiem lai
+  await publishedListing(undefined, { decidedAt: new Date(Date.now() - 40 * 86_400_000) });
+  const run = await call(mod.token, 'POST', '/moderation/audits/run', { count: 20 });
   assert.equal(run.status, 201, JSON.stringify(run.body));
   assert.ok(run.body.data.created >= 1);
   const reviews = await prisma.moderationReview.findMany({ where: { id: { in: run.body.data.reviewIds } }, include: { listing: true } });
   assert.ok(reviews.every((r) => r.reviewType === 'random_audit' && r.listing.status === 'published'));
+  assert.ok(reviews.every((r) => r.listingId !== fresh.id), 'truyen vua duyet trong 30 ngay khong bi chon');
   for (const r of reviews) assert.equal(await prisma.moderationReview.count({ where: { listingId: r.listingId, decidedAt: null } }), 1);
 
   const audits = (await call(mod.token, 'GET', '/moderation/audits?open=true')).body.data.audits;
