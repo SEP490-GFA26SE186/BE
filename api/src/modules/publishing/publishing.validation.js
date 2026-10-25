@@ -10,6 +10,17 @@ const applySeller = z.object({
     expertise: z.string().max(1000).optional(),
   }),
 });
+// Sua ho so ban (biet danh / gioi thieu / kinh nghiem); de trong bio / expertise = xoa.
+const updateSeller = z.object({
+  body: z
+    .object({
+      displayName: z.string().trim().min(2, 'Biệt danh tối thiểu 2 ký tự').max(100).optional(),
+      bio: z.string().max(2000).optional(),
+      expertise: z.string().max(1000).optional(),
+    })
+    .strict()
+    .refine((b) => Object.keys(b).length > 0, { message: 'Không có gì để cập nhật' }),
+});
 const sellerDecision = z.object({ params: z.object({ userId: uuid('userId') }), body: z.object({ approve: z.boolean() }) });
 const sellerList = z.object({ query: z.object({ status: z.enum(['pending', 'approved', 'rejected', 'suspended']).default('pending') }) });
 
@@ -45,4 +56,4 @@ const decide = z.object({
     .strict(),
 });
 
-export default { applySeller, sellerDecision, sellerList, createListing, review, viewPage, decide };
+export default { applySeller, updateSeller, sellerDecision, sellerList, createListing, review, viewPage, decide };

@@ -7,6 +7,7 @@ const ok = (fn, statusCode) => catchAsync(async (req, res) => ApiResponse.succes
 export default {
   getMySeller: ok((req) => svc.getMySeller(req.user)),
   applySeller: ok((req) => svc.applySeller(req.user, req.body), StatusCodes.CREATED),
+  updateMySeller: ok((req) => svc.updateMySeller(req.user, req.body)),
   listSellerApplications: ok(async (req) => ({ sellers: await svc.listSellerApplications(req.query) })),
   decideSeller: ok((req) => svc.decideSeller(req.user, req.params.userId, req.body)),
   createListing: ok((req) => svc.createListing(req.user, req.body), StatusCodes.CREATED),

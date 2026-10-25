@@ -191,3 +191,27 @@ test('mua trung (hai don cung duoc tra): khong giao lai, khong cong doanh thu; t
   assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).purchaseCount, 1);
   assert.equal((await wallet(seller.user.id)).earningPendingVnd, 15200n);
 });
+
+test('ho so cong khai nguoi ban: thong tin + truyen dang ban; sua biet danh khi da duyet; chua duyet -> 404', { skip }, async () => {
+  const { seller, listing } = await publishedListing(0);
+  const buyer = await withPlan('FREE');
+
+  const res = await call(buyer.token, 'GET', `/market/sellers/${seller.user.id}`);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const { seller: profile, items } = res.body.data;
+  assert.equal(profile.id, seller.user.id);
+  assert.equal(profile.listingCount, 1);
+  assert.deepEqual(items.map((i) => i.id), [listing.id]);
+  assert.ok('totalSales' in profile && 'ratingAvg' in profile);
+
+  const upd = await call(seller.token, 'PUT', '/sellers/me', { displayName: '  Mẹ Mít kể chuyện ', bio: 'Giáo viên mầm non' });
+  assert.equal(upd.status, 200, JSON.stringify(upd.body));
+  assert.equal(upd.body.data.seller.displayName, 'Mẹ Mít kể chuyện');
+  assert.equal((await call(buyer.token, 'GET', `/market/sellers/${seller.user.id}`)).body.data.seller.bio, 'Giáo viên mầm non');
+  assert.equal((await call(seller.token, 'PUT', '/sellers/me', {})).status, 400, 'body rong');
+  assert.equal((await call(buyer.token, 'PUT', '/sellers/me', { bio: 'x' })).status, 404, 'chua co ho so ban');
+
+  await prisma.sellerProfile.update({ where: { userId: seller.user.id }, data: { status: 'suspended' } });
+  assert.equal((await call(buyer.token, 'GET', `/market/sellers/${seller.user.id}`)).status, 404, 'nguoi ban bi khoa khong hien');
+  assert.equal((await call(seller.token, 'PUT', '/sellers/me', { bio: 'x' })).status, 409);
+});

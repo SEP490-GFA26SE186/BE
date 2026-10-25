@@ -77,6 +77,25 @@ export async function applySeller(user, { displayName, bio, expertise }) {
   return { seller: formatSeller(seller) };
 }
 
+/**
+ * PUT /sellers/me — sua ho so ban khi dang cho duyet hoac da duyet (khong can duyet lai: biet danh chi la ten
+ * hien thi; Specialist van thay ho so moi o trang duyet nguoi ban). Bi tu choi -> nop lai bang /apply.
+ */
+export async function updateMySeller(user, { displayName, bio, expertise }) {
+  const existing = await prisma.sellerProfile.findUnique({ where: { userId: user.id } });
+  if (!existing) throw ApiError.notFound('Ba mẹ chưa có hồ sơ bán.');
+  if (!['pending', 'approved'].includes(existing.status)) {
+    throw new ApiError(StatusCodes.CONFLICT, existing.status === 'suspended' ? 'Tài khoản bán đang bị tạm khoá.' : 'Hồ sơ bị từ chối: hãy nộp lại hồ sơ.');
+  }
+  const data = {
+    ...(displayName !== undefined && { displayName: displayName.trim() }),
+    ...(bio !== undefined && { bio: bio.trim() || null }),
+    ...(expertise !== undefined && { expertise: expertise.trim() || null }),
+  };
+  const seller = await prisma.sellerProfile.update({ where: { userId: user.id }, data });
+  return { seller: formatSeller(seller) };
+}
+
 export async function listSellerApplications({ status = 'pending' } = {}) {
   const rows = await prisma.sellerProfile.findMany({
     where: { status },
@@ -404,7 +423,7 @@ export async function decide(moderator, reviewId, body, { now = new Date() } = {
 }
 
 export default {
-  getMySeller, applySeller, listSellerApplications, decideSeller,
+  getMySeller, applySeller, updateMySeller, listSellerApplications, decideSeller,
   createListing, getMyListings,
   getQueue, claimReview, getReview, viewPage, decide,
 };

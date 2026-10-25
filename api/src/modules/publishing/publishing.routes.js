@@ -7,6 +7,7 @@ import v from './publishing.validation.js';
 export const sellersRouter = Router();
 sellersRouter.get('/me', auth, authorize('parent'), c.getMySeller);
 sellersRouter.post('/apply', auth, authorize('parent'), validate(v.applySeller), c.applySeller);
+sellersRouter.put('/me', auth, authorize('parent'), validate(v.updateSeller), c.updateMySeller);
 
 export const listingsRouter = Router();
 listingsRouter.get('/mine', auth, authorize('parent'), c.getMyListings);
