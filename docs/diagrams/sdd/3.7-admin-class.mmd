@@ -1,0 +1,57 @@
+classDiagram
+  class AdminRoutes {
+    +GET accounts()
+    +PATCH account(userId)
+    +POST moderators()
+    +GET POST PUT plans()
+    +PUT settings(key)
+    +GET financeSummary()
+    +GET auditLogs()
+  }
+  class AdminService {
+    +overview()
+    +listAccounts(query)
+    +setAccountActive(admin, userId, isActive)
+    +createModerator(admin, body)
+    +createPlan(admin, body)
+    +updatePlan(admin, id, body)
+    +getSettings()
+    +updateSetting(admin, key, value)
+    +listAuditLogs(query)
+  }
+  class FinanceService {
+    +summary(range)
+    +reconciliation()
+    +fixCounters(admin)
+  }
+  class SettingsRegistry {
+    +SETTINGS
+    +settingError(key, value, current)
+    +describeSettings()
+  }
+  class User {
+    UserRole role
+    bool isActive
+  }
+  class Plan {
+    bigint priceVnd
+    int durationMonths
+    int creditsPerMonth
+    bool canSell
+  }
+  class PlatformSetting {
+    string key
+    json value
+  }
+  class AdminAuditLog {
+    string action
+    json beforeState
+    json afterState
+  }
+  AdminRoutes --> AdminService
+  AdminRoutes --> FinanceService
+  AdminService --> SettingsRegistry
+  AdminService --> User
+  AdminService --> Plan
+  AdminService --> PlatformSetting
+  AdminService --> AdminAuditLog : every change

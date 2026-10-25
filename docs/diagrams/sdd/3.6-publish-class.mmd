@@ -20,7 +20,8 @@ classDiagram
     +identifyingNames(story)
     +aliasErrors(aliases)
     +leftoverNameErrors(texts, names)
-    +reviewProgress(review)
+    +reviewProgress(pageIds, viewedIds)
+    +validPriceVnd(price)
     +claimedByOther(review, id, now)
   }
   class NarrationService
@@ -37,7 +38,7 @@ classDiagram
     uuid id
     ListingStatus status
     uuid publishedStoryId
-    uuid priceTierId
+    bigint priceVnd
     int purchaseCount
   }
   class ModerationReview {
@@ -49,7 +50,6 @@ classDiagram
     datetime decidedAt
   }
   class ReviewPageView
-  class ReviewChecklistResult
   PublishingRoutes --> PublishingService
   PublishingService --> PublishRules
   PublishingService --> NarrationService : regenerate voice for copy
@@ -57,4 +57,3 @@ classDiagram
   SellerProfile "1" --> "*" Listing
   Listing "1" --> "*" ModerationReview
   ModerationReview "1" --> "*" ReviewPageView
-  ModerationReview "1" --> "*" ReviewChecklistResult

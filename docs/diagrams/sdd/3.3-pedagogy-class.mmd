@@ -1,8 +1,7 @@
 classDiagram
   class SubSkillsService {
-    +createSubSkill(user, body)
+    +listSubSkills(query)
     +updateSubSkill(user, id, body)
-    +deleteSubSkill(id)
   }
   class TopicsService {
     +createTopic(user, body)
@@ -13,6 +12,7 @@ classDiagram
     +createTemplate(user, body)
     +saveDraft(user, id, body)
     +publish(user, id)
+    +duplicateTemplate(user, id)
     +deleteTemplate(id)
   }
   class TemplateRules {
@@ -26,7 +26,8 @@ classDiagram
   class EqSubSkill {
     string code
     uuid skillId
-    uuid caselReferenceId
+    string caselTextEn
+    bool isActive
     int ageMin
     int ageMax
   }
@@ -43,6 +44,7 @@ classDiagram
   class Topic {
     string title
     uuid skillId
+    string guidance
     bool isActive
   }
   SubSkillsService --> EqSubSkill

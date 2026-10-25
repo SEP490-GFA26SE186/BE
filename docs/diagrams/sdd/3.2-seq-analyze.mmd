@@ -1,0 +1,24 @@
+sequenceDiagram
+  actor P as Parent
+  participant API as StoriesAnalysisService
+  participant DB as PostgreSQL
+  participant AI as AI Service
+  P->>API: POST /stories/analyze {situation, characters, length, subSkillIds?}
+  API->>DB: AI usage blocked? analyses today < limits.story_analysis_per_day?
+  alt blocked or daily limit reached
+    API-->>P: 403 / 429
+  end
+  API->>API: replace real names with {NVx}, check blocked keywords
+  API->>DB: usable sub-skills (with a published template version) + child levels
+  API->>AI: analyze tokenized story (synchronous, 0 credit)
+  AI-->>API: moment summary, seed event, 1-2 sub-skill codes
+  API->>API: validate output, sign analysisToken (HMAC, 2 h)
+  API->>DB: insert ai_requests (story_analysis)
+  API-->>P: 200 summary + sub-skills (real names restored) + analysisToken
+  P->>API: POST /stories {entry: family, situation, characters, length, analysisToken}
+  API->>API: verify token (owner, story hash, characters)
+  alt token expired or story / characters changed
+    API-->>P: 422 analyze again
+  end
+  API->>DB: create story + story_sub_skills (position 1 = main) + skeleton
+  API-->>P: 201 draft story

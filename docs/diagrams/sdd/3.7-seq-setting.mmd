@@ -1,0 +1,15 @@
+sequenceDiagram
+  actor A as Admin
+  participant API as AdminService
+  participant R as SettingsRegistry
+  participant DB as PostgreSQL
+  A->>API: PUT /admin/settings/:key {value}
+  API->>DB: BEGIN, load current settings
+  API->>R: settingError(key, value, current)
+  alt unknown key, wrong type or out of range
+    API-->>A: 422 with reason
+  end
+  API->>DB: upsert platform_settings (updated_by = admin)
+  API->>DB: insert admin_audit_logs (setting.update, before, after)
+  API->>DB: COMMIT
+  API-->>A: 200 updated settings

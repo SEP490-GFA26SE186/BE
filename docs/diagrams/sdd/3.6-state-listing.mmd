@@ -1,7 +1,7 @@
 stateDiagram-v2
   [*] --> submitted : Seller creates listing
   submitted --> in_review : Specialist claims review
-  in_review --> published : Approved (100% pages viewed, checklist passed)
+  in_review --> published : Approved (100% pages viewed)
   in_review --> changes_requested : Changes requested (comment)
   in_review --> rejected : Rejected (comment, strike)
   published --> suspended : Report threshold reached / Specialist suspends

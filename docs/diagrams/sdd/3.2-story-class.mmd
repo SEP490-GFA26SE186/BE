@@ -1,6 +1,8 @@
 classDiagram
   class StoriesRoutes {
+    +POST analyze()
     +POST stories()
+    +PUT cover(id)
     +PUT pages(pageId)
     +PUT checkpoints(cpId)
     +POST generate(id)
@@ -9,10 +11,19 @@ classDiagram
   }
   class StoriesService {
     +createStory(user, body)
+    +prepareFamily(user, body)
+    +setCover(user, id, sceneId)
     +updateStory(user, id, body)
     +bindCharacters(user, id, ids)
     +tokenizeOrReject(text, ctx)
     +assertNoBlockedKeywords(tx, storyId)
+  }
+  class StoriesAnalysisService {
+    +analyzeStory(user, body)
+  }
+  class AnalysisToken {
+    +signAnalysisToken(payload)
+    +verifyAnalysisToken(token, ownerId)
   }
   class StoriesEditorService {
     +addPage() deletePage()
@@ -47,9 +58,13 @@ classDiagram
   class Story {
     uuid id
     StoryKind kind
+    StoryEntry entry
     StoryLength length
     StoryStatus status
     string situation
+    string momentSummary
+    bool scored
+    uuid coverSceneId
     datetime reviewedAt
   }
   class AiRequest {
@@ -60,6 +75,10 @@ classDiagram
     string idempotencyKey
   }
   StoriesRoutes --> StoriesService
+  StoriesRoutes --> StoriesAnalysisService
+  StoriesAnalysisService --> AnalysisToken
+  StoriesAnalysisService --> AiClient : sync, no credit
+  StoriesService --> AnalysisToken
   StoriesRoutes --> StoriesEditorService
   StoriesRoutes --> GenerationService
   GenerationService --> CreditLedger
@@ -68,4 +87,9 @@ classDiagram
   AiProcessor --> GenerationStore
   AiProcessor --> AiClient
   GenerationStore --> CreditLedger
+  class StorySubSkill {
+    StorySubSkillSource source
+    int position
+  }
   Story "1" --> "*" AiRequest
+  Story "1" --> "1..2" StorySubSkill : family entry

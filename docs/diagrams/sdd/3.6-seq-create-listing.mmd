@@ -3,19 +3,19 @@ sequenceDiagram
   participant API as PublishingService
   participant DB as PostgreSQL
   participant N as NarrationService
-  S->>API: POST /listings {storyId, title, priceTierId, aliases}
-  API->>DB: seller approved? plan canSell? tier active?
+  S->>API: POST /listings {storyId, title, description, priceVnd, aliases}
+  API->>DB: seller approved? plan canSell? price 0 or 5,000-500,000 step 1,000?
   API->>DB: load private story (owned, reviewed)
   alt not reviewed or gaps
     API-->>S: 422
   end
-  API->>API: aliasErrors + leftoverNameErrors (real names, situation)
+  API->>API: aliasErrors + leftoverNameErrors (real names, situation, family moment)
   alt personal info left
     API-->>S: 422 Personal information not fully removed
   end
   API->>DB: BEGIN
-  API->>DB: copy story as kind=published (no situation, aliasName characters)
-  API->>DB: copy pages, checkpoints (template trace kept), ready scene images
+  API->>DB: copy story as kind=published (no situation / moment / seed event, aliasName characters)
+  API->>DB: copy pages, checkpoints (template trace kept), ready scene images and cover key
   API->>N: queue narration with generic names
   API->>DB: insert listings(submitted) + moderation_reviews(submission)
   API->>DB: COMMIT

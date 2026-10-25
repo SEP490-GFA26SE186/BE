@@ -10,14 +10,15 @@ sequenceDiagram
     M->>API: POST /submissions/:id/pages/:pageId/view {comment}
     API->>DB: upsert review_page_views
   end
-  M->>API: POST /submissions/:id/decision {decision, checklist, comment}
+  M->>API: POST /submissions/:id/decision {decision, comment, issueStrike}
+  Note over M: 7-rule pedagogical checklist is checked on the web, not sent
   API->>DB: decision allowed for review type?
-  alt approved but coverage < 100% or checklist not all passed
-    API-->>M: 422 must view all pages and pass checklist
+  alt approved but coverage < 100% or narration not ready
+    API-->>M: 422 must view all pages
   else changes_requested / rejected without comment
     API-->>M: 422 comment required
   else ok
-    API->>DB: save checklist results, decision, listing status
+    API->>DB: save decision, listing status, close open reports
     opt rejected / taken_down
       API->>DB: issueStrikeTx (3 active strikes -> seller suspended)
     end

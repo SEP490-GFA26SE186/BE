@@ -17,4 +17,6 @@ Parent --> UC05
 Parent --> UC06
 Parent --> UC07
 Parent --> UC08
+actor "AI Service" as AIS
+UC07 --> AIS
 @enduml
