@@ -5,6 +5,7 @@ import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import {
+  AUDIT_COOLDOWN_DAYS,
   DAY_MS,
   MODERATION_SETTING_KEYS,
   auditDue,
@@ -342,8 +343,8 @@ export async function decideAppeal(admin, appealId, { approve, note }, { now = n
 // ---------------------------------------------------------------------------
 
 /**
- * Chon toi da `auditPerWeek` truyen dang ban (nguoi ban con hoat dong, chua co luot duyet dang mo),
- * uu tien truyen lau chua duoc kiem. Worker goi moi chu ky: chi chon khi tuan nay chua chon (idempotent).
+ * Chon toi da `auditPerWeek` truyen dang ban (nguoi ban con hoat dong, chua co luot duyet dang mo, khong co luot
+ * duyet nao xong trong AUDIT_COOLDOWN_DAYS ngay), uu tien truyen lau chua duoc Specialist xem. Worker goi moi chu ky: chi chon khi tuan nay chua chon (idempotent).
  * force (Specialist bam) -> chon ngay, bo qua moc tuan.
  */
 export async function scheduleRandomAudits(db = prisma, { now = new Date(), force = false, count } = {}) {
@@ -351,14 +352,17 @@ export async function scheduleRandomAudits(db = prisma, { now = new Date(), forc
   if (!force && !auditDue(last?.createdAt, now)) return { created: 0, reviewIds: [] };
   const { auditPerWeek } = await loadModerationSettings(db);
   const take = count ?? auditPerWeek;
-  // Ngau nhien trong nhom "lau chua kiem nhat": chua tung kiem truoc, roi kiem lau nhat.
+  const recent = new Date(now.getTime() - AUDIT_COOLDOWN_DAYS * DAY_MS);
+  // Ngau nhien trong nhom "lau chua duoc xem nhat" (moi loai luot duyet: duyet dang ban, kiem tra, bao cao).
   const picked = await db.$queryRaw`
     SELECT l.id
     FROM listings l
     JOIN seller_profiles s ON s.user_id = l.seller_id AND s.status = 'approved'
     WHERE l.status = 'published'
-      AND NOT EXISTS (SELECT 1 FROM moderation_reviews r WHERE r.listing_id = l.id AND r.decided_at IS NULL)
-    ORDER BY (SELECT max(r.created_at) FROM moderation_reviews r WHERE r.listing_id = l.id AND r.review_type = 'random_audit') ASC NULLS FIRST, random()
+      AND NOT EXISTS (
+        SELECT 1 FROM moderation_reviews r WHERE r.listing_id = l.id AND (r.decided_at IS NULL OR r.decided_at > ${recent})
+      )
+    ORDER BY (SELECT max(r.decided_at) FROM moderation_reviews r WHERE r.listing_id = l.id) ASC NULLS FIRST, random()
     LIMIT ${take}`;
   const reviewIds = [];
   for (const { id } of picked) {

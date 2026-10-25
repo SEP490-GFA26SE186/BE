@@ -3,6 +3,10 @@
 
 export const DAY_MS = 86_400_000;
 
+// Truyen vua duoc Specialist xem (duyet dang ban, kiem tra, xu ly bao cao) trong khoang nay thi kiem tra ngau
+// nhien bo qua: vua duyet xong ma bi chon kiem lai la phi cong. Moc tinh theo decided_at cua moi loai luot duyet.
+export const AUDIT_COOLDOWN_DAYS = 30;
+
 /** Mac dinh khi platform_settings chua co khoa moderation.* (Admin sua o buoc 4). */
 export const MODERATION_DEFAULTS = {
   reportThreshold: 3, // so nguoi KHAC NHAU bao cao trong 24 gio -> tu tam go
