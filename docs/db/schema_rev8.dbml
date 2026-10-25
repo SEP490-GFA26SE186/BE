@@ -849,7 +849,7 @@ Table listings {
   id uuid [pk, default: `gen_random_uuid()`]
   seller_id uuid [not null]
   published_story_id uuid [unique, not null, note: 'stories.kind = published']
-  previous_listing_id uuid [note: 'phien ban truoc']
+  previous_listing_id uuid [note: 'phien ban truoc: duyet ban moi -> quyen doc / danh gia / bo dem / gia sach chuyen sang, ban truoc archived']
   title varchar(200) [not null]
   description text
   cover_image_key varchar(300)

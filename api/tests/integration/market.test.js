@@ -215,3 +215,45 @@ test('ho so cong khai nguoi ban: thong tin + truyen dang ban; sua biet danh khi 
   assert.equal((await call(buyer.token, 'GET', `/market/sellers/${seller.user.id}`)).status, 404, 'nguoi ban bi khoa khong hien');
   assert.equal((await call(seller.token, 'PUT', '/sellers/me', { bio: 'x' })).status, 409);
 });
+
+test('phien ban moi: ban cu van ban khi cho duyet; duyet -> nguoi da mua, danh gia, bo dem, gia sach sang ban moi; ban cu archived', { skip }, async () => {
+  const { seller, listing } = await publishedListing(0);
+  const buyer = await withPlan('FREE');
+  const child = await createChild(buyer.user.id, 'Su');
+  await call(buyer.token, 'POST', '/market/checkout', { listingId: listing.id });
+  await prisma.productReview.create({ data: { listingId: listing.id, parentId: buyer.user.id, rating: 5 } });
+  await prisma.listing.update({ where: { id: listing.id }, data: { ratingAvg: 5, ratingCount: 1 } });
+  const oldStoryId = listing.publishedStoryId;
+  await prisma.bookshelfItem.create({ data: { childId: child.id, storyId: oldStoryId } });
+
+  const v = await call(seller.token, 'POST', `/listings/${listing.id}/versions`, {
+    title: 'Bé đi chơi (bản mới)', priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
+  });
+  assert.equal(v.status, 201, JSON.stringify(v.body));
+  const next = v.body.data.listing;
+  assert.equal(next.previousListingId, listing.id);
+  assert.equal(next.status, 'submitted');
+  assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).status, 'published', 'ban cu van ban');
+  const dup = await call(seller.token, 'POST', `/listings/${listing.id}/versions`, { title: 'Lần nữa', priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }] });
+  assert.equal(dup.status, 409, 'moi luc mot phien ban cho duyet');
+
+  const mod = await createUser({ role: 'specialist' });
+  const review = await prisma.moderationReview.findFirst({ where: { listingId: next.id } });
+  assert.equal((await call(mod.token, 'POST', `/moderation/submissions/${review.id}/claim`)).status, 200);
+  for (const pg of await prisma.storyPage.findMany({ where: { storyId: next.publishedStoryId } })) {
+    await call(mod.token, 'POST', `/moderation/submissions/${review.id}/pages/${pg.id}/view`, {});
+  }
+  const done = await call(mod.token, 'POST', `/moderation/submissions/${review.id}/decision`, { decision: 'approved' });
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+
+  const [oldL, newL] = await Promise.all([prisma.listing.findUnique({ where: { id: listing.id } }), prisma.listing.findUnique({ where: { id: next.id } })]);
+  assert.deepEqual([oldL.status, newL.status], ['archived', 'published']);
+  assert.equal(newL.freeClaimCount, oldL.freeClaimCount);
+  assert.deepEqual([Number(newL.ratingAvg), newL.ratingCount], [5, 1]);
+  assert.ok(await prisma.entitlement.findFirst({ where: { parentId: buyer.user.id, listingId: next.id, revokedAt: null } }), 'nguoi da mua co ban moi');
+  assert.ok(await prisma.productReview.findFirst({ where: { listingId: next.id, parentId: buyer.user.id } }), 'danh gia theo sang');
+  assert.ok(await prisma.bookshelfItem.findFirst({ where: { childId: child.id, storyId: next.publishedStoryId } }), 'gia sach doi sang ban moi');
+  assert.equal((await call(buyer.token, 'GET', `/market/listings/${listing.id}`)).status, 404, 'ban cu het hien tren cho');
+  assert.equal((await call(buyer.token, 'GET', `/market/listings/${next.id}`)).status, 200);
+  assert.equal((await call(seller.token, 'POST', `/listings/${listing.id}/versions`, { title: 'Bản cũ hơn', priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }] })).status, 409, 'ban da luu tru');
+});

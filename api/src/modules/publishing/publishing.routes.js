@@ -12,6 +12,7 @@ sellersRouter.put('/me', auth, authorize('parent'), validate(v.updateSeller), c.
 export const listingsRouter = Router();
 listingsRouter.get('/mine', auth, authorize('parent'), c.getMyListings);
 listingsRouter.post('/', auth, authorize('parent'), validate(v.createListing), c.createListing);
+listingsRouter.post('/:listingId/versions', auth, authorize('parent'), validate(v.createVersion), c.createListingVersion);
 
 // Gan TRUOC router /moderation cu (keywords / reports giu lai cho Phase 5); duong dan khong trung.
 export const moderationReviewRouter = Router();

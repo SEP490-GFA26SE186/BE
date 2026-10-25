@@ -40,6 +40,12 @@ const createListing = z.object({
   }),
 });
 
+// Phien ban moi cua truyen dang ban: nhu dang ban, storyId tuy chon (mac dinh truyen rieng goc).
+const createVersion = z.object({
+  params: z.object({ listingId: uuid('listingId') }),
+  body: createListing.shape.body.extend({ storyId: uuid('storyId').optional() }),
+});
+
 const review = z.object({ params: z.object({ reviewId: uuid('reviewId') }) });
 const viewPage = z.object({
   params: z.object({ reviewId: uuid('reviewId'), pageId: uuid('pageId') }),
@@ -56,4 +62,4 @@ const decide = z.object({
     .strict(),
 });
 
-export default { applySeller, updateSeller, sellerDecision, sellerList, createListing, review, viewPage, decide };
+export default { applySeller, updateSeller, sellerDecision, sellerList, createListing, createVersion, review, viewPage, decide };
