@@ -9,19 +9,19 @@ skinparam usecaseBorderColor #4A6FA5
 actor "Parent" as Parent
 actor "Seller" as Seller
 rectangle "StoryWeaver AI – Seller" {
-  usecase "UC-28\nApply to become seller" as UC28
-  usecase "UC-29\nSubmit story for sale" as UC29
-  usecase "UC-30\nView my listings" as UC30
-  usecase "UC-31\nReply to review" as UC31
-  usecase "UC-32\nManage earnings and bank account" as UC32
-  usecase "UC-33\nRequest / cancel withdrawal" as UC33
-  usecase "UC-34\nAppeal strike" as UC34
+  usecase "UC-29\nApply to become seller" as UC29
+  usecase "UC-30\nSubmit story for sale" as UC30
+  usecase "UC-31\nView my listings" as UC31
+  usecase "UC-32\nReply to review" as UC32
+  usecase "UC-33\nManage earnings and bank account" as UC33
+  usecase "UC-34\nRequest / cancel withdrawal" as UC34
+  usecase "UC-35\nAppeal strike" as UC35
 }
-Parent --> UC28
-Seller --> UC29
+Parent --> UC29
 Seller --> UC30
 Seller --> UC31
 Seller --> UC32
 Seller --> UC33
 Seller --> UC34
+Seller --> UC35
 @enduml

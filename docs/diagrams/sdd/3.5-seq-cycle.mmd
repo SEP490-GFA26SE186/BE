@@ -1,17 +1,28 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
-  participant CR as Cron (worker, every 15 min)
-  participant BS as BillingStore
-  participant DB as PostgreSQL
-  CR->>BS: runBillingCycle(now)
-  BS->>DB: subscriptions active AND next_credit_grant_at <= now
+  autonumber
+  participant CR as :Worker cron (every 15 min)
+  participant ST as :BillingStore
+  participant R as :BillingRules
+  participant L as :CreditLedger
+  participant DB as Database
+  CR->>+ST: runBillingCycle(db, now)
+  ST->>DB: SELECT subscriptions WHERE active AND next_credit_grant_at <= now
+  DB-->>ST: due subscriptions
   loop each subscription
-    BS->>BS: cycleAction(sub, now)
-    alt new month in period
-      BS->>DB: credit_expire (key expire:sub:month)
-      BS->>DB: credit_grant (key grant:sub:month), move next_credit_grant_at
+    ST->>R: cycleAction(subscription, now)
+    R-->>ST: grant / renew_free / expire
+    ST->>DB: BEGIN
+    alt new month inside the period
+      ST->>L: expireCredit(key expire:sub:month)
+      ST->>L: grantCredit(creditsPerMonth, key grant:sub:month)
+      ST->>DB: UPDATE subscriptions SET next_credit_grant_at
     else period ended
-      BS->>DB: subscription expired, fall back to Free plan
+      ST->>L: expireCredit (left-over credit)
+      ST->>DB: startPeriod(Free plan), old subscription expired
     end
+    ST->>DB: COMMIT
   end
-  BS->>DB: orders pending AND expires_at < now -> expired
-  Note over BS,DB: Deterministic idempotency keys make double runs safe
+  ST->>DB: UPDATE orders SET expired WHERE pending AND expires_at < now
+  ST-->>-CR: {granted, renewedFree, expired, ordersExpired}
+  Note over ST,DB: Deterministic idempotency keys make two workers running together safe

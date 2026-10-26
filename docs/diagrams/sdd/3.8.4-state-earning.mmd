@@ -1,0 +1,20 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+stateDiagram-v2
+  [*] --> Pending : Order paid, seller share recorded (earning_pending)
+  Pending --> Available : Cron after market.earning_hold_days, no pending refund (earning_release)
+  Pending --> Reversed : Admin approves refund (earning_reversal)
+  Available --> Reversed : Admin approves refund, balance still enough (earning_reversal)
+  Available --> Locked : Seller requests withdrawal (withdrawal_hold)
+  Locked --> Available : Seller cancels / Admin rejects (withdrawal_release)
+  Locked --> Paid : Admin transfers and marks paid (withdrawal_paid)
+  Paid --> [*]
+  Reversed --> [*]
+  note right of Pending
+    Wallet.earningPendingVnd
+  end note
+  note right of Available
+    Wallet.earningAvailableVnd
+  end note
+  note right of Locked
+    Wallet.earningLockedVnd
+  end note

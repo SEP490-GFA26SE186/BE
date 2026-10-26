@@ -1,0 +1,9 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+stateDiagram-v2
+  [*] --> none : Scene / clip created
+  none --> queued : Job requested
+  queued --> generating : Worker starts
+  generating --> ready : Asset uploaded
+  generating --> failed : Error after retries
+  failed --> queued : Parent retries
+  ready --> queued : Text changed (narration) / redraw (scene)

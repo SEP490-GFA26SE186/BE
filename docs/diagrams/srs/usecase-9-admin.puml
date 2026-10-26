@@ -9,7 +9,7 @@ skinparam usecaseBorderColor #4A6FA5
 actor "Admin" as Admin
 rectangle "StoryWeaver AI – Administration" {
   usecase "UC-50\nManage accounts" as UC50
-  usecase "UC-51\nManage plans and price tiers" as UC51
+  usecase "UC-51\nManage plans" as UC51
   usecase "UC-52\nConfigure platform settings" as UC52
   usecase "UC-53\nDecide refund" as UC53
   usecase "UC-54\nProcess withdrawal" as UC54
@@ -25,4 +25,6 @@ Admin --> UC54
 Admin --> UC55
 Admin --> UC56
 Admin --> UC57
+actor "payOS" as payOS
+UC54 --> payOS
 @enduml

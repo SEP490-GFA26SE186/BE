@@ -4,6 +4,7 @@ title: WEB (Parent / Seller)
 %%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 70}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "lineColor": "#555555"}}}%%
 flowchart LR
   Login["Parent Login"]:::start --> L["Parent Layout<br/>Sidebar 11 items + Credit badge + Child switcher"]
+  L --> VerifyM
   L --> Dash["Dashboard<br/>Stats + EQ radar + Continue reading + Best sellers"]
   L --> Kids["My Children<br/>Child cards + Kid PIN + Reading settings"]
   Kids --> ChildM(["Child Form Modal"])

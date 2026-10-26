@@ -1,121 +1,81 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
+  direction TB
   class AuthRoutes {
-    <<router>>
+    <<routes>>
     +POST /auth/register
     +POST /auth/login
     +POST /auth/refresh-tokens
     +POST /auth/logout
-    +GET /auth/me
     +POST /auth/forgot-password
     +POST /auth/reset-password
-    +PUT /auth/change-password
-    +POST /auth/send-verification-email
-    +POST /auth/verify-email
-    +GET /auth/verify-email
     +POST /auth/kid-pin/set
-    +PUT /auth/kid-pin/change
     +POST /auth/kid-mode/enter
     +POST /auth/kid-mode/exit
   }
-
-  class KidRoutes {
-    <<router>>
-    +use(kidAuth)
-  }
-
   class AuthMiddleware {
-    <<middleware>>
+    <<security>>
     +auth(req, res, next) void
+    +authorize(roles) Middleware
+    +validate(schema) Middleware
   }
-
-  class KidAuthMiddleware {
-    <<middleware>>
-    +kidAuth(req, res, next) void
-  }
-
   class AuthController {
     <<controller>>
     +register(req, res) void
     +login(req, res) void
     +refreshTokens(req, res) void
     +logout(req, res) void
-    +getMe(req, res) void
     +forgotPassword(req, res) void
     +resetPassword(req, res) void
-    +changePassword(req, res) void
-    +sendVerificationEmail(req, res) void
-    +verifyEmail(req, res) void
     +setKidPin(req, res) void
-    +changeKidPin(req, res) void
     +enterKidMode(req, res) void
     +exitKidMode(req, res) void
   }
-
   class AuthService {
     <<service>>
-    +register(data) Object
-    +login(emailOrUsername, password) Object
-    +refreshTokens(refreshToken) Object
+    +register(body) AuthResult
+    +login(body) AuthResult
+    +refreshTokens(refreshToken) AuthTokens
     +logout(refreshToken) void
-    +getUserProfile(userId) Object
-    +forgotPassword(email) Object
-    +resetPassword(token, newPassword) Object
-    +changePassword(userId, currentPassword, newPassword) Object
-    +sendVerificationEmail(userId, email) Object
-    +verifyEmail(rawToken) Object
-    +setKidPin(userId, pin) Object
-    +changeKidPin(userId, currentPin, password, newPin) Object
-    +enterKidMode(parentId, childId) Object
-    +exitKidMode(pin, kidSessionToken, userId) Object
+    +forgotPassword(body) void
+    +resetPassword(body) void
+    +setKidPin(userId, pin) void
+    +changeKidPin(userId, currentPin, newPin) void
+    +enterKidMode(parentId, childId) KidSession
+    +exitKidMode(body) AuthResult
   }
-
   class TokenService {
     <<service>>
-    +hashToken(token) String
-    +generateAuthTokens(user) Object
-    +verifyAndRotateRefreshToken(rawRefreshToken) Object
-    +revokeRefreshToken(rawRefreshToken) void
-    +generateEmailVerificationToken(userId) String
-    +verifyEmailToken(rawToken) User
-    +generatePasswordResetToken(userId) String
-    +resetPasswordWithToken(rawToken, passwordHash) String
-    +generateKidSessionToken(parentUser, childId) Object
-    +verifyKidSessionToken(kidSessionToken) Object
-    +consumeKidSessionToken(tokenId) void
+    +generateAuthTokens(user) AuthTokens
+    +verifyAndRotateRefreshToken(token) AuthResult
+    +revokeRefreshToken(token) void
+    +generatePasswordResetToken(user) string
+    +resetPasswordWithToken(token, hash) void
+    +generateKidSessionToken(parent, childId) string
+    +verifyKidSessionToken(token) AuthToken
+    +consumeKidSessionToken(token) void
   }
-
+  class KidPinLimiter {
+    <<utility>>
+    +lockRemainingMs(userId) int
+    +recordFailure(userId) void
+    +reset(userId) void
+  }
+  class BillingStore {
+    <<repository>>
+    +ensureFreeSubscription(tx, parentId) Subscription
+  }
   class EmailService {
     <<service>>
-    +sendEmail(to, toName, subject, text, html) Object
-    +sendVerificationEmail(to, token, username) void
-    +sendPasswordResetEmail(to, token, username) void
+    +sendVerificationEmail(email, token, name) void
+    +sendPasswordResetEmail(email, token, name) void
   }
-
-  class BillingStore {
-    <<store>>
-    +ensureFreeSubscription(tx, parentId) Object
-  }
-
-  class Bcrypt {
-    <<library>>
-    +hash(plain, saltRounds) String
-    +compare(plain, hash) boolean
-  }
-
-  class JsonWebToken {
-    <<library>>
-    +sign(payload, secret, options) String
-    +verify(token, secret) Object
-  }
-
-  class Brevo {
-    <<external>>
-    +POST /v3/smtp/email
-  }
-
-  class SmtpServer {
-    <<external>>
-    +sendMail(message)
+  class PrismaClient {
+    <<repository>>
+    +user.findFirst(where) User
+    +user.create(data) User
+    +authToken.create(data) AuthToken
+    +childProfile.findFirst(where) ChildProfile
   }
 
   class User {
@@ -125,14 +85,10 @@ classDiagram
     -String username
     -String email
     -String passwordHash
-    -String fullName
-    -String phone
     -String kidExitPinHash
-    -DateTime emailVerifiedAt
+    -Boolean isActive
     -DateTime lastLoginAt
-    -boolean isActive
     -DateTime aiBlockedUntil
-    -DateTime deletedAt
   }
 
   class ChildProfile {
@@ -151,19 +107,23 @@ classDiagram
     -UUID userId
     -AuthTokenType type
     -String tokenHash
-    -UUID replacedById
     -UUID childId
     -DateTime expiresAt
     -DateTime consumedAt
   }
-
+  class ChildProfile {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -String name
+    -Date birthDate
+  }
   class UserRole {
     <<enumeration>>
     admin
     specialist
     parent
   }
-
   class AuthTokenType {
     <<enumeration>>
     refresh
@@ -172,31 +132,19 @@ classDiagram
     kid_session
   }
 
-  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
-  AuthRoutes ..> AuthMiddleware : registers
-  AuthRoutes ..> AuthController : delegates
-  KidRoutes ..> KidAuthMiddleware : registers
-  AuthController ..> AuthService : uses
-  AuthMiddleware ..> JsonWebToken : verifies access token
-  AuthMiddleware ..> User : loads req.user
-  KidAuthMiddleware ..> JsonWebToken : verifies kid token
-  KidAuthMiddleware ..> TokenService : verifyKidSessionToken
-  KidAuthMiddleware ..> ChildProfile : checks child of parent
-  AuthService ..> TokenService : issues / revokes tokens
-  AuthService ..> Bcrypt : hashes password & PIN
-  AuthService ..> EmailService : sends verify / reset email
-  AuthService ..> BillingStore : creates free plan on register
-  AuthService ..> User : manages users
-  AuthService ..> ChildProfile : checks child on enter
-  TokenService ..> JsonWebToken : signs tokens
-  TokenService ..> AuthToken : persists token hash
-  EmailService ..> Brevo : sends email
-  EmailService ..> SmtpServer : sends email (fallback)
-
-  %% Quan hệ dữ liệu (association): khóa ngoại trong database
-  User "1" --> "0..*" ChildProfile : parentOf
-  User "1" --> "0..*" AuthToken : owns
-  ChildProfile "1" --> "0..*" AuthToken : kid_session
-  AuthToken "0..1" --> "0..1" AuthToken : replacedBy
-  User --> UserRole : has
-  AuthToken --> AuthTokenType : has
+  AuthRoutes ..> AuthMiddleware : applies
+  AuthRoutes --> AuthController : routes to
+  AuthController --> AuthService : uses
+  AuthService --> TokenService : issues tokens
+  AuthService ..> KidPinLimiter : exit PIN attempts
+  AuthService ..> BillingStore : Free plan on register
+  AuthService ..> EmailService : sends mail
+  AuthService ..> PrismaClient : persists
+  TokenService ..> PrismaClient : persists
+  PrismaClient ..> User
+  PrismaClient ..> AuthToken
+  PrismaClient ..> ChildProfile
+  User "1" --> "*" AuthToken : has
+  User "1" --> "*" ChildProfile : parent of
+  User --> UserRole
+  AuthToken --> AuthTokenType

@@ -1,0 +1,89 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class WithdrawalRoutes {
+    <<controller>>
+    +GET /sellers/me/earnings
+    +PUT /sellers/me/bank
+    +POST /sellers/me/withdrawals
+    +DELETE /sellers/me/withdrawals/:id
+    +GET /admin/withdrawals
+    +POST /admin/withdrawals/:id/mark-paid
+    +POST /admin/withdrawals/:id/reject
+  }
+  class WithdrawalsService {
+    <<service>>
+    +getEarnings(user) Earnings
+    +updateBank(user, body) SellerProfile
+    +requestWithdrawal(user, amountVnd) WithdrawalRequest
+    +cancelWithdrawal(user, id) WithdrawalRequest
+    +listWithdrawals(query) List~WithdrawalRequest~
+    +markWithdrawalPaid(admin, id, bankTransactionRef) WithdrawalRequest
+    +rejectWithdrawal(admin, id, reason) WithdrawalRequest
+    -release(tx, withdrawal, status) void
+  }
+  class EarningLedger {
+    <<repository>>
+    +moveEarning(tx, entry) void
+    +recordEarning(tx, sellerId, amount, availableAt) void
+    +releaseDueEarnings(db, now) int
+  }
+  class WorkerCron {
+    <<worker>>
+    +releaseDueEarnings() void
+  }
+  class SecretBox {
+    <<utility>>
+    +seal(accountNumber) string
+    +open(sealed) string
+    +maskAccount(accountNumber) string
+  }
+  class SellerProfile {
+    <<entity>>
+    -UUID userId
+    -String bankBin
+    -String bankName
+    -String bankAccountNumber
+    -String bankAccountHolder
+    -DateTime bankUpdatedAt
+  }
+  class WithdrawalRequest {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -BigInt amountVnd
+    -WithdrawalStatus status
+    -Json bankSnapshot
+    -UUID handledBy
+    -String bankTransactionRef
+  }
+  class Wallet {
+    <<entity>>
+    -UUID userId
+    -BigInt earningPendingVnd
+    -BigInt earningAvailableVnd
+    -BigInt earningLockedVnd
+  }
+  class WalletLedger {
+    <<entity>>
+    -LedgerEntryType entryType
+    -BigInt amount
+    -String idempotencyKey
+  }
+  class WithdrawalStatus {
+    <<enumeration>>
+    requested
+    paid
+    rejected
+    cancelled
+  }
+
+  WithdrawalRoutes --> WithdrawalsService : uses
+  WithdrawalsService ..> EarningLedger : withdrawal_hold / paid / release
+  WorkerCron ..> EarningLedger : earning_release
+  WithdrawalsService ..> SecretBox : seal / open bank account
+  WithdrawalsService ..> SellerProfile : bank account
+  WithdrawalsService ..> WithdrawalRequest : persists
+  EarningLedger ..> Wallet : FOR UPDATE
+  EarningLedger ..> WalletLedger : append only
+  WithdrawalRequest --> WithdrawalStatus
