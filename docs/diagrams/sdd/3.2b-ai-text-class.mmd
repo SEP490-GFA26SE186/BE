@@ -1,0 +1,202 @@
+classDiagram
+  class StoriesRoutes {
+    <<router>>
+    +GET /api/v1/stories/ai-pricing [auth]
+    +POST /api/v1/stories/:id/generate [auth]
+    +GET /api/v1/stories/:id/generation [auth]
+  }
+
+  class StoriesController {
+    <<controller>>
+    +getAiPricing(req, res) void
+    +generateStory(req, res) void
+    +getGeneration(req, res) void
+  }
+
+  class StoriesGenerationService {
+    <<service>>
+    +startGeneration(user, storyId) Object
+    +getGeneration(user, storyId) Object
+    +getAiPricing() Object
+  }
+
+  class StoriesGenerationStore {
+    <<store>>
+    +markProcessing(db, aiRequestId, attempt) boolean
+    +loadGenerationInput(db, aiRequestId) Object
+    +persistAiResult(db, aiRequestId, response) boolean
+    +finalizeFailure(db, aiRequestId, status, code, message) boolean
+  }
+
+  class StoriesAccess {
+    <<policy>>
+    +loadStoryForRead(user, storyId) Story
+    +loadOwnedStory(user, storyId) Story
+  }
+
+  class StoryRules {
+    <<utility>>
+    +loadStorySettings(db) Object
+    +findGenerationNameIssues(story, nameContext) Object
+    +isStaleRequest(request, now) boolean
+    +buildAiRequest(input) Object
+    +planPersist(response, story) Object
+    +storyStatusFromPages(pages) StoryStatus
+  }
+
+  class CreditLedger {
+    <<store>>
+    +holdCredit(tx, userId, amount, aiRequestId) void
+    +consumeCredit(tx, userId, aiRequestId) void
+    +releaseCredit(tx, userId, amount, aiRequestId) void
+  }
+
+  class AiQueue {
+    <<queue>>
+    +enqueueAiJob(jobName, data, jobId) Object
+  }
+
+  class AiProcessor {
+    <<worker>>
+    +processAiJob(job) void
+  }
+
+  class AiClient {
+    <<client>>
+    +callAi(jobName, payload) Object
+  }
+
+  class AiService {
+    <<external>>
+    +POST /v1/story/generate
+  }
+
+  class User {
+    <<entity>>
+    -UUID id
+    -DateTime aiBlockedUntil
+  }
+
+  class Wallet {
+    <<entity>>
+    -UUID userId
+    -int creditBalance
+  }
+
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryLength length
+    -StoryStatus status
+    -String situation
+    -boolean useAiImage
+    -DateTime reviewedAt
+  }
+
+  class StoryPage {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -int pageOrder
+    -String contentText
+    -String aiOriginalText
+    -ContentOrigin origin
+  }
+
+  class StoryCheckpoint {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -UUID afterPageId
+    -String question
+    -String hint
+    -ContentOrigin origin
+  }
+
+  class CheckpointOption {
+    <<entity>>
+    -UUID id
+    -UUID checkpointId
+    -int optionOrder
+    -String text
+    -boolean isCorrect
+    -String feedback
+  }
+
+  class AiRequest {
+    <<entity>>
+    -UUID id
+    -UUID userId
+    -UUID storyId
+    -AiRequestType requestType
+    -AiRequestStatus status
+    -int creditsCharged
+    -int attempts
+    -String idempotencyKey
+    -String errorMessage
+    -DateTime createdAt
+    -DateTime finishedAt
+  }
+
+  class StoryStatus {
+    <<enumeration>>
+    draft
+    generating
+    ready
+  }
+
+  class AiRequestStatus {
+    <<enumeration>>
+    queued
+    processing
+    succeeded
+    failed
+    blocked
+  }
+
+  class ContentOrigin {
+    <<enumeration>>
+    human
+    ai
+    ai_edited
+  }
+
+  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
+  StoriesRoutes ..> StoriesController : delegates
+  StoriesController ..> StoriesGenerationService : uses
+  StoriesGenerationService ..> StoriesAccess : checks ownership
+  StoriesGenerationService ..> User : checks aiBlockedUntil
+  StoriesGenerationService ..> StoryRules : pricing / name preflight / stale check
+  StoriesGenerationService ..> Story : sets generating
+  StoriesGenerationService ..> AiRequest : creates (queued)
+  StoriesGenerationService ..> CreditLedger : holds credit
+  StoriesGenerationService ..> AiQueue : enqueues story_text job
+  StoriesGenerationService ..> StoriesGenerationStore : finalizeFailure on enqueue error / stale
+  AiQueue ..> AiProcessor : delivers job
+  AiProcessor ..> StoriesGenerationStore : load input / persist / finalize
+  AiProcessor ..> StoryRules : buildAiRequest
+  AiProcessor ..> AiClient : calls
+  AiClient ..> AiService : HTTP request
+  StoriesGenerationStore ..> StoryRules : planPersist / storyStatusFromPages
+  StoriesGenerationStore ..> CreditLedger : consumes / releases credit
+  StoriesGenerationStore ..> AiRequest : updates status
+  StoriesGenerationStore ..> StoryPage : writes AI text
+  StoriesGenerationStore ..> StoryCheckpoint : writes question / hint
+  StoriesGenerationStore ..> CheckpointOption : writes AI options
+  CreditLedger ..> Wallet : updates creditBalance
+
+  %% Quan hệ dữ liệu: khóa ngoại trong schema.prisma
+  User "1" --> "0..*" Story : owns
+  User "1" --> "0..1" Wallet : has
+  User "1" --> "0..*" AiRequest : requests
+  Story "0..1" --> "0..*" AiRequest : requests
+  Story "1" *-- "1..*" StoryPage : pages
+  Story "1" *-- "0..*" StoryCheckpoint : checkpoints
+  StoryPage "1" --> "0..1" StoryCheckpoint : afterPage
+  StoryCheckpoint "1" *-- "0..*" CheckpointOption : options
+  Story --> StoryStatus
+  AiRequest --> AiRequestStatus
+  StoryPage --> ContentOrigin
+
+  note "Ghi chú<br/>- Chỉ truyện có length short / medium / long (không phải custom); khóa AI (aiBlockedUntil) -> 403.<br/>- generate: story draft/ready -> generating, tạo AiRequest queued, giữ credit (thiếu -> 402), đẩy job BullMQ (Redis), trả aiRequestId.<br/>- Worker: queued -> processing -> gọi AI -> succeeded: ghi chữ, story -> ready, trừ credit.<br/>- Lỗi / bị chặn / quá 10 phút: AiRequest -> failed hoặc blocked, story tính lại status, hoàn credit.<br/>- Truyện đã có bé đọc thì không cho viết lại (409); đang generating -> 409.<br/>- Nếu story.useAiImage: viết chữ xong tự xếp hàng vẽ tranh (xem 3.3).<br/>- Tạo truyện và sửa nội dung: xem 3.2a."

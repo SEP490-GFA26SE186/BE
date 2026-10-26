@@ -1,0 +1,184 @@
+classDiagram
+  class StoriesRoutes {
+    <<router>>
+    +POST /api/v1/stories/:id/review [auth]
+    +POST /api/v1/stories/:id/narration/retry [auth]
+  }
+
+  class StoriesController {
+    <<controller>>
+    +reviewStory(req, res) void
+    +retryNarration(req, res) void
+  }
+
+  class StoriesEditorService {
+    <<service>>
+    +reviewStory(user, storyId) Object
+  }
+
+  class StoriesNarrationService {
+    <<service>>
+    +prepareNarration(tx, storyId) Object
+    +dispatchNarration(jobs) boolean
+    +retryNarration(user, storyId) Object
+  }
+
+  class StoriesNarrationStore {
+    <<store>>
+    +loadVoice(db) String
+    +queueNarration(tx, storyId, voice) Object
+    +markClipGenerating(db, clipId, round, attempt) boolean
+    +loadClipInput(db, clipId) Object
+    +persistClip(db, clipResult) boolean
+    +failClip(db, clipId, round, code, message) void
+    +loadReadiness(db, storyId) Object
+  }
+
+  class StoriesAccess {
+    <<policy>>
+    +lockForWrite(tx, user, storyId) Story
+  }
+
+  class StoriesService {
+    <<service>>
+    +assertNoBlockedKeywords(db, storyId, paths) void
+    +getDetail(db, storyId) Object
+  }
+
+  class NarrationRules {
+    <<utility>>
+    +findReviewGaps(pages, checkpoints) Object
+    +storyStatusFromPages(pages) StoryStatus
+    +narrationSegments(story) Object
+    +fingerprintOf(text, voice) String
+    +planNarration(segments, clips, voice) Object
+    +childReadiness(story, clips, voice) Object
+  }
+
+  class NarrationQueue {
+    <<queue>>
+    +enqueueNarration(jobs) Object
+  }
+
+  class NarrationProcessor {
+    <<worker>>
+    +processNarrationJob(job) void
+  }
+
+  class AiClient {
+    <<client>>
+    +callAi(jobName, payload) Object
+  }
+
+  class AiService {
+    <<external>>
+    +POST /v1/tts/synthesize
+  }
+
+  class Cloudinary {
+    <<external>>
+    +upload(file) String
+  }
+
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryStatus status
+    -boolean useTts
+    -DateTime reviewedAt
+  }
+
+  class StoryPage {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -int pageOrder
+    -String contentText
+    -String audioKey
+    -GenerationStatus audioStatus
+  }
+
+  class StoryCheckpoint {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -String question
+    -String hint
+    -String questionAudioKey
+    -String hintAudioKey
+  }
+
+  class CheckpointOption {
+    <<entity>>
+    -UUID id
+    -UUID checkpointId
+    -String text
+    -String feedback
+    -String textAudioKey
+    -String feedbackAudioKey
+  }
+
+  class NarrationClip {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -String segment
+    -String fingerprint
+    -GenerationStatus status
+    -int round
+    -int attempts
+    -String audioKey
+    -Decimal durationSeconds
+    -String errorCode
+    -String errorMessage
+  }
+
+  class PlatformSetting {
+    <<entity>>
+    -String key
+    -Json value
+  }
+
+  class GenerationStatus {
+    <<enumeration>>
+    none
+    queued
+    generating
+    ready
+    failed
+  }
+
+  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
+  StoriesRoutes ..> StoriesController : delegates
+  StoriesController ..> StoriesEditorService : review story
+  StoriesController ..> StoriesNarrationService : retry narration
+  StoriesEditorService ..> StoriesAccess : locks story for write
+  StoriesEditorService ..> NarrationRules : findReviewGaps / recomputes status
+  StoriesEditorService ..> StoriesService : checks keywords / returns detail
+  StoriesEditorService ..> Story : sets reviewedAt
+  StoriesEditorService ..> StoriesNarrationService : prepare + dispatch narration
+  StoriesNarrationService ..> StoriesAccess : locks story for write
+  StoriesNarrationService ..> StoriesNarrationStore : queue / fail clips
+  StoriesNarrationService ..> NarrationQueue : enqueues clip jobs
+  StoriesNarrationStore ..> NarrationRules : segments / fingerprint / plan
+  StoriesNarrationStore ..> PlatformSetting : reads tts.voice
+  StoriesNarrationStore ..> NarrationClip : creates / updates
+  StoriesNarrationStore ..> StoryPage : writes audioKey
+  StoriesNarrationStore ..> StoryCheckpoint : writes question / hint audio
+  StoriesNarrationStore ..> CheckpointOption : writes option audio
+  NarrationQueue ..> NarrationProcessor : delivers job (concurrency 1)
+  NarrationProcessor ..> StoriesNarrationStore : mark / load / persist / fail
+  NarrationProcessor ..> AiClient : calls narration
+  AiClient ..> AiService : HTTP request
+  AiService ..> Cloudinary : uploads audio
+
+  %% Quan hệ dữ liệu: khóa ngoại trong schema.prisma
+  Story "1" *-- "1..*" StoryPage : pages
+  Story "1" *-- "0..*" StoryCheckpoint : checkpoints
+  StoryCheckpoint "1" *-- "0..*" CheckpointOption : options
+  Story "1" *-- "0..*" NarrationClip : narrationClips
+  NarrationClip --> GenerationStatus
+  StoryPage --> GenerationStatus
+
+  note "Ghi chú<br/>- Review: truyện còn chỗ trống -> 422; có từ khoá bị chặn -> 422; hợp lệ -> ghi reviewedAt.<br/>- Nếu useTts: chia truyện thành đoạn (trang, câu hỏi, gợi ý, phương án, phản hồi), mỗi đoạn một NarrationClip.<br/>- fingerprint = hash(chữ + giọng): đoạn đã có clip khớp thì bỏ qua, chữ đổi thì đọc lại (round + 1).<br/>- Hàng đợi narration riêng, chạy từng job một; AI service đọc rồi tải audio lên Cloudinary, trả audioKey.<br/>- Không dùng AiRequest, không trừ credit.<br/>- Lỗi đẩy job -> clip failed (ENQUEUE_FAILED); retry chỉ đọc lại đoạn lỗi / thiếu / lệch, phải review trước.<br/>- loadReadiness: bé chỉ đọc được khi đã review và đủ audio (dùng ở giá sách / Kid Mode)."

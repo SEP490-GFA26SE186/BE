@@ -1,0 +1,208 @@
+classDiagram
+  class StoriesRoutes {
+    <<router>>
+    +POST /api/v1/stories/:id/images
+    +POST /api/v1/stories/:id/scenes/:sceneId/image
+    +PUT /api/v1/stories/:id/cover [parent]
+  }
+
+  class CharactersRoutes {
+    <<router>>
+    +POST /api/v1/characters/:id/portrait [auth]
+  }
+
+  class StoriesController {
+    <<controller>>
+    +drawImages(req, res) void
+    +redrawScene(req, res) void
+    +setCover(req, res) void
+  }
+
+  class CharactersController {
+    <<controller>>
+    +generatePortrait(req, res) void
+  }
+
+  class StoriesImagesService {
+    <<service>>
+    +startPortrait(user, characterId) Object
+    +drawStoryImages(user, storyId) Object
+    +redrawScene(user, storyId, sceneId) Object
+    +queueStoryImages(storyId, userId, sceneIds) Object
+    +resumeAfterPortrait(characterId) void
+  }
+
+  class StoriesImagesStore {
+    <<store>>
+    +loadImageCosts(db) Object
+    +loadPortraitInput(db, aiRequestId) Object
+    +loadSceneInput(db, aiRequestId) Object
+    +persistImageResult(db, aiRequestId, response) AiRequest
+    +finalizeImageFailure(db, aiRequestId, status, code, message) AiRequest
+  }
+
+  class StoriesService {
+    <<service>>
+    +setCover(user, storyId, sceneId) Object
+  }
+
+  class CreditLedger {
+    <<store>>
+    +holdCredit(tx, userId, amount, aiRequestId) void
+    +consumeCredit(tx, userId, aiRequestId) void
+    +releaseCredit(tx, userId, amount, aiRequestId) void
+  }
+
+  class AiQueue {
+    <<queue>>
+    +enqueueAiJob(jobName, data, jobId) Object
+  }
+
+  class AiProcessor {
+    <<worker>>
+    +processAiJob(job) void
+  }
+
+  class AiClient {
+    <<client>>
+    +callAi(jobName, payload) Object
+  }
+
+  class AiService {
+    <<external>>
+    +POST /v1/images/portrait
+    +POST /v1/images/scene
+  }
+
+  class Cloudinary {
+    <<external>>
+    +upload(file) String
+  }
+
+  class User {
+    <<entity>>
+    -UUID id
+    -DateTime aiBlockedUntil
+  }
+
+  class Wallet {
+    <<entity>>
+    -UUID userId
+    -int creditBalance
+  }
+
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryKind kind
+    -StoryStatus status
+    -boolean useAiImage
+    -UUID coverSceneId
+  }
+
+  class StoryScene {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -int sceneOrder
+    -String description
+    -String imageKey
+    -GenerationStatus imageStatus
+  }
+
+  class Character {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -String name
+    -String appearance
+    -String portraitImageKey
+    -GenerationStatus portraitStatus
+  }
+
+  class StoryCharacter {
+    <<entity>>
+    -UUID storyId
+    -String token
+    -UUID characterId
+    -boolean isMain
+  }
+
+  class AiRequest {
+    <<entity>>
+    -UUID id
+    -UUID userId
+    -AiRequestType requestType
+    -UUID storyId
+    -UUID sceneId
+    -UUID characterId
+    -AiRequestStatus status
+    -int creditsCharged
+    -String idempotencyKey
+    -String errorMessage
+    -DateTime finishedAt
+  }
+
+  class GenerationStatus {
+    <<enumeration>>
+    none
+    queued
+    generating
+    ready
+    failed
+  }
+
+  class AiRequestStatus {
+    <<enumeration>>
+    queued
+    processing
+    succeeded
+    failed
+    blocked
+  }
+
+  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
+  StoriesRoutes ..> StoriesController : delegates
+  CharactersRoutes ..> CharactersController : delegates
+  StoriesController ..> StoriesImagesService : draw / redraw scenes
+  StoriesController ..> StoriesService : set cover
+  CharactersController ..> StoriesImagesService : startPortrait
+  StoriesService ..> StoryScene : checks image ready
+  StoriesService ..> Story : sets coverSceneId
+  StoriesImagesService ..> User : checks aiBlockedUntil
+  StoriesImagesService ..> StoriesImagesStore : loads costs / finalize on enqueue error
+  StoriesImagesService ..> AiRequest : creates (queued)
+  StoriesImagesService ..> CreditLedger : holds credit
+  StoriesImagesService ..> AiQueue : enqueues portrait / scene job
+  StoriesImagesService ..> Character : sets portraitStatus queued
+  StoriesImagesService ..> StoryScene : sets imageStatus queued
+  StoriesImagesService ..> Story : turns on useAiImage
+  AiQueue ..> AiProcessor : delivers job
+  AiProcessor ..> StoriesImagesStore : load input / persist / finalize
+  AiProcessor ..> StoriesImagesService : queueStoryImages after text / resumeAfterPortrait
+  AiProcessor ..> AiClient : calls
+  AiClient ..> AiService : HTTP request
+  AiService ..> Cloudinary : uploads image
+  StoriesImagesStore ..> AiRequest : updates status
+  StoriesImagesStore ..> Character : writes portrait
+  StoriesImagesStore ..> StoryScene : writes scene image
+  StoriesImagesStore ..> CreditLedger : consumes / releases credit
+  CreditLedger ..> Wallet : updates creditBalance
+
+  %% Quan hệ dữ liệu: khóa ngoại trong schema.prisma
+  User "1" --> "0..1" Wallet : has
+  User "1" --> "0..*" Story : owns
+  User "1" --> "0..*" Character : owns
+  User "1" --> "0..*" AiRequest : requests
+  Story "1" *-- "1..*" StoryScene : scenes
+  Story "0..*" --> "0..1" StoryScene : cover
+  Story "1" *-- "1..*" StoryCharacter : characters
+  Character "0..1" --> "0..*" StoryCharacter : played as
+  StoryScene "0..1" --> "0..*" AiRequest : scene_image
+  Character "0..1" --> "0..*" AiRequest : character_portrait
+  StoryScene --> GenerationStatus
+  Character --> GenerationStatus
+  AiRequest --> AiRequestStatus
+
+  note "Ghi chú<br/>- Mọi route cần auth; [parent] = thêm authorize('parent').<br/>- 3 cách kích hoạt: AI viết chữ xong và useAiImage = true (worker tự gọi queueStoryImages); POST /images; vẽ lại một cảnh.<br/>- Chân dung nhân vật vẽ trước, làm ảnh tham chiếu; cảnh có nhân vật đang vẽ chân dung thì chờ (imageStatus = queued), xong thì resumeAfterPortrait.<br/>- Mỗi ảnh một AiRequest: giữ credit -> thành công trừ credit, thất bại hoàn credit. Thiếu credit -> 402.<br/>- Chỉ truyện private có mô tả cảnh mới vẽ được; truyện đang generating -> 409; khóa AI -> 403.<br/>- Tên thật bị bỏ khỏi mô tả trước khi gửi AI; ảnh tải lên Cloudinary, Node trả link có chữ ký.<br/>- Ảnh bìa = một cảnh đã có ảnh (setCover); cảnh chưa có ảnh -> 422.<br/>- Mỗi trang gắn một StoryScene (xem 3.2a)."
