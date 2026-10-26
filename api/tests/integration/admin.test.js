@@ -8,7 +8,6 @@ let api;
 let topic;
 let store;
 let earnings;
-let tiers;
 let admin;
 
 before(async () => {
@@ -18,13 +17,11 @@ before(async () => {
   store = await import('../../src/modules/billing/billing.store.js');
   earnings = await import('../../src/modules/wallets/earningLedger.js');
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
-  await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
   const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => /^(market|moderation)\./.test(s.key))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
-  tiers = Object.fromEntries((await prisma.priceTier.findMany()).map((t) => [Number(t.priceVnd), t]));
   admin = await createUser({ role: 'admin' });
 });
 
@@ -61,7 +58,7 @@ async function publishedListing(price) {
   const story = (await call(s.token, 'POST', '/stories', { topicId: topic.id, length: 'custom', title: 'Truyện', useTts: false, characters: [{ characterId: bin.id, isMain: true }] })).body.data.story;
   for (const p of story.pages) await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} ở trang ${p.pageOrder}.` } });
   await call(s.token, 'POST', `/stories/${story.id}/review`);
-  const { listing } = (await call(s.token, 'POST', '/listings', { storyId: story.id, title: `Truyện thử quản trị ${Date.now()}`, priceTierId: tiers[price].id, aliases: [{ token: '{NV1}', aliasName: 'Bống' }] })).body.data;
+  const { listing } = (await call(s.token, 'POST', '/listings', { storyId: story.id, title: `Truyện thử quản trị ${Date.now()}`, priceVnd: price, aliases: [{ token: '{NV1}', aliasName: 'Bống' }] })).body.data;
   await prisma.listing.update({ where: { id: listing.id }, data: { status: 'published', publishedAt: new Date() } });
   return { seller: s, listing };
 }
@@ -110,18 +107,6 @@ test('goi + bac gia: sua goi ghi nhat ky, goi Mien phi giu 0d; bac gia dang dung
   await prisma.adminAuditLog.deleteMany({ where: { targetId: planId } });
   await prisma.plan.delete({ where: { code } });
 
-  await publishedListing(19000);
-  const used = (await call(admin.token, 'GET', '/admin/price-tiers')).body.data.tiers.find((t) => t.priceVnd === 19000);
-  assert.ok(used.listingsCount >= 1);
-  const lock = await call(admin.token, 'PUT', `/admin/price-tiers/${used.id}`, { priceVnd: 21000 });
-  assert.equal(lock.status, 422);
-  assert.equal((await call(admin.token, 'PUT', `/admin/price-tiers/${used.id}`, { label: used.label })).status, 200);
-  const price = 10_000 + (Date.now() % 1000) * 7;
-  const created = await call(admin.token, 'POST', '/admin/price-tiers', { label: 'Thử', priceVnd: price });
-  assert.equal(created.status, 201, JSON.stringify(created.body));
-  assert.equal((await call(admin.token, 'POST', '/admin/price-tiers', { label: 'Trùng', priceVnd: price })).status, 409);
-  assert.equal((await call(admin.token, 'PUT', `/admin/price-tiers/${created.body.data.tier.id}`, { priceVnd: price + 1 })).status, 200, 'chua dung -> doi duoc');
-  await prisma.priceTier.delete({ where: { id: created.body.data.tier.id } });
 });
 
 test('cau hinh: sua theo danh sach, rang buoc cheo, khoa ngoai danh sach -> 422', { skip }, async () => {

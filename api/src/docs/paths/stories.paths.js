@@ -67,7 +67,6 @@ const storyDetailExample = {
       description: 'Sân chơi trước nhà',
       imageKey: null,
       imageUrl: null, // link Cloudinary co chu ky khi da co anh
-      backgroundId: null,
       imageStatus: 'none',
     },
   ],

@@ -83,7 +83,7 @@ test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban 
   const old = await prisma.eqSubSkill.create({
     data: {
       skillId: skills.self_management.id, code: `thu_${Date.now()}`,
-      nameVi: `Kỹ năng thử tuổi ${Date.now()}`, descriptionVi: 'x', ageMin: 12, ageMax: 15, createdBy: mod.user.id,
+      nameVi: `Kỹ năng thử tuổi ${Date.now()}`, descriptionVi: 'x', caselTextEn: 'Fixture CASEL sentence', ageMin: 12, ageMax: 15, createdBy: mod.user.id,
     },
   });
   const noAge = await post({ subSkillIds: [old.id] });
@@ -92,7 +92,7 @@ test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban 
 
   const nameNoTpl = `Kỹ năng thử chưa mẫu ${Date.now()}`;
   const noTpl = await prisma.eqSubSkill.create({
-    data: { skillId: skills.self_management.id, code: `thu2_${Date.now()}`, nameVi: nameNoTpl, descriptionVi: 'x', createdBy: mod.user.id },
+    data: { skillId: skills.self_management.id, code: `thu2_${Date.now()}`, nameVi: nameNoTpl, descriptionVi: 'x', caselTextEn: 'Fixture CASEL sentence', createdBy: mod.user.id },
   });
   const noPub = await post({ subSkillIds: [noTpl.id] });
   assert.equal(noPub.status, 422, JSON.stringify(noPub.body));
@@ -102,7 +102,7 @@ test('bai hoc: gan 1-3 ky nang con, kiem cung nang luc / giao tuoi / co mau ban 
   const ok = await post({ subSkillIds: two });
   assert.equal(ok.status, 201, JSON.stringify(ok.body));
   assert.equal(ok.body.data.subSkills.length, 2);
-  assert.ok(ok.body.data.subSkills.every((x) => x.id && x.nameVi && 'caselTextEn' in x && ['casel', 'specialist'].includes(x.source)));
+  assert.ok(ok.body.data.subSkills.every((x) => x.id && x.nameVi && typeof x.caselTextEn === 'string' && !('source' in x)));
   const pl = (await call(parent.token, 'GET', '/topics')).body.data;
   // Chi kiem bai vua tao: DB test tich luy bai hoc cua cac lan chay khac (co the chua gan ky nang con).
   const mine = pl.find((x) => x.id === ok.body.data.id);

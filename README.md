@@ -1,5 +1,10 @@
 # StoryWeaver AI — Backend
 
+> **Dev mới clone về:** làm theo [SETUP.md](SETUP.md) — Postgres local + API/worker trong Docker,
+> AI chạy trên máy với Claude CLI (`claude_code`) và VieNeu-TTS. File này là tài liệu tham khảo chi tiết.
+>
+> **Deploy:** [DEPLOY.md](DEPLOY.md) — dựng lần đầu (một máy Google Cloud + Web trên Cloudflare Pages). Đưa thay đổi mới lên bản đang chạy: [DEPLOY-UPDATE.md](DEPLOY-UPDATE.md).
+
 Backend gồm **hai source riêng biệt** trong cùng một repo:
 
 | Thư mục | Ngôn ngữ | Trách nhiệm |
@@ -124,7 +129,7 @@ docker compose exec api npm run db:setup
 - Sửa `package.json` (thêm script / dependency) thì phải `up --build`: chế độ dev chỉ
   mount `src/`, `prisma/`, `scripts/`.
 
-#### Ba điều cần biết khi làm việc với Supabase
+#### Hai điều cần biết khi làm việc với Supabase
 
 **1. Đừng dùng `prisma migrate reset` trên Supabase.** Nó cố xoá mọi thứ nó thấy
 và sẽ vướng quyền với các schema hệ thống (`auth`, `storage`, `realtime`). Muốn
@@ -139,25 +144,10 @@ GRANT ALL   ON SCHEMA public TO postgres, service_role;
 ```
 
 **2. Cảnh báo "RLS disabled in public" là đúng thiết kế — đừng bật RLS.**
-Supabase Advisor sẽ báo đỏ cả 49 bảng. Chúng ta không dùng Supabase Auth: API tự
+Supabase Advisor sẽ báo đỏ cả 44 bảng. Chúng ta không dùng Supabase Auth: API tự
 xác thực bằng JWT riêng và kết nối bằng role `postgres`. Bật RLS lên sẽ không
 chặn được gì (role `postgres` bypass) nhưng sẽ làm vỡ mọi truy vấn nếu ai đó
 đồng thời đổi sang role `anon`/`authenticated`.
-
-**3. `child_usage_sessions` có 2 generated column mà Prisma không hiểu.**
-`duration_seconds` và `usage_date` là `GENERATED ALWAYS ... STORED`, viết tay ở
-cuối `migration.sql`. Prisma không diễn tả được nên `prisma migrate diff` sẽ
-**luôn** báo drift ở hai cột này — đó là drift giả, bỏ qua:
-
-```
-[*] Altered column `duration_seconds` (default changed from DbGenerated(None) to ...)
-[*] Altered column `usage_date`       (default changed from DbGenerated(None) to ...)
-```
-
-⚠️ Hệ quả: khi chạy `prisma migrate dev` lần sau, Prisma sẽ sinh ra migration
-`ALTER COLUMN` xoá mất mệnh đề `GENERATED`. **Phải xoá hai dòng đó khỏi migration
-mới trước khi apply**, nếu không `usage_date` thành cột thường và số liệu giờ xem
-theo ngày Việt Nam sẽ sai.
 
 ### Kiểm tra đã chạy đúng
 
@@ -257,7 +247,7 @@ xem `ai/README.md` mục "Claude".
 ## Ai gọi ai
 
 ```
-Client ──> api (Express)          KHÔNG gọi ai/ trực tiếp
+Client ──> api (Express)          chỉ gọi ai/ trực tiếp cho /v1/story/analyze
              │  tạo bản ghi job + reserve credit
              ↓
            BullMQ (Redis)         attempts=3, backoff exponential 2s
@@ -294,8 +284,8 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 | `JWT_SECRET`, `JWT_*` | ✓ | — | — |
 | `BREVO_*`, `CORS_ORIGIN`, `APP_URL` | ✓ | — | — |
 | `REDIS_URL` | ✓ | ✓ | — |
-| `AI_SERVICE_URL` | **—** | ✓ | — |
-| `INTERNAL_TOKEN` | — | ✓ | ✓ |
+| `AI_SERVICE_URL` | ✓ | ✓ | — |
+| `INTERNAL_TOKEN` | ✓ | ✓ | ✓ |
 | `AI_TIMEOUT_MS_<JOB>`, `AI_JOB_ATTEMPTS`, `AI_WORKER_CONCURRENCY` | — | ✓ | — |
 | `LLM_PROVIDER`, `TTS_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `LLM_*`, `TOKENS_PER_WORD`, `PRICE_TEXT_*` | — | — | ✓ |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_FOLDER` | ✓ | — | ✓ |
@@ -303,8 +293,8 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 
 Hai ô đáng chú ý:
 
-- `api` **không** có `AI_SERVICE_URL` → mọi yêu cầu sinh nội dung buộc phải đi
-  qua queue, không thể gọi thẳng.
+- Sinh nội dung (chữ, ảnh, giọng đọc) **luôn** đi qua queue. `api` chỉ gọi thẳng `ai` cho một
+  việc: phân tích lời kể (`POST /stories/analyze` → `/v1/story/analyze`), ngắn và không trừ credit.
 - `ai` **không** có `DATABASE_URL` → Python không thể query DB dù có muốn.
   Kiểm tra bằng lệnh: `docker compose exec ai env | grep DATABASE_URL`
   (kết quả phải rỗng).

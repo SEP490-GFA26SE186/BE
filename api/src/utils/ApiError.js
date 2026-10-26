@@ -29,6 +29,10 @@ class ApiError extends Error {
     return new ApiError(StatusCodes.CONFLICT, message);
   }
 
+  static tooManyRequests(message, errors = []) {
+    return new ApiError(StatusCodes.TOO_MANY_REQUESTS, message, errors);
+  }
+
   static internal(message = 'Internal server error') {
     return new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, message, [], false);
   }

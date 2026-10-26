@@ -46,11 +46,6 @@ const env = {
     clientId: process.env.PAYOS_CLIENT_ID,
     apiKey: process.env.PAYOS_API_KEY,
     checksumKey: process.env.PAYOS_CHECKSUM_KEY,
-    payout: {
-      clientId: process.env.PAYOS_PAYOUT_CLIENT_ID || undefined,
-      apiKey: process.env.PAYOS_PAYOUT_API_KEY || undefined,
-      checksumKey: process.env.PAYOS_PAYOUT_CHECKSUM_KEY || undefined,
-    },
   },
   // Trang Web ma payOS tra nguoi dung ve sau khi thanh toan / huy (returnUrl, cancelUrl).
   webUrl: (process.env.WEB_URL || 'http://localhost:5173').replace(/\/+$/, ''),

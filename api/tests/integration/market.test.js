@@ -9,7 +9,6 @@ let topic;
 let store;
 let earnings;
 let setPayosClient;
-let tiers;
 
 function fakePayos() {
   const state = { created: [], status: new Map() };
@@ -35,13 +34,11 @@ before(async () => {
   earnings = await import('../../src/modules/wallets/earningLedger.js');
   ({ setPayosClient } = await import('../../src/clients/payos.js'));
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
-  await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
   const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => s.key.startsWith('market.'))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
-  tiers = Object.fromEntries((await prisma.priceTier.findMany()).map((t) => [Number(t.priceVnd), t]));
 });
 
 after(async () => {
@@ -76,7 +73,7 @@ async function publishedListing(price) {
   for (const p of story.pages) await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} ở trang ${p.pageOrder}.` } });
   await call(s.token, 'POST', `/stories/${story.id}/review`);
   const created = await call(s.token, 'POST', '/listings', {
-    storyId: story.id, title: 'Bé đi chơi', priceTierId: tiers[price].id, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
+    storyId: story.id, title: 'Bé đi chơi', priceVnd: price, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const { listing } = created.body.data;
@@ -93,7 +90,12 @@ test('cho: chi truyen published; truyen mien phi -> nhan ngay -> len gia sach ->
   const card = list.body.data.items.find((i) => i.id === listing.id);
   assert.ok(card);
   assert.equal(card.owned, false);
-  assert.equal(card.priceTier.priceVnd, 0);
+  assert.equal(card.priceVnd, 0);
+  assert.equal(card.priceTier, undefined);
+  const ids = async (qs) => (await call(buyer.token, 'GET', `/market/listings?search=Bé đi chơi&limit=50&${qs}`)).body.data.items.map((i) => i.id);
+  assert.ok((await ids('priceMax=0')).includes(listing.id), 'priceMax=0 -> chi truyen mien phi');
+  assert.ok(!(await ids('priceMin=1000')).includes(listing.id));
+  assert.equal((await call(buyer.token, 'GET', '/market/listings?priceMin=20000&priceMax=10000')).status, 400);
 
   const claim = await call(buyer.token, 'POST', '/market/checkout', { listingId: listing.id });
   assert.equal(claim.status, 201, JSON.stringify(claim.body));
@@ -188,4 +190,70 @@ test('mua trung (hai don cung duoc tra): khong giao lai, khong cong doanh thu; t
   assert.equal(still.revokedAt, null, 'quyen doc tu don dau van con');
   assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).purchaseCount, 1);
   assert.equal((await wallet(seller.user.id)).earningPendingVnd, 15200n);
+});
+
+test('ho so cong khai nguoi ban: thong tin + truyen dang ban; sua biet danh khi da duyet; chua duyet -> 404', { skip }, async () => {
+  const { seller, listing } = await publishedListing(0);
+  const buyer = await withPlan('FREE');
+
+  const res = await call(buyer.token, 'GET', `/market/sellers/${seller.user.id}`);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const { seller: profile, items } = res.body.data;
+  assert.equal(profile.id, seller.user.id);
+  assert.equal(profile.listingCount, 1);
+  assert.deepEqual(items.map((i) => i.id), [listing.id]);
+  assert.ok('totalSales' in profile && 'ratingAvg' in profile);
+
+  const upd = await call(seller.token, 'PUT', '/sellers/me', { displayName: '  Mẹ Mít kể chuyện ', bio: 'Giáo viên mầm non' });
+  assert.equal(upd.status, 200, JSON.stringify(upd.body));
+  assert.equal(upd.body.data.seller.displayName, 'Mẹ Mít kể chuyện');
+  assert.equal((await call(buyer.token, 'GET', `/market/sellers/${seller.user.id}`)).body.data.seller.bio, 'Giáo viên mầm non');
+  assert.equal((await call(seller.token, 'PUT', '/sellers/me', {})).status, 400, 'body rong');
+  assert.equal((await call(buyer.token, 'PUT', '/sellers/me', { bio: 'x' })).status, 404, 'chua co ho so ban');
+
+  await prisma.sellerProfile.update({ where: { userId: seller.user.id }, data: { status: 'suspended' } });
+  assert.equal((await call(buyer.token, 'GET', `/market/sellers/${seller.user.id}`)).status, 404, 'nguoi ban bi khoa khong hien');
+  assert.equal((await call(seller.token, 'PUT', '/sellers/me', { bio: 'x' })).status, 409);
+});
+
+test('phien ban moi: ban cu van ban khi cho duyet; duyet -> nguoi da mua, danh gia, bo dem, gia sach sang ban moi; ban cu archived', { skip }, async () => {
+  const { seller, listing } = await publishedListing(0);
+  const buyer = await withPlan('FREE');
+  const child = await createChild(buyer.user.id, 'Su');
+  await call(buyer.token, 'POST', '/market/checkout', { listingId: listing.id });
+  await prisma.productReview.create({ data: { listingId: listing.id, parentId: buyer.user.id, rating: 5 } });
+  await prisma.listing.update({ where: { id: listing.id }, data: { ratingAvg: 5, ratingCount: 1 } });
+  const oldStoryId = listing.publishedStoryId;
+  await prisma.bookshelfItem.create({ data: { childId: child.id, storyId: oldStoryId } });
+
+  const v = await call(seller.token, 'POST', `/listings/${listing.id}/versions`, {
+    title: 'Bé đi chơi (bản mới)', priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
+  });
+  assert.equal(v.status, 201, JSON.stringify(v.body));
+  const next = v.body.data.listing;
+  assert.equal(next.previousListingId, listing.id);
+  assert.equal(next.status, 'submitted');
+  assert.equal((await prisma.listing.findUnique({ where: { id: listing.id } })).status, 'published', 'ban cu van ban');
+  const dup = await call(seller.token, 'POST', `/listings/${listing.id}/versions`, { title: 'Lần nữa', priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }] });
+  assert.equal(dup.status, 409, 'moi luc mot phien ban cho duyet');
+
+  const mod = await createUser({ role: 'specialist' });
+  const review = await prisma.moderationReview.findFirst({ where: { listingId: next.id } });
+  assert.equal((await call(mod.token, 'POST', `/moderation/submissions/${review.id}/claim`)).status, 200);
+  for (const pg of await prisma.storyPage.findMany({ where: { storyId: next.publishedStoryId } })) {
+    await call(mod.token, 'POST', `/moderation/submissions/${review.id}/pages/${pg.id}/view`, {});
+  }
+  const done = await call(mod.token, 'POST', `/moderation/submissions/${review.id}/decision`, { decision: 'approved' });
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+
+  const [oldL, newL] = await Promise.all([prisma.listing.findUnique({ where: { id: listing.id } }), prisma.listing.findUnique({ where: { id: next.id } })]);
+  assert.deepEqual([oldL.status, newL.status], ['archived', 'published']);
+  assert.equal(newL.freeClaimCount, oldL.freeClaimCount);
+  assert.deepEqual([Number(newL.ratingAvg), newL.ratingCount], [5, 1]);
+  assert.ok(await prisma.entitlement.findFirst({ where: { parentId: buyer.user.id, listingId: next.id, revokedAt: null } }), 'nguoi da mua co ban moi');
+  assert.ok(await prisma.productReview.findFirst({ where: { listingId: next.id, parentId: buyer.user.id } }), 'danh gia theo sang');
+  assert.ok(await prisma.bookshelfItem.findFirst({ where: { childId: child.id, storyId: next.publishedStoryId } }), 'gia sach doi sang ban moi');
+  assert.equal((await call(buyer.token, 'GET', `/market/listings/${listing.id}`)).status, 404, 'ban cu het hien tren cho');
+  assert.equal((await call(buyer.token, 'GET', `/market/listings/${next.id}`)).status, 200);
+  assert.equal((await call(seller.token, 'POST', `/listings/${listing.id}/versions`, { title: 'Bản cũ hơn', priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }] })).status, 409, 'ban da luu tru');
 });

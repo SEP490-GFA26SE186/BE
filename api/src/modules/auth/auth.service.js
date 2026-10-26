@@ -1,9 +1,14 @@
 import bcrypt from 'bcryptjs';
+import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import tokenService from './token.service.js';
 import emailService from '../../services/email.service.js';
 import { ensureFreeSubscription } from '../billing/billing.store.js';
+import * as pinLimiter from './lib/kidPinLimiter.js';
+
+// Thoi gian cho toi thieu giua hai lan gui lai ma xac thuc email (tinh tu ma gan nhat, ke ca ma luc dang ky)
+const VERIFY_EMAIL_RESEND_COOLDOWN_SECONDS = 60;
 
 /**
  * Register a new user
@@ -85,9 +90,10 @@ const register = async ({ username, email, password, fullName, phone }) => {
   // Send email verification asynchronously without blocking registration
   tokenService
     .generateEmailVerificationToken(newUser.id)
-    .then((verifyToken) => {
-      emailService.sendVerificationEmail(newUser.email, verifyToken, newUser.fullName || newUser.username);
-    })
+    // return de loi gui mail roi vao .catch, khong thanh unhandled rejection (Node 22 se dung process)
+    .then((verifyToken) =>
+      emailService.sendVerificationEmail(newUser.email, verifyToken, newUser.fullName || newUser.username),
+    )
     .catch((err) => {
       console.error('Failed to send registration verification email:', err.message);
     });
@@ -362,10 +368,29 @@ const exitKidMode = async ({ pin, kidSessionToken, userId }) => {
     throw ApiError.badRequest('No PIN configured for this account');
   }
 
+  // Chong do PIN: sai lien tiep 5 lan -> khoa 15 phut (lib/kidPinLimiter.js, dem trong bo nho api).
+  const lockedMs = pinLimiter.lockRemainingMs(parentUser.id);
+  if (lockedMs > 0) {
+    const minutes = Math.ceil(lockedMs / 60_000);
+    throw ApiError.tooManyRequests(`Nhập sai mã PIN nhiều lần. Ba mẹ thử lại sau ${minutes} phút nhé.`, [
+      { path: 'pin', message: `Thử lại sau ${minutes} phút`, retryAfterSeconds: Math.ceil(lockedMs / 1000) },
+    ]);
+  }
+
   const isPinMatch = await bcrypt.compare(pin, parentUser.kidExitPinHash);
   if (!isPinMatch) {
-    throw ApiError.unauthorized('Incorrect Kid Exit PIN');
+    const { locked, attemptsLeft } = pinLimiter.recordFailure(parentUser.id);
+    if (locked) {
+      const minutes = pinLimiter.LOCK_MS / 60_000;
+      throw ApiError.tooManyRequests(`Nhập sai mã PIN ${pinLimiter.MAX_ATTEMPTS} lần. Ba mẹ thử lại sau ${minutes} phút nhé.`, [
+        { path: 'pin', message: `Thử lại sau ${minutes} phút`, retryAfterSeconds: pinLimiter.LOCK_MS / 1000 },
+      ]);
+    }
+    throw new ApiError(StatusCodes.UNAUTHORIZED, `Mã PIN chưa đúng. Còn ${attemptsLeft} lần thử.`, [
+      { path: 'pin', message: `Còn ${attemptsLeft} lần thử`, attemptsLeft },
+    ]);
   }
+  pinLimiter.reset(parentUser.id);
 
   // Consume kid session token only after successful PIN verification
   if (tokenIdToConsume) {
@@ -386,45 +411,38 @@ const exitKidMode = async ({ pin, kidSessionToken, userId }) => {
 // =============================================================================
 
 /**
- * Send email verification link to user
- * @param {Object} options
- * @param {string} [options.userId]
- * @param {string} [options.email]
+ * Gui lai ma xac thuc cho tai khoan dang dang nhap (khong nhan email tu body: tranh gui mail toi nguoi khac)
+ * @param {string} userId
  */
-const sendVerificationEmail = async ({ userId, email }) => {
-  let user = null;
-
-  if (userId) {
-    user = await prisma.user.findUnique({ where: { id: userId } });
-  } else if (email) {
-    user = await prisma.user.findFirst({
-      where: { email: email.toLowerCase().trim() },
-    });
-  }
+const sendVerificationEmail = async (userId) => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
 
   if (!user) {
-    throw ApiError.notFound('User not found');
+    throw ApiError.notFound('Không tìm thấy tài khoản');
   }
 
   if (user.emailVerifiedAt) {
-    throw ApiError.badRequest('Email is already verified');
+    throw ApiError.badRequest('Email đã được xác thực');
   }
 
-  const rawToken = await tokenService.generateEmailVerificationToken(user.id);
+  const rawToken = await tokenService.generateEmailVerificationToken(user.id, {
+    cooldownSeconds: VERIFY_EMAIL_RESEND_COOLDOWN_SECONDS,
+  });
   await emailService.sendVerificationEmail(user.email, rawToken, user.fullName || user.username);
 
-  return { message: 'Verification email sent successfully' };
+  return { message: 'Đã gửi mã xác thực tới email của bạn', retryAfterSeconds: VERIFY_EMAIL_RESEND_COOLDOWN_SECONDS };
 };
 
 /**
  * Verify user email address with token
  * @param {string} rawToken
+ * @param {string} userId Nguoi dang dang nhap
  * @returns {Promise<Object>} Verified user info
  */
-const verifyEmail = async (rawToken) => {
-  const verifiedUser = await tokenService.verifyEmailToken(rawToken);
+const verifyEmail = async (rawToken, userId) => {
+  const verifiedUser = await tokenService.verifyEmailToken(rawToken, userId);
   return {
-    message: 'Email verified successfully',
+    message: 'Xác thực email thành công',
     user: verifiedUser,
   };
 };

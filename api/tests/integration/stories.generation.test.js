@@ -131,7 +131,7 @@ async function topicWithSubSkills(owner, subs) {
     const ss = await prisma.eqSubSkill.create({
       data: {
         skillId, code: `it_${tag}_${i}`, nameVi: `Kỹ năng thử ${tag} ${i}`,
-        descriptionVi: 'x', isActive: sub.isActive ?? true, displayOrder: i, createdBy: owner.id,
+        descriptionVi: 'x', caselTextEn: 'Fixture CASEL sentence', isActive: sub.isActive ?? true, displayOrder: i, createdBy: owner.id,
       },
     });
     await prisma.topicSubSkill.create({ data: { topicId: t.id, subSkillId: ss.id } });

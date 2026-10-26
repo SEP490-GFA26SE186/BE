@@ -21,9 +21,7 @@ import checkpointReviewRoutes from '../../modules/checkpoint-review/checkpoint-r
 import pedagogySettingsRoutes from '../../modules/pedagogy-settings/pedagogy-settings.routes.js';
 
 import contentLibraryRouter, {
-  backgroundsRouter,
   uiAudioAssetsRouter,
-  checklistItemsRouter,
 } from '../../modules/content-library/content-library.routes.js';
 import adminRouter, { parentRefundRouter } from '../../modules/admin/admin.routes.js';
 import { reviewModerationRouter, reviewsRouter } from '../../modules/reviews/reviews.routes.js';
@@ -47,9 +45,7 @@ router.use('/checkpoint-review', checkpointReviewRoutes);
 router.use('/pedagogy', pedagogySettingsRoutes);
 router.use('/sub-skills', subSkillsRoutes);
 router.use('/question-templates', questionTemplatesRoutes);
-router.use('/backgrounds', backgroundsRouter);
 router.use('/ui-audio-assets', uiAudioAssetsRouter);
-router.use('/checklist-items', checklistItemsRouter);
 router.use('/content-library', contentLibraryRouter);
 router.use('/bookshelf', bookshelfRoutes);
 router.use('/kid', kidRoutes);

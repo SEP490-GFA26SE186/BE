@@ -43,13 +43,10 @@ services:
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
       BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-StoryWeaver AI}
-      # payOS (thu tien goi / truyen). PAYOS_PAYOUT_* chi khi chi ho dung kenh rieng.
+      # payOS: chi thu tien goi / truyen. Rut tien nguoi ban: Admin chuyen khoan tay.
       PAYOS_CLIENT_ID: ${PAYOS_CLIENT_ID:-}
       PAYOS_API_KEY: ${PAYOS_API_KEY:-}
       PAYOS_CHECKSUM_KEY: ${PAYOS_CHECKSUM_KEY:-}
-      PAYOS_PAYOUT_CLIENT_ID: ${PAYOS_PAYOUT_CLIENT_ID:-}
-      PAYOS_PAYOUT_API_KEY: ${PAYOS_PAYOUT_API_KEY:-}
-      PAYOS_PAYOUT_CHECKSUM_KEY: ${PAYOS_PAYOUT_CHECKSUM_KEY:-}
       # Ma hoa so tai khoan ngan hang nguoi ban (32 byte hex/base64). Production bat buoc; dev trong = suy tu JWT_SECRET.
       BANK_DATA_KEY: ${BANK_DATA_KEY:-}
       # Trang Web payOS tra nguoi dung ve (returnUrl / cancelUrl).
@@ -117,7 +114,7 @@ services:
         AI_EXTRAS: ${AI_EXTRAS:-}
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
-      # Chu (mock | gemini | claude | claude_code) va giong doc (mock | vieneu) chon rieng. Anh chi co mock.
+      # Chu (mock | gemini | claude | claude_code) va giong doc (mock | vieneu) chon rieng.
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       TTS_PROVIDER: ${TTS_PROVIDER:-mock}
       # Chi khi TTS_PROVIDER=vieneu. De trong = mac dinh ai/app/config.py (Kim Thanh, fp32, 120 s, mp3).
@@ -149,12 +146,10 @@ services:
       SCENE_DESCRIPTION_MAX_WORDS: ${SCENE_DESCRIPTION_MAX_WORDS:-}
       IMAGE_PROFILE_PORTRAIT: ${IMAGE_PROFILE_PORTRAIT:-}
       IMAGE_PROFILE_SCENE: ${IMAGE_PROFILE_SCENE:-}
-      # Chi khi IMAGE_PROFILE_* la profile that (Workers AI). Xem ai/.env.example muc "Anh".
+      # Anh that (profile cf-*): Workers AI qua REST. Profile khong co bo loc san can IMAGE_SAFETY=human_review.
+      IMAGE_SAFETY: ${IMAGE_SAFETY:-}
       CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
-      IMAGE_SAFETY: ${IMAGE_SAFETY:-}
-      IMAGE_SCENE_WIDTH: ${IMAGE_SCENE_WIDTH:-}
-      IMAGE_SCENE_HEIGHT: ${IMAGE_SCENE_HEIGHT:-}
       PRICE_TEXT_INPUT_PER_MTOK_MICROS: ${PRICE_TEXT_INPUT_PER_MTOK_MICROS:-}
       PRICE_TEXT_OUTPUT_PER_MTOK_MICROS: ${PRICE_TEXT_OUTPUT_PER_MTOK_MICROS:-}
       LOG_LEVEL: ${LOG_LEVEL:-}

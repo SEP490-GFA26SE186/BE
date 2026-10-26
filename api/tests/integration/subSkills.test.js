@@ -2,8 +2,9 @@ import { hasTestDb } from './_db.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { prisma, createParent, createUser, startServer } from './_fixtures.js';
+import { CASEL_REFERENCES } from '../../prisma/data/casel.js';
 
-// Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21): source casel (40 muc goc, seed)
+// Ky nang con CHINH LA muc CASEL (1 tang, nguoi dung chot 2026-10-21): 40 muc goc, seed
 // Danh muc chuan (chot 2026-10-22): khong them / xoa, chi dieu chinh dien giai tieng Viet, do tuoi, bat/tat.
 const skip = !hasTestDb;
 let api;
@@ -23,12 +24,18 @@ after(async () => {
 const call = (token, method, path, body) => api.request(method, path, { token, body });
 const caselRow = (code = 'sa_emotion_naming') => prisma.eqSubSkill.findUnique({ where: { code } });
 
-test('40 muc goc CASEL la ky nang con source casel, co nguyen van tieng Anh; loc theo source', { skip }, async () => {
+// DB test tich luy ky nang con do fixture tao; 40 muc goc nhan ra qua nguyen van tieng Anh.
+const CASEL_TEXTS = new Set(CASEL_REFERENCES.map((c) => c.textEn));
+
+test('40 muc goc CASEL la ky nang con, co nguyen van tieng Anh; khong tra `source`', { skip }, async () => {
   const mod = await createUser({ role: 'specialist' });
-  const list = await call(mod.token, 'GET', '/sub-skills?source=casel');
+  const list = await call(mod.token, 'GET', '/sub-skills');
   assert.equal(list.status, 200, JSON.stringify(list.body));
-  assert.equal(list.body.data.length, 40);
-  assert.ok(list.body.data.every((x) => x.source === 'casel' && x.caselTextEn && x.nameVi && x.skill?.caselCode));
+  const casel = list.body.data.filter((x) => CASEL_TEXTS.has(x.caselTextEn));
+  assert.equal(casel.length, 40);
+  assert.equal(new Set(casel.map((x) => x.caselTextEn)).size, 40);
+  assert.ok(list.body.data.every((x) => typeof x.caselTextEn === 'string' && !('source' in x)));
+  assert.ok(casel.every((x) => x.nameVi && x.skill?.caselCode));
   const emo = list.body.data.find((x) => x.code === 'sa_emotion_naming');
   assert.equal(emo.caselTextEn, "Identifying one's emotions");
   assert.equal((await call(undefined, 'GET', '/eq-skills/casel-references')).status, 404);
@@ -37,13 +44,13 @@ test('40 muc goc CASEL la ky nang con source casel, co nguyen van tieng Anh; loc
 test('danh muc chuan: khong them / xoa qua API (404)', { skip }, async () => {
   const mod = await createUser({ role: 'specialist' });
   const row = await caselRow();
-  const before = await prisma.eqSubSkill.count();
+  const before = await prisma.eqSubSkill.count({ where: { caselTextEn: { in: [...CASEL_TEXTS] } } });
   const add = await call(mod.token, 'POST', '/sub-skills', {
     skillId: skills.self_management.id, nameVi: 'Kỹ năng thử thêm', descriptionVi: 'Bé biết hít thở sâu khi thấy giận.',
   });
   assert.equal(add.status, 404, JSON.stringify(add.body));
   assert.equal((await call(mod.token, 'DELETE', `/sub-skills/${row.id}`)).status, 404);
-  assert.equal(await prisma.eqSubSkill.count(), before);
+  assert.equal(await prisma.eqSubSkill.count({ where: { caselTextEn: { in: [...CASEL_TEXTS] } } }), before);
   assert.ok(await caselRow());
 });
 
@@ -72,7 +79,7 @@ test('dieu chinh: chi sua ten / mo ta / do tuoi / bat-tat; nang luc / ma / cau t
 test('bat/tat: phu huynh chi thay ban dang dung va khong kem so dem', { skip }, async () => {
   const mod = await createUser({ role: 'specialist' });
   const parent = await createParent();
-  const inactive = await prisma.eqSubSkill.findFirst({ where: { source: 'casel', isActive: false } });
+  const inactive = await prisma.eqSubSkill.findFirst({ where: { caselTextEn: { in: [...CASEL_TEXTS] }, isActive: false } });
   const parentIds = async () => (await call(parent.token, 'GET', '/sub-skills')).body.data.map((x) => x.id);
   assert.ok(!(await parentIds()).includes(inactive.id), 'ban tat an voi phu huynh');
   const parentList = (await call(parent.token, 'GET', '/sub-skills')).body.data;

@@ -1,12 +1,22 @@
+---
+title: WEB (Admin)
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 70}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "lineColor": "#555555"}}}%%
 flowchart LR
-  AD[Admin Dashboard] --> Acc[Accounts]
-  AD --> Plans[Plans & Price Tiers]
-  AD --> Cfg[Platform Settings / AI Cost]
-  AD --> WD[Withdrawals]
-  AD --> RF[Refunds]
-  AD --> AP[Strike Appeals]
-  AD --> Rev[Revenue Report]
-  AD --> Cost[AI Cost Report]
-  AD --> PL[Profit & Loss]
-  AD --> Rec[Reconciliation]
-  AD --> Log[Audit Logs]
+  Login["Admin Login"]:::start --> L["Admin Layout<br/>Sidebar 9 items"]
+  L --> Dash["Dashboard<br/>KPIs + Revenue chart + Pending tasks"]
+  L --> Acc["Accounts<br/>Filters + Table + Lock / Unlock"]
+  Acc --> SpecM(["Create Specialist Modal"])
+  L --> Plans["Plans & Pricing<br/>Plans + Price tiers + Settings"]
+  Plans --> PlanM(["Plan Form Modal"])
+  L --> Ref["Refunds<br/>Pending / Refunded / Rejected"]
+  Ref --> RefD(["Approve / Reject Form<br/>Bank ref + Note"])
+  L --> WD["Seller Withdrawals<br/>Requested / Processing / Paid / Rejected"]
+  WD --> WDD(["Approve - payOS payout / Reject"])
+  L --> App["Strike Appeals<br/>Pending / Approved / Rejected"]
+  L --> Rev["Revenue Report<br/>Chart + Reconciliation"]
+  L --> Log["Audit Logs<br/>Table + Pagination"]
+  L --> AIC["AI Configuration<br/>Providers"]
+  classDef default fill:#EEEEEE,stroke:#999999,color:#111111
+  classDef start fill:#FFE0A3,stroke:#333333,color:#111111
+  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111

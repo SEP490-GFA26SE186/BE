@@ -7,11 +7,12 @@ import v from './publishing.validation.js';
 export const sellersRouter = Router();
 sellersRouter.get('/me', auth, authorize('parent'), c.getMySeller);
 sellersRouter.post('/apply', auth, authorize('parent'), validate(v.applySeller), c.applySeller);
+sellersRouter.put('/me', auth, authorize('parent'), validate(v.updateSeller), c.updateMySeller);
 
 export const listingsRouter = Router();
-listingsRouter.get('/price-tiers', auth, c.listPriceTiers);
 listingsRouter.get('/mine', auth, authorize('parent'), c.getMyListings);
 listingsRouter.post('/', auth, authorize('parent'), validate(v.createListing), c.createListing);
+listingsRouter.post('/:listingId/versions', auth, authorize('parent'), validate(v.createVersion), c.createListingVersion);
 
 // Gan TRUOC router /moderation cu (keywords / reports giu lai cho Phase 5); duong dan khong trung.
 export const moderationReviewRouter = Router();

@@ -7,30 +7,6 @@ const requireSpecialist = [auth, authorize('admin', 'specialist')];
 const requireAdmin = [auth, authorize('admin')];
 
 // =============================================================================
-// Standalone Backgrounds Router (/api/v1/backgrounds)
-// =============================================================================
-export const backgroundsRouter = Router();
-
-backgroundsRouter
-  .route('/')
-  .get(validate(contentLibraryValidation.getBackgrounds), contentLibraryController.getBackgrounds)
-  .post(
-    ...requireSpecialist,
-    validate(contentLibraryValidation.createBackground),
-    contentLibraryController.createBackground
-  );
-
-backgroundsRouter
-  .route('/:id')
-  .get(validate(contentLibraryValidation.getBackgroundById), contentLibraryController.getBackgroundById)
-  .put(
-    ...requireSpecialist,
-    validate(contentLibraryValidation.updateBackground),
-    contentLibraryController.updateBackground
-  )
-  .delete(...requireSpecialist, validate(contentLibraryValidation.deleteBackground), contentLibraryController.deleteBackground);
-
-// =============================================================================
 // Standalone UI Audio Assets Router (/api/v1/ui-audio-assets)
 // =============================================================================
 export const uiAudioAssetsRouter = Router();
@@ -59,30 +35,6 @@ uiAudioAssetsRouter
   .delete(...requireSpecialist, validate(contentLibraryValidation.deleteUiAudioAsset), contentLibraryController.deleteUiAudioAsset);
 
 // =============================================================================
-// Standalone Checklist Items Router (/api/v1/checklist-items)
-// =============================================================================
-export const checklistItemsRouter = Router();
-
-checklistItemsRouter
-  .route('/')
-  .get(validate(contentLibraryValidation.getChecklistItems), contentLibraryController.getChecklistItems)
-  .post(
-    ...requireSpecialist,
-    validate(contentLibraryValidation.createChecklistItem),
-    contentLibraryController.createChecklistItem
-  );
-
-checklistItemsRouter
-  .route('/:id')
-  .get(validate(contentLibraryValidation.getChecklistItemById), contentLibraryController.getChecklistItemById)
-  .put(
-    ...requireSpecialist,
-    validate(contentLibraryValidation.updateChecklistItem),
-    contentLibraryController.updateChecklistItem
-  )
-  .delete(...requireSpecialist, validate(contentLibraryValidation.deleteChecklistItem), contentLibraryController.deleteChecklistItem);
-
-// =============================================================================
 // Unified Content Library Router (/api/v1/content-library)
 // =============================================================================
 export const contentLibraryRouter = Router();
@@ -91,8 +43,6 @@ export const contentLibraryRouter = Router();
 contentLibraryRouter.get('/stats', ...requireSpecialist, contentLibraryController.getContentLibraryStats);
 
 // Mount resource routers also under unified content-library
-contentLibraryRouter.use('/backgrounds', backgroundsRouter);
 contentLibraryRouter.use('/ui-audio-assets', uiAudioAssetsRouter);
-contentLibraryRouter.use('/checklist-items', checklistItemsRouter);
 
 export default contentLibraryRouter;

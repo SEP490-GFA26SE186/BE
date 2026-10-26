@@ -43,7 +43,7 @@ async function setup() {
   }
   const link = await prisma.topicSubSkill.findFirst({ where: { topicId: topic.id }, select: { subSkill: { select: { skillId: true } } } });
   const sub = await prisma.eqSubSkill.create({
-    data: { skillId: link.subSkill.skillId, code: `it_cr_${tag()}`, nameVi: `Kỹ năng ${tag()}`, descriptionVi: 'x', createdBy: user.id },
+    data: { skillId: link.subSkill.skillId, code: `it_cr_${tag()}`, nameVi: `Kỹ năng ${tag()}`, descriptionVi: 'x', caselTextEn: 'Fixture CASEL sentence', createdBy: user.id },
   });
   const tpl = await prisma.questionTemplate.create({ data: { subSkillId: sub.id, title: `Mẫu ${tag()}`, answerFormat: 'role_choice', createdBy: user.id } });
   const ver = await prisma.questionTemplateVersion.create({

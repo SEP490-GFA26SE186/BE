@@ -7,11 +7,23 @@
 //   use_tts = false, khong anh.
 // - Ten that cua nhan vat va cua cac be tuyet doi khong duoc nam trong chu ban sao.
 //
-// Specialist chi duyet `approved` khi da xem 100% trang va tick dat du checklist (DBML moderation_reviews).
+// Specialist chi duyet `approved` khi da xem 100% trang (DBML moderation_reviews). Checklist su pham chi
+// hien tren web de Specialist tu soat, khong gui len / khong luu.
+//
+// Gia ban do nguoi ban tu dat (listings.price_vnd): 0 = mien phi (di qua don 0d) hoac 5.000-500.000, boi 1.000.
 
 import { findLeftoverNames } from '../../stories/lib/names.js';
 
 export const CLAIM_MINUTES = 30;
+
+export const PRICE_MIN_VND = 5000;
+export const PRICE_MAX_VND = 500000;
+export const PRICE_STEP_VND = 1000;
+export const PRICE_RULE_MESSAGE = 'Giá bán là 0đ (miễn phí) hoặc từ 5.000đ đến 500.000đ, làm tròn đến 1.000đ.';
+
+/** Gia ban hop le: so nguyen, 0 (mien phi) hoac PRICE_MIN..PRICE_MAX va chia het cho PRICE_STEP. */
+export const validPriceVnd = (v) =>
+  Number.isInteger(v) && (v === 0 || (v >= PRICE_MIN_VND && v <= PRICE_MAX_VND && v % PRICE_STEP_VND === 0));
 
 /**
  * Tu xung ho trong gia dinh: dat lam ten nhan vat ("Bà", "Mẹ") khong lam lo danh tinh, va trong chu
@@ -82,24 +94,14 @@ export function leftoverNameErrors(story, forbiddenNames, listingTitle) {
 }
 
 /**
- * Tien do duyet: da xem bao nhieu trang, checklist da tick chua.
+ * Tien do duyet: da xem bao nhieu trang.
  * @param {string[]} pageIds   trang cua ban dang ban
  * @param {string[]} viewedIds trang Specialist da xem
- * @param {string[]} itemIds   muc checklist dang dung
- * @param {{ checklistItemId: string, passed: boolean }[]} results
  */
-export function reviewProgress(pageIds, viewedIds, itemIds, results) {
+export function reviewProgress(pageIds, viewedIds) {
   const viewed = new Set(viewedIds);
-  const passed = new Set(results.filter((r) => r.passed).map((r) => r.checklistItemId));
   const pagesViewed = pageIds.filter((id) => viewed.has(id)).length;
-  const checklistPassed = itemIds.filter((id) => passed.has(id)).length;
-  return {
-    pagesTotal: pageIds.length,
-    pagesViewed,
-    checklistTotal: itemIds.length,
-    checklistPassed,
-    canApprove: pagesViewed === pageIds.length && checklistPassed === itemIds.length,
-  };
+  return { pagesTotal: pageIds.length, pagesViewed, canApprove: pagesViewed === pageIds.length };
 }
 
 /** Claim con hieu luc cua nguoi khac? */

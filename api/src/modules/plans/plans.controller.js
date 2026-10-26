@@ -22,7 +22,14 @@ const getMySubscription = catchAsync(async (req, res) => {
   });
 });
 
+const getCreditHistory = catchAsync(async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+  return ApiResponse.success(res, { data: await plansService.getCreditHistory(req.user.id, { page, limit }) });
+});
+
 export default {
+  getCreditHistory,
   getPlans,
   getPlanById,
   getMySubscription,

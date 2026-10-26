@@ -1,0 +1,6 @@
+# API cong khai qua HTTPS (Caddy tu xin chung chi cho SITE_DOMAIN). Web nam o Cloudflare Pages.
+# Webhook payOS: https://{$SITE_DOMAIN}/api/v1/payments/payos/webhook
+{$SITE_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:3000
+}

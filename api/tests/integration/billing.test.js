@@ -168,3 +168,56 @@ test('chu ky goi: goi thang het ky -> credit het han, ve Mien phi; goi nam giua 
   assert.equal((await activeSub(y.user.id)).plan.code, 'FAMILY_YEAR');
   assert.equal(await balance(y.user.id), 20, 'thang moi: credit du het han, cap 20');
 });
+
+test('gia han: mua lai dung goi dang dung -> cong them thoi han vao ngay het han, khong tao ky moi, khong cap credit them', { skip }, async () => {
+  const payos = fakePayos();
+  setPayosClient(payos);
+  const f = await parentWithFree();
+  const pay = async () => {
+    const res = await api.request('POST', '/payments/plans/checkout', { token: f.token, body: { planId: plans.FAMILY_MONTH.id } });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const req = payos.state.created.at(-1);
+    payos.state.status.set(req.orderCode, { status: 'PAID', amountPaid: 49000 });
+    const got = await api.request('GET', `/payments/orders/${res.body.data.order.id}`, { token: f.token });
+    assert.equal(got.body.data.order.status, 'paid');
+  };
+  await pay();
+  const first = await activeSub(f.user.id);
+  const credits = await balance(f.user.id);
+
+  await pay(); // gia han
+  const renewed = await activeSub(f.user.id);
+  assert.equal(renewed.id, first.id, 'cung mot ky, khong tao moi');
+  assert.equal(renewed.periodStart.getTime(), first.periodStart.getTime());
+  const expected = new Date(first.periodEnd);
+  expected.setUTCMonth(expected.getUTCMonth() + 1);
+  assert.equal(renewed.periodEnd.toISOString().slice(0, 10), expected.toISOString().slice(0, 10), 'het han + 1 thang');
+  assert.equal(await balance(f.user.id), credits, 'credit thang toi cap theo lich, khong cap ngay');
+  assert.equal(await prisma.subscription.count({ where: { parentId: f.user.id, status: 'active' } }), 1);
+});
+
+test('lich su credit: dong cap credit kem ten goi, dong giu / hoan credit AI kem ten truyen; moi nhat truoc, phan trang', { skip }, async () => {
+  const f = await parentWithFree();
+  const story = await prisma.story.create({ data: { ownerId: f.user.id, title: 'Bin đi học', length: 'short', entry: 'handwritten' } });
+  const req = await prisma.aiRequest.create({
+    data: { userId: f.user.id, requestType: 'story_text', storyId: story.id, idempotencyKey: `t:${story.id}`, status: 'failed', creditsCharged: 1 },
+  });
+  const now = Number(await balance(f.user.id));
+  await prisma.walletLedger.createMany({
+    data: [
+      { userId: f.user.id, walletType: 'credit', entryType: 'credit_hold', amount: -1n, balanceAfter: BigInt(now - 1), idempotencyKey: `ai:${req.id}:hold`, refType: 'ai_request', refId: req.id },
+      { userId: f.user.id, walletType: 'credit', entryType: 'credit_consume', amount: 0n, balanceAfter: BigInt(now - 1), idempotencyKey: `ai:${req.id}:consume`, refType: 'ai_request', refId: req.id },
+      { userId: f.user.id, walletType: 'credit', entryType: 'credit_release', amount: 1n, balanceAfter: BigInt(now), idempotencyKey: `ai:${req.id}:release`, refType: 'ai_request', refId: req.id },
+    ],
+  });
+  const res = await api.request('GET', '/subscriptions/me/credit-history', { token: f.token });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const { entries, pagination } = res.body.data;
+  assert.deepEqual(entries.map((e) => e.entryType), ['credit_release', 'credit_hold', 'credit_grant'], 'bo dong consume, moi nhat truoc');
+  assert.deepEqual(entries[1].context, { kind: 'ai', requestType: 'story_text', storyTitle: 'Bin đi học', characterName: null });
+  assert.equal(entries[1].amount, -1);
+  assert.equal(entries[2].context.kind, 'plan');
+  assert.equal(pagination.total, 3);
+  const page2 = await api.request('GET', '/subscriptions/me/credit-history?page=2&limit=2', { token: f.token });
+  assert.deepEqual(page2.body.data.entries.map((e) => e.entryType), ['credit_grant']);
+});

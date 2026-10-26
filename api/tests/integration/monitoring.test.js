@@ -7,7 +7,6 @@ const skip = !hasTestDb;
 let api;
 let topic;
 let store;
-let tiers;
 
 before(async () => {
   if (skip) return;
@@ -15,13 +14,11 @@ before(async () => {
   topic = await getSeededTopic();
   store = await import('../../src/modules/billing/billing.store.js');
   await (await import('../../prisma/seed_plans.js')).seedPlans(prisma);
-  await (await import('../../prisma/seed_market.js')).seedMarket(prisma);
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
   const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => /^(market|moderation)\./.test(s.key))) {
     await prisma.platformSetting.upsert({ where: { key }, update: {}, create: { key, value, updatedBy: mod.id } });
   }
-  tiers = Object.fromEntries((await prisma.priceTier.findMany()).map((t) => [Number(t.priceVnd), t]));
 });
 
 after(async () => {
@@ -43,7 +40,7 @@ async function withPlan(code) {
 }
 
 /** Nguoi ban da duyet + truyen mien phi dang ban. Truyen ban them cung nguoi ban: truyen `seller`. */
-async function publishedListing(existingSeller) {
+async function publishedListing(existingSeller, { decidedAt = new Date() } = {}) {
   const s = existingSeller ?? (await withPlan('FAMILY_MONTH'));
   if (!existingSeller) await prisma.sellerProfile.create({ data: { userId: s.user.id, displayName: `Người bán ${Date.now()}`, status: 'approved' } });
   const child = await createChild(s.user.id, 'Bin');
@@ -54,22 +51,21 @@ async function publishedListing(existingSeller) {
   for (const p of story.pages) await prisma.storyPage.update({ where: { id: p.id }, data: { contentText: `{NV1} ở trang ${p.pageOrder}.` } });
   await call(s.token, 'POST', `/stories/${story.id}/review`);
   const created = await call(s.token, 'POST', '/listings', {
-    storyId: story.id, title: `Truyện thử giám sát ${Date.now()}`, priceTierId: tiers[0].id, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
+    storyId: story.id, title: `Truyện thử giám sát ${Date.now()}`, priceVnd: 0, aliases: [{ token: '{NV1}', aliasName: 'Bống' }],
   });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const { listing } = created.body.data;
-  await prisma.moderationReview.updateMany({ where: { listingId: listing.id }, data: { decision: 'approved', decidedAt: new Date() } });
+  await prisma.moderationReview.updateMany({ where: { listingId: listing.id }, data: { decision: 'approved', decidedAt } });
   await prisma.listing.update({ where: { id: listing.id }, data: { status: 'published', publishedAt: new Date() } });
   return { seller: s, listing };
 }
 
-/** Specialist nhan luot duyet, xem het trang, tick du checklist, quyet dinh. */
+/** Specialist nhan luot duyet, xem het trang, quyet dinh. */
 async function decideReview(mod, reviewId, body) {
   const claim = await call(mod.token, 'POST', `/moderation/submissions/${reviewId}/claim`);
   assert.equal(claim.status, 200, JSON.stringify(claim.body));
   for (const p of claim.body.data.story.pages) await call(mod.token, 'POST', `/moderation/submissions/${reviewId}/pages/${p.id}/view`, {});
-  const checklist = claim.body.data.checklist.map((i) => ({ itemId: i.id, passed: true }));
-  return call(mod.token, 'POST', `/moderation/submissions/${reviewId}/decision`, { checklist, ...body });
+  return call(mod.token, 'POST', `/moderation/submissions/${reviewId}/decision`, body);
 }
 
 const report = (token, listingId, body = { category: 'scary' }) => call(token, 'POST', `/market/listings/${listingId}/reports`, body);
@@ -185,12 +181,14 @@ test('canh cao: du 3 -> khoa tai khoan ban (an truyen khoi cho); khang nghi -> A
 
 test('kiem tra ngau nhien: Specialist tao dot -> luot random_audit tren truyen dang ban, khong trung luot dang mo', { skip }, async () => {
   const mod = await createUser({ role: 'specialist' });
-  await publishedListing();
-  const run = await call(mod.token, 'POST', '/moderation/audits/run', { count: 2 });
+  const { listing: fresh } = await publishedListing(); // vua duyet xong -> khong bi chon kiem lai
+  await publishedListing(undefined, { decidedAt: new Date(Date.now() - 40 * 86_400_000) });
+  const run = await call(mod.token, 'POST', '/moderation/audits/run', { count: 20 });
   assert.equal(run.status, 201, JSON.stringify(run.body));
   assert.ok(run.body.data.created >= 1);
   const reviews = await prisma.moderationReview.findMany({ where: { id: { in: run.body.data.reviewIds } }, include: { listing: true } });
   assert.ok(reviews.every((r) => r.reviewType === 'random_audit' && r.listing.status === 'published'));
+  assert.ok(reviews.every((r) => r.listingId !== fresh.id), 'truyen vua duyet trong 30 ngay khong bi chon');
   for (const r of reviews) assert.equal(await prisma.moderationReview.count({ where: { listingId: r.listingId, decidedAt: null } }), 1);
 
   const audits = (await call(mod.token, 'GET', '/moderation/audits?open=true')).body.data.audits;

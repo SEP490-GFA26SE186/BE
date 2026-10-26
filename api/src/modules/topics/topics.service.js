@@ -38,7 +38,6 @@ const formatManaged = (t) => ({
     id: x.id,
     nameVi: x.nameVi,
     caselTextEn: x.caselTextEn,
-    source: x.source,
   })),
   storiesCount: t._count.stories,
   createdAt: t.createdAt,
@@ -52,7 +51,7 @@ const MANAGED_INCLUDE = {
     orderBy: { subSkill: { displayOrder: 'asc' } },
     select: {
       subSkill: {
-        select: { id: true, nameVi: true, caselTextEn: true, source: true },
+        select: { id: true, nameVi: true, caselTextEn: true },
       },
     },
   },

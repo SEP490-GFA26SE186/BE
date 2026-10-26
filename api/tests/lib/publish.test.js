@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aliasErrors, claimedByOther, leftoverNameErrors, reviewProgress } from '../../src/modules/publishing/lib/publish.js';
+import { aliasErrors, claimedByOther, leftoverNameErrors, reviewProgress, validPriceVnd } from '../../src/modules/publishing/lib/publish.js';
 
 const chars = [{ token: '{NV1}' }, { token: '{NV2}' }];
 
@@ -30,11 +30,14 @@ test('tu xung ho ("Bà", "Mẹ") khong bi coi la ten that; ten rieng van bi chan
   assert.deepEqual(aliasErrors([{ token: '{NV2}' }], [{ token: '{NV2}', aliasName: 'Bà' }], ['Bà']), [], 'giu "Bà" lam ten chung duoc');
 });
 
-test('reviewProgress: chi duyet khi xem du trang VA dat du checklist', () => {
-  const p = reviewProgress(['a', 'b'], ['a'], ['c1', 'c2'], [{ checklistItemId: 'c1', passed: true }, { checklistItemId: 'c2', passed: true }]);
-  assert.equal(p.canApprove, false);
-  assert.equal(reviewProgress(['a'], ['a'], ['c1'], [{ checklistItemId: 'c1', passed: false }]).canApprove, false);
-  assert.equal(reviewProgress(['a'], ['a', 'x'], ['c1'], [{ checklistItemId: 'c1', passed: true }]).canApprove, true);
+test('reviewProgress: chi duyet khi xem du trang', () => {
+  assert.deepEqual(reviewProgress(['a', 'b'], ['a']), { pagesTotal: 2, pagesViewed: 1, canApprove: false });
+  assert.equal(reviewProgress(['a'], ['a', 'x']).canApprove, true);
+});
+
+test('validPriceVnd: 0 (mien phi) hoac 5.000-500.000, boi 1.000, so nguyen', () => {
+  for (const v of [0, 5000, 19000, 499000, 500000]) assert.equal(validPriceVnd(v), true, String(v));
+  for (const v of [-1000, 1000, 4000, 5500, 501000, 19000.5, '19000', null, undefined, NaN]) assert.equal(validPriceVnd(v), false, String(v));
 });
 
 test('claimedByOther: chi khi nguoi khac giu va con han', () => {

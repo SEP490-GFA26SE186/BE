@@ -129,6 +129,7 @@ async def test_cloudinary_upload_image_is_authenticated_and_signed() -> None:
     assert await _cld().upload("a/r1-1.png", b"x", "image/png") == "a/r1-1.png"
     form = _form(route.calls.last.request)
     assert form["public_id"] == "sw/a/r1-1"  # extension dropped for images
+    assert form["asset_folder"] == "sw/a"  # Media Library folder in dynamic folder mode
     assert form["type"] == "authenticated"  # no public delivery URL
     assert form["overwrite"] == "true"
     assert form["api_key"] == "key-123"
@@ -140,7 +141,11 @@ async def test_cloudinary_upload_image_is_authenticated_and_signed() -> None:
 async def test_cloudinary_upload_audio_goes_to_video_resource() -> None:
     route = respx.post(f"{CLD}/video/upload").mock(return_value=httpx.Response(200, json={}))
     await _cld(folder="").upload("n/r2-1.wav", b"x", "audio/wav")
-    assert _form(route.calls.last.request)["public_id"] == "n/r2-1"
+    form = _form(route.calls.last.request)
+    assert (form["public_id"], form["asset_folder"]) == ("n/r2-1", "n")
+    image = respx.post(f"{CLD}/image/upload").mock(return_value=httpx.Response(200, json={}))
+    await _cld(folder="").upload("r3-1.png", b"x", "image/png")
+    assert "asset_folder" not in _form(image.calls.last.request)  # root key: no folder
 
 
 @respx.mock

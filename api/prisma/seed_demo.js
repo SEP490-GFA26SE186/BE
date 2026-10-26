@@ -121,7 +121,7 @@ function buildAnswer(spec, cp, version, options) {
 }
 
 /** Truyen + nhan vat + canh + trang + ke gian sach (chung cho truyen AI va truyen tu viet). */
-async function createStoryBody(tx, { storyData, spec, ownerId, child, own, second, backgroundId, createdAt }) {
+async function createStoryBody(tx, { storyData, spec, ownerId, child, own, second, createdAt }) {
   const story = await tx.story.create({
     data: { ...storyData, ownerId, useAiImage: false, useTts: false, status: 'ready', createdAt, updatedAt: createdAt, reviewedAt: createdAt },
   });
@@ -130,7 +130,7 @@ async function createStoryBody(tx, { storyData, spec, ownerId, child, own, secon
 
   const scenes = [];
   for (const [i, description] of spec.scenes.entries()) {
-    scenes.push(await tx.storyScene.create({ data: { storyId: story.id, sceneOrder: i + 1, description, backgroundId } }));
+    scenes.push(await tx.storyScene.create({ data: { storyId: story.id, sceneOrder: i + 1, description } }));
   }
   const origin = storyData.length === 'custom' ? 'human' : 'ai';
   const pages = [];
@@ -147,7 +147,7 @@ async function createStoryBody(tx, { storyData, spec, ownerId, child, own, secon
 }
 
 /** Tao mot truyen AI + diem dung tu mau + luot doc dau. Tra ve ly do bo qua (chuoi) hoac null neu da tao. */
-async function createAiStory(prisma, { spec, parent, child, own, bookCharacter, topic, backgroundId }) {
+async function createAiStory(prisma, { spec, parent, child, own, bookCharacter, topic }) {
   const versions = [];
   for (const cp of spec.checkpoints) {
     const version = await findPublishedVersion(prisma, cp);
@@ -160,7 +160,7 @@ async function createAiStory(prisma, { spec, parent, child, own, bookCharacter, 
   await prisma.$transaction(async (tx) => {
     const { story, pages } = await createStoryBody(tx, {
       storyData: { kind: 'private', topicId: topic.id, length: spec.length, title: spec.title, situation: spec.situation },
-      spec, ownerId: parent.id, child, own, backgroundId, createdAt,
+      spec, ownerId: parent.id, child, own, createdAt,
       second: spec.second.aliasName ? { aliasName: spec.second.aliasName } : { characterId: bookCharacter.id },
     });
 
@@ -214,12 +214,12 @@ async function createAiStory(prisma, { spec, parent, child, own, bookCharacter, 
   return null;
 }
 
-async function createCustomStory(prisma, { parent, child, own, backgroundId }) {
+async function createCustomStory(prisma, { parent, child, own }) {
   const createdAt = new Date(Date.now() - 7 * DAY_MS);
   await prisma.$transaction(async (tx) => {
     await createStoryBody(tx, {
       storyData: { kind: 'private', topicId: null, length: 'custom', entry: 'handwritten', title: DEMO_CUSTOM_STORY.title, situation: DEMO_CUSTOM_STORY.situation },
-      spec: DEMO_CUSTOM_STORY, ownerId: parent.id, child, own, second: null, backgroundId, createdAt,
+      spec: DEMO_CUSTOM_STORY, ownerId: parent.id, child, own, second: null, createdAt,
     });
   }, STORY_TX);
 }
@@ -243,19 +243,16 @@ export async function ensureDemoStories(prisma, parent) {
       data: { token: `{NV${n}}` },
     });
   }
-  const background = await prisma.background.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } });
-  const backgroundId = background?.id ?? null;
-
   for (const spec of DEMO_STORIES) {
     if (existing.has(spec.title)) continue;
     const topic = await prisma.topic.findFirst({ where: { title: spec.topicTitle, isActive: true } });
     const skipped = topic
-      ? await createAiStory(prisma, { spec, parent, child, own, bookCharacter, topic, backgroundId })
+      ? await createAiStory(prisma, { spec, parent, child, own, bookCharacter, topic })
       : `khong co topic "${spec.topicTitle}"`;
     console.log(skipped ? `  ! Bo qua "${spec.title}": ${skipped}` : `  + ${spec.title}`);
   }
   if (!existing.has(DEMO_CUSTOM_STORY.title)) {
-    await createCustomStory(prisma, { parent, child, own, backgroundId });
+    await createCustomStory(prisma, { parent, child, own });
     console.log(`  + ${DEMO_CUSTOM_STORY.title}`);
   }
 }
