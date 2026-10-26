@@ -37,11 +37,11 @@ sequenceDiagram
   else approve
     S->>DB: order_items SET refunded
     alt listing item
-      S->>DB: UPDATE entitlements SET revoked_at
+      S->>DB: UPDATE entitlements SET revoked_at, remove from bookshelves, counters - 1
       S->>+E: moveEarning (earning_reversal)
       E-->>-S: ok / 422 seller already withdrew
     else plan item
-      S->>DB: UPDATE subscriptions SET cancelled
+      S->>DB: expire credit, UPDATE subscriptions SET cancelled, fall back to Free plan
     end
     S->>DB: refund approved, INSERT admin_audit_logs
     S-->>C: approved

@@ -14,12 +14,6 @@ classDiagram
     +PUT /market/listings/:listingId/review
     +POST /market/reviews/:reviewId/reply
   }
-  class RefundRoutes {
-    <<controller>>
-    +GET /payments/orders
-    +POST /payments/order-items/:itemId/refund
-    +POST /admin/refunds/:refundId/decision
-  }
   class MarketService {
     <<service>>
     +listListings(query) Page~Listing~
@@ -29,26 +23,25 @@ classDiagram
   }
   class ReviewsService {
     <<service>>
-    +listReviews(listingId) List~Review~
-    +upsertReview(user, listingId, body) Review
-    +replyReview(user, reviewId, reply) Review
-    +hideReview(moderator, reviewId) void
-  }
-  class RefundsService {
-    <<service>>
-    +listMyOrders(user) List~OrderItem~
-    +requestRefund(user, orderItemId, reason) RefundRequest
-    +listRefunds(query) List~RefundRequest~
-    +decideRefund(admin, refundId, body) RefundRequest
+    +listReviews(listingId) List~ProductReview~
+    +upsertReview(user, listingId, body) ProductReview
+    +replyReview(user, reviewId, reply) ProductReview
   }
   class BillingService {
     <<service>>
     +checkoutOrder(user, price, itemName, item, returnPath) CheckoutResult
+    +handleWebhook(body) WebhookResult
   }
   class BillingStore {
     <<repository>>
     +fulfillOrder(tx, orderId) bool
+    +loadMarketSettings(db) MarketSettings
     -deliverListing(tx, buyerId, item) void
+  }
+  class PayOSClient {
+    <<external>>
+    +paymentRequests.create(request) PaymentLink
+    +webhooks.verify(body) WebhookData
   }
   class EarningLedger {
     <<repository>>
@@ -56,57 +49,82 @@ classDiagram
     +releaseDueEarnings(db, now) int
     +moveEarning(tx, entry) void
   }
+  class WorkerCron {
+    <<worker>>
+    +releaseDueEarnings() void
+  }
+  class Listing {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -BigInt priceVnd
+    -ListingStatus status
+    -Int purchaseCount
+    -Int freeClaimCount
+  }
+  class OrderItem {
+    <<entity>>
+    -UUID id
+    -UUID orderId
+    -UUID listingId
+    -BigInt unitPriceVnd
+    -Decimal sellerShareRate
+  }
   class Entitlement {
     <<entity>>
     -UUID id
     -UUID parentId
     -UUID listingId
     -UUID orderItemId
+    -DateTime grantedAt
     -DateTime revokedAt
   }
-  class RefundRequest {
+  class ProductReview {
     <<entity>>
     -UUID id
-    -UUID orderItemId
-    -RequestStatus status
-    -String reason
-    -String bankTransactionRef
+    -UUID listingId
+    -UUID parentId
+    -Int rating
+    -String sellerReply
   }
   class Wallet {
     <<entity>>
     -UUID userId
-    -Int creditBalance
     -BigInt earningPendingVnd
     -BigInt earningAvailableVnd
     -BigInt earningLockedVnd
   }
   class WalletLedger {
     <<entity>>
-    -UUID id
+    -BigInt id
     -LedgerEntryType entryType
     -BigInt amount
     -String idempotencyKey
+    -DateTime availableAt
   }
-  class RequestStatus {
+  class LedgerEntryType {
     <<enumeration>>
-    pending
-    approved
-    rejected
-    cancelled
+    earning_pending
+    earning_release
+    earning_reversal
+    withdrawal_hold
+    withdrawal_paid
+    withdrawal_release
   }
 
   MarketRoutes --> MarketService : uses
   ReviewsRoutes --> ReviewsService : uses
-  RefundRoutes --> RefundsService : uses
   MarketService --> BillingService : checkoutOrder
+  BillingService ..> PayOSClient : payment link
   BillingService --> BillingStore : fulfillOrder
   BillingStore ..> Entitlement : grants
-  BillingStore ..> EarningLedger : 80% earning_pending
-  BillingStore ..> RefundRequest : duplicate purchase
-  RefundsService ..> RefundRequest : persists
-  RefundsService ..> EarningLedger : earning_reversal
-  RefundsService ..> Entitlement : revokes
+  BillingStore ..> EarningLedger : seller share as earning_pending
+  WorkerCron ..> EarningLedger : earning_release
+  ReviewsService ..> ProductReview : persists
   EarningLedger ..> Wallet : FOR UPDATE
   EarningLedger ..> WalletLedger : append only
+  Listing "1" --> "*" OrderItem : sold as
+  OrderItem "1" --> "0..1" Entitlement : grants
+  Listing "1" --> "*" ProductReview : rated by
   Wallet "1" --> "*" WalletLedger : entries
-  RefundRequest --> RequestStatus
+  WalletLedger --> LedgerEntryType
