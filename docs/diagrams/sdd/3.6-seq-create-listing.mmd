@@ -1,22 +1,42 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor S as Seller
-  participant API as PublishingService
-  participant DB as PostgreSQL
-  participant N as NarrationService
-  S->>API: POST /listings {storyId, title, description, priceVnd, aliases}
-  API->>DB: seller approved? plan canSell? price 0 or 5,000-500,000 step 1,000?
-  API->>DB: load private story (owned, reviewed)
-  alt not reviewed or gaps
-    API-->>S: 422
+  participant W as Web App
+  participant C as :PublishingController
+  participant P as :PublishingService
+  participant R as :PublishRules
+  participant N as :NarrationService
+  participant DB as Database
+  S->>W: Fill title, price, generic names for characters, click Submit
+  W->>+C: POST /api/v1/listings {storyId, title, description, priceVnd, aliases}
+  C->>+P: createListing(user, body)
+  P->>DB: SELECT seller_profiles, active plan
+  DB-->>P: SellerProfile, Plan
+  P->>R: validPriceVnd(priceVnd)
+  R-->>P: 0 or 5,000-500,000 step 1,000
+  P->>DB: SELECT private story (owned) + pages + checkpoints + characters
+  DB-->>P: Story
+  P->>R: aliasErrors + leftoverNameErrors (real names of characters and children)
+  R-->>P: errors
+  alt seller not approved / plan cannot sell / bad price / not reviewed / gaps / personal info left
+    P-->>C: ApiError 403 / 422
+    C-->>W: error with list of fixes
+  else ok
+    P->>DB: BEGIN
+    P->>DB: INSERT stories kind = published (no situation, moment summary, seed event)
+    P->>DB: copy story_characters with aliasName, scenes (ready images), pages, checkpoints (template trace kept)
+    P->>DB: INSERT listings (submitted, cover_image_key) + moderation_reviews (submission)
+    opt new version of a live listing
+      P->>DB: reuseNarration (clips of unchanged segments)
+    end
+    P->>+N: prepareNarration(tx, copyId)
+    N-->>-P: narration jobs (generic names)
+    P->>DB: COMMIT
+    P->>N: dispatchNarration(jobs)
+    P-->>C: Listing + narration progress
+    C-->>W: 201
   end
-  API->>API: aliasErrors + leftoverNameErrors (real names, situation, family moment)
-  alt personal info left
-    API-->>S: 422 Personal information not fully removed
-  end
-  API->>DB: BEGIN
-  API->>DB: copy story as kind=published (no situation / moment / seed event, aliasName characters)
-  API->>DB: copy pages, checkpoints (template trace kept), ready scene images and cover key
-  API->>N: queue narration with generic names
-  API->>DB: insert listings(submitted) + moderation_reviews(submission)
-  API->>DB: COMMIT
-  API-->>S: 201 listing
+  deactivate P
+  deactivate C
+  W-->>S: Listing waits for moderation

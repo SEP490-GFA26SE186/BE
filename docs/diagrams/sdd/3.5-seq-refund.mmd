@@ -1,17 +1,55 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
   actor A as Admin
-  participant API as RefundsService
-  participant DB as PostgreSQL
-  P->>API: GET /payments/orders (refundable + deadline per item)
-  P->>API: POST /payments/order-items/:id/refund {reason}
-  API->>DB: paid, price > 0, within market.refund_window_days, no request yet
-  API->>DB: insert refund_requests(pending)
-  A->>API: POST /admin/refunds/:id/decision {approve, bankTransactionRef | note}
-  alt approve
-    API->>DB: order_item refunded, revoke entitlement or cancel subscription
-    API->>DB: earning_reversal (if seller earning not withdrawn)
-    API->>DB: admin_audit_logs refund.approved
-  else reject
-    API->>DB: refund rejected with note
+  participant W as Web App
+  participant C as :RefundRoutes
+  participant S as :RefundsService
+  participant E as :EarningLedger
+  participant DB as Database
+  P->>W: Open My orders
+  W->>+C: GET /api/v1/payments/orders
+  C->>S: listMyOrders(user)
+  S-->>C: items with refundable flag + deadline
+  C-->>-W: 200
+  P->>W: Request refund with reason
+  W->>+C: POST /api/v1/payments/order-items/:itemId/refund {reason}
+  C->>+S: requestRefund(user, orderItemId, reason)
+  S->>DB: order paid, price > 0, within market.refund_window_days, no request yet
+  DB-->>S: refund state
+  alt not refundable / already requested
+    S-->>C: ApiError 422 / 409
+    C-->>W: error
+  else ok
+    S->>DB: INSERT refund_requests (pending)
+    S-->>C: RefundRequest
+    C-->>W: 201
   end
+  deactivate S
+  deactivate C
+  A->>W: Transfer money back manually, open refund
+  W->>+C: POST /api/v1/admin/refunds/:refundId/decision {approve, bankTransactionRef, note}
+  C->>+S: decideRefund(admin, refundId, body)
+  S->>DB: BEGIN, SELECT refund FOR UPDATE
+  alt not pending
+    S-->>C: ApiError 409
+  else approve
+    S->>DB: order_items SET refunded
+    alt listing item
+      S->>DB: UPDATE entitlements SET revoked_at
+      S->>+E: moveEarning (earning_reversal)
+      E-->>-S: ok / 422 seller already withdrew
+    else plan item
+      S->>DB: UPDATE subscriptions SET cancelled
+    end
+    S->>DB: refund approved, INSERT admin_audit_logs
+    S-->>C: approved
+  else reject (note required)
+    S->>DB: refund rejected with note, INSERT admin_audit_logs
+    S-->>C: rejected
+  end
+  S->>DB: COMMIT
+  deactivate S
+  C-->>-W: 200 / error
+  W-->>A: Show result

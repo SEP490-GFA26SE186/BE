@@ -1,25 +1,56 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
-  actor C as Child
+  autonumber
+  actor K as Child
   participant W as Kid Reader
-  participant API as KidService
-  participant DB as PostgreSQL
-  C->>W: Open story from bookshelf
-  W->>API: POST /kid/sessions {storyId}
-  API->>DB: on child shelf? loadReadiness (reviewed + all clips ready)
-  alt not ready
-    API-->>W: 422 Story not ready
+  participant A as :KidAuth
+  participant C as :KidController
+  participant S as :KidService
+  participant N as :NarrationStore
+  participant R as :PlayRules
+  participant DB as Database
+  K->>W: Open story from bookshelf
+  W->>+A: POST /api/v1/kid/sessions {storyId}
+  A->>A: verify kid_session token, set req.kid
+  A->>+C: startSession(req, res)
+  C->>+S: startSession(kid, storyId)
+  S->>DB: SELECT bookshelf_items (child, story)
+  DB-->>S: item or null
+  S->>+N: loadReadiness(db, storyId)
+  N-->>-S: reviewed, narration progress
+  alt not on shelf or not ready
+    S-->>C: ApiError 404 / 422
+    C-->>A: 422 Story not ready
+  else ready
+    S->>DB: resume in_progress or INSERT play_sessions (is_first_play if first)
+    DB-->>S: PlaySession
+    S->>R: kidStoryContent(story)
+    R-->>S: pages, audio, checkpoints WITHOUT answers
+    S-->>C: session view
+    C-->>A: 201
   end
-  API->>DB: resume in_progress or create play_session (is_first_play if first)
-  API-->>W: pages, audio URLs, checkpoints WITHOUT correct answers
+  deactivate S
+  deactivate C
+  A-->>-W: HTTP response
   loop each checkpoint
-    C->>W: Choose emotion / option
-    W->>API: POST /kid/sessions/:id/answers
-    API->>DB: first answer? snapshot score, skill, sub-skill, template version
-    alt wrong first choice (emotion / perspective)
-      API-->>W: hint, ask to choose again
-      C->>W: Second choice
-      W->>API: POST answers (attempt 2, score unchanged)
+    K->>W: Choose emotion / option
+    W->>+C: POST /api/v1/kid/sessions/:id/answers {checkpointId, choice}
+    C->>+S: answer(kid, sessionId, body)
+    S->>R: readChoice(checkpoint, body)
+    alt first answer
+      S->>R: firstScore(checkpoint, choice)
+      R-->>S: score (null if reflection, not scored or excluded)
+      S->>DB: INSERT checkpoint_answers (snapshot score, skill, sub-skill, template version)
+    else second try (emotion / perspective)
+      S->>DB: UPDATE checkpoint_answers attempts = 2 (score unchanged)
     end
-    API-->>W: outcome + correct answer audio
+    S->>R: answerOutcome(checkpoint, row)
+    R-->>S: hint and ask again, or outcome + correct answer audio
+    S-->>-C: AnswerOutcome
+    C-->>-W: 200
   end
-  W->>API: POST /kid/sessions/:id/complete (idempotent)
+  W->>+C: POST /api/v1/kid/sessions/:id/complete
+  C->>S: complete(kid, sessionId)
+  S->>DB: UPDATE play_sessions SET status = completed (idempotent)
+  C-->>-W: 200
+  W-->>K: The end, back to bookshelf

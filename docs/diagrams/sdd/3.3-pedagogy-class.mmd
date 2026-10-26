@@ -1,55 +1,146 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
+  direction TB
+  class SubSkillsController {
+    <<controller>>
+    +getSubSkills(req, res) void
+    +updateSubSkill(req, res) void
+  }
+  class TopicsController {
+    <<controller>>
+    +getTopics(req, res) void
+    +createTopic(req, res) void
+    +updateTopic(req, res) void
+    +deleteTopic(req, res) void
+  }
+  class QuestionTemplatesController {
+    <<controller>>
+    +list(req, res) void
+    +create(req, res) void
+    +duplicate(req, res) void
+    +saveDraft(req, res) void
+    +publish(req, res) void
+    +remove(req, res) void
+  }
+  class CheckpointReviewController {
+    <<controller>>
+    +list(req, res) void
+    +markOk(req, res) void
+    +flag(req, res) void
+    +unflag(req, res) void
+  }
   class SubSkillsService {
-    +listSubSkills(query)
-    +updateSubSkill(user, id, body)
+    <<service>>
+    +listSubSkills(query) List~EqSubSkill~
+    +updateSubSkill(user, id, body) EqSubSkill
   }
   class TopicsService {
-    +createTopic(user, body)
-    +updateTopic(id, body)
-    +deleteTopic(id)
+    <<service>>
+    +listTopics(query) List~Topic~
+    +createTopic(user, body) Topic
+    +updateTopic(id, body) Topic
+    +deleteTopic(id) void
   }
   class QuestionTemplatesService {
-    +createTemplate(user, body)
-    +saveDraft(user, id, body)
-    +publish(user, id)
-    +duplicateTemplate(user, id)
-    +deleteTemplate(id)
+    <<service>>
+    +listTemplates(query) List~QuestionTemplate~
+    +createTemplate(user, body) QuestionTemplate
+    +duplicateTemplate(user, id) QuestionTemplate
+    +saveDraft(user, id, body) QuestionTemplate
+    +publish(user, id) QuestionTemplate
+    +deleteTemplate(id) void
   }
   class TemplateRules {
-    +assertVersionComplete(version)
-    +checkpointTypeFor(format)
-    +scoreFor(version, choice)
+    <<utility>>
+    +draftDefaults(answerFormat, url) VersionContent
+    +assertVersionComplete(answerFormat, version) void
+    +checkpointTypeFor(answerFormat) CheckpointType
+    +scoreFor(version, choice) Decimal
   }
   class CheckpointReviewService {
-    +listQueue() markOk() flag() unflag()
+    <<service>>
+    +listQueue(query) List~StoryCheckpoint~
+    +markOk(user, id) void
+    +flag(user, id, reason) void
+    +unflag(user, id) void
+  }
+  class PrismaClient {
+    <<repository>>
+  }
+  class EqSkill {
+    <<entity>>
+    -UUID id
+    -CaselCompetency caselCode
+    -String nameVi
   }
   class EqSubSkill {
-    string code
-    uuid skillId
-    string caselTextEn
-    bool isActive
-    int ageMin
-    int ageMax
-  }
-  class QuestionTemplate {
-    string name
-    bool isActive
-  }
-  class QuestionTemplateVersion {
-    int version
-    TemplateStatus status
-    AnswerFormat answerFormat
-    json options
+    <<entity>>
+    -UUID id
+    -UUID skillId
+    -String code
+    -String nameVi
+    -String caselTextEn
+    -Int ageMin
+    -Int ageMax
+    -Boolean isActive
   }
   class Topic {
-    string title
-    uuid skillId
-    string guidance
-    bool isActive
+    <<entity>>
+    -UUID id
+    -String title
+    -UUID skillId
+    -String guidance
+    -Int ageMin
+    -Int ageMax
+    -Boolean isActive
   }
-  SubSkillsService --> EqSubSkill
-  TopicsService --> Topic
-  QuestionTemplatesService --> TemplateRules
-  QuestionTemplate "1" --> "*" QuestionTemplateVersion
-  EqSubSkill "1" --> "*" QuestionTemplate
-  Topic "*" --> "1..3" EqSubSkill
+  class QuestionTemplate {
+    <<entity>>
+    -UUID id
+    -UUID subSkillId
+    -String title
+    -AnswerFormat answerFormat
+    -Boolean isActive
+  }
+  class QuestionTemplateVersion {
+    <<entity>>
+    -UUID id
+    -UUID templateId
+    -Int version
+    -TemplateStatus status
+    -String questionFrame
+    -Decimal constructiveScore
+    -Decimal avoidantScore
+    -Decimal impulsiveScore
+    -DateTime publishedAt
+  }
+  class TemplateStatus {
+    <<enumeration>>
+    draft
+    published
+  }
+  class AnswerFormat {
+    <<enumeration>>
+    emotion_pick
+    single_correct
+    role_choice
+  }
+
+  SubSkillsController --> SubSkillsService : uses
+  TopicsController --> TopicsService : uses
+  QuestionTemplatesController --> QuestionTemplatesService : uses
+  CheckpointReviewController --> CheckpointReviewService : uses
+  QuestionTemplatesService ..> TemplateRules : validates
+  SubSkillsService ..> PrismaClient : persists
+  TopicsService ..> PrismaClient : persists
+  QuestionTemplatesService ..> PrismaClient : persists
+  CheckpointReviewService ..> PrismaClient : persists
+  PrismaClient ..> EqSubSkill
+  PrismaClient ..> Topic
+  PrismaClient ..> QuestionTemplate
+  EqSkill "1" --> "*" EqSubSkill : groups
+  EqSubSkill "1" --> "*" QuestionTemplate : has
+  QuestionTemplate "1" --> "*" QuestionTemplateVersion : versions
+  Topic "*" --> "1..3" EqSubSkill : topic_sub_skills
+  QuestionTemplate --> AnswerFormat
+  QuestionTemplateVersion --> TemplateStatus

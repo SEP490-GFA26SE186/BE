@@ -1,26 +1,56 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
-  participant API as StoriesEditorService
-  participant N as NarrationService
-  participant DB as PostgreSQL
-  participant Q as narration queue
-  participant WK as Narration Worker
+  participant W as Web App
+  participant C as :StoriesController
+  participant E as :StoriesEditorService
+  participant S as :StoriesService
+  participant N as :NarrationService
+  participant NS as :NarrationStore
+  participant Q as :NarrationQueue
+  participant WK as :NarrationProcessor
+  participant DB as Database
   participant AI as AI Service (VieNeu-TTS)
-  participant CL as Cloudinary
-  P->>API: POST /stories/:id/review
-  API->>DB: findReviewGaps (pages, checkpoints complete)
+  P->>W: Click Finish review
+  W->>+C: POST /api/v1/stories/:id/review
+  C->>+E: reviewStory(user, storyId)
+  E->>DB: BEGIN, lockForWrite (story owned, not generating)
+  E->>DB: SELECT story_pages, story_checkpoints + options
+  DB-->>E: pages, checkpoints
+  E->>E: findReviewGaps(pages, checkpoints)
   alt gaps found
-    API-->>P: 422 list of missing parts
+    E-->>C: ApiError 422 + gaps
+    C-->>W: 422 list of missing parts
+  else complete
+    E->>+S: assertNoBlockedKeywords(tx, storyId)
+    S-->>-E: ok (or 422 blocked words)
+    E->>DB: UPDATE stories SET reviewed_at = now(), status
+    E->>+N: prepareNarration(tx, storyId)
+    N->>NS: queueNarration (missing / changed segments only)
+    NS->>DB: UPSERT narration_clips (queued)
+    N-->>-E: jobs
+    E->>DB: COMMIT
+    E->>N: dispatchNarration(jobs)
+    N->>Q: enqueueNarration(jobs)
+    E-->>C: story detail + narration progress
+    C-->>W: 200
   end
-  API->>DB: assertNoBlockedKeywords
-  API->>DB: set reviewed_at, status
-  API->>N: prepareNarration(tx) -> narration_clips(queued) per segment
-  N->>Q: dispatch jobs (concurrency 1)
-  API-->>P: story detail + narration progress
-  Q->>WK: clip job
-  WK->>DB: markGenerating
-  WK->>AI: POST /v1/tts/synthesize (text with real names, private only)
-  AI->>CL: upload MP3 (type=authenticated)
-  AI-->>WK: audio key, duration
-  WK->>DB: persistClip(audioKey, ready)
-  Note over P,DB: Story is "ready for child" only when reviewed and all clips ready
+  deactivate E
+  deactivate C
+  loop each clip (concurrency 1)
+    Q->>+WK: job narration clip
+    WK->>NS: markClipGenerating(clipId)
+    WK->>NS: loadClipInput(clipId)
+    NS-->>WK: segment text, voice
+    WK->>+AI: POST /v1/tts/synthesize
+    AI-->>-WK: audio key (Cloudinary, authenticated), duration
+    alt TTS error
+      WK->>NS: failClip(clipId)
+    else ok
+      WK->>NS: persistClip(clipId, audioKey)
+    end
+    deactivate WK
+  end
+  Note over P,DB: Ready for child = reviewed_at set AND all clips ready (loadReadiness)
+  W-->>P: Show narration progress

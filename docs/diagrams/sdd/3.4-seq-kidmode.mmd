@@ -1,30 +1,58 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
-  actor C as Child
+  actor K as Child
   participant W as Web App
-  participant S as AuthService
-  participant T as TokenService
-  participant DB as PostgreSQL
+  participant C as :AuthController
+  participant S as :AuthService
+  participant L as :KidPinLimiter
+  participant T as :TokenService
+  participant DB as Database
   P->>W: Choose child, click Enter Kid Mode
-  W->>S: POST /auth/kid-mode/enter {childId}
-  S->>DB: load parent (kidExitPinHash) and child (owned, not deleted)
+  W->>+C: POST /api/v1/auth/kid-mode/enter {childId}
+  C->>+S: enterKidMode(parentId, childId)
+  S->>DB: SELECT parent (kid_exit_pin_hash), child (owned, not deleted)
+  DB-->>S: User, ChildProfile
   alt PIN not set
-    S-->>W: 403 Set a Kid Exit PIN first
+    S-->>C: ApiError 403
+    C-->>W: 403 Set a Kid Exit PIN first
   else child not owned
-    S-->>W: 404 Child profile not found
+    S-->>C: ApiError 404
+    C-->>W: 404 Child profile not found
   else ok
-    S->>T: generateKidSessionToken(parent, childId)
-    T->>DB: insert auth_tokens (kid_session)
-    S-->>W: kid session token + child
+    S->>+T: generateKidSessionToken(parent, childId)
+    T->>DB: INSERT auth_tokens (kid_session)
+    T-->>-S: kid token
+    S-->>C: kid token + child
+    C-->>W: 200 kid session
   end
-  C->>W: Read stories (all /kid/* calls carry kid token)
-  P->>W: Enter exit PIN
-  W->>S: POST /auth/kid-mode/exit {pin}
-  S->>T: verifyKidSessionToken(token)
-  alt wrong PIN
-    S-->>W: 401 Incorrect Kid Exit PIN
-  else correct
-    S->>T: consumeKidSessionToken(token)
-    T->>DB: set consumed_at
-    S-->>W: parent tokens, back to Parent Dashboard
+  deactivate S
+  deactivate C
+  K->>W: Read stories (every /kid/* call carries the kid token)
+  P->>W: Enter Kid Exit PIN
+  W->>+C: POST /api/v1/auth/kid-mode/exit {pin, kidSessionToken}
+  C->>+S: exitKidMode(body)
+  S->>+T: verifyKidSessionToken(token)
+  T-->>-S: parent, token id
+  S->>L: lockRemainingMs(parentId)
+  L-->>S: remaining ms
+  alt locked after 5 wrong PINs
+    S-->>C: ApiError 429
+    C-->>W: 429 Try again in 15 minutes
+  else PIN wrong
+    S->>L: recordFailure(parentId)
+    S-->>C: ApiError 401 with attempts left
+    C-->>W: 401 Wrong PIN
+  else PIN correct
+    S->>L: reset(parentId)
+    S->>T: consumeKidSessionToken(tokenId)
+    T->>DB: UPDATE auth_tokens SET consumed_at = now()
+    S->>T: generateAuthTokens(parent)
+    T-->>S: parent tokens
+    S-->>C: parent + tokens
+    C-->>W: 200
   end
+  deactivate S
+  deactivate C
+  W-->>P: Back to Parent Dashboard / show error

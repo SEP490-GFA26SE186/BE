@@ -1,95 +1,159 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
-  class StoriesRoutes {
-    +POST analyze()
-    +POST stories()
-    +PUT cover(id)
-    +PUT pages(pageId)
-    +PUT checkpoints(cpId)
-    +POST generate(id)
-    +GET generation(id)
-    +POST review(id)
+  direction TB
+  class StoriesController {
+    <<controller>>
+    +analyzeStory(req, res) void
+    +createStory(req, res) void
+    +updateStory(req, res) void
+    +setCover(req, res) void
+    +updatePage(req, res) void
+    +updateCheckpoint(req, res) void
+    +generateStory(req, res) void
+    +getGeneration(req, res) void
+    +reviewStory(req, res) void
   }
   class StoriesService {
-    +createStory(user, body)
-    +prepareFamily(user, body)
-    +setCover(user, id, sceneId)
-    +updateStory(user, id, body)
-    +bindCharacters(user, id, ids)
-    +tokenizeOrReject(text, ctx)
-    +assertNoBlockedKeywords(tx, storyId)
+    <<service>>
+    +createStory(user, body) Story
+    +updateStory(user, id, body) Story
+    +bindCharacters(user, id, characterIds) Story
+    +setCover(user, id, sceneId) Story
+    +tokenizeOrReject(text, nameContext) string
+    +assertNoBlockedKeywords(tx, storyId) void
+    -prepareFamily(user, data, ctx) FamilyPlan
   }
   class StoriesAnalysisService {
-    +analyzeStory(user, body)
+    <<service>>
+    +analyzeStory(user, body) AnalysisResult
   }
   class AnalysisToken {
-    +signAnalysisToken(payload)
-    +verifyAnalysisToken(token, ownerId)
+    <<utility>>
+    +signAnalysisToken(payload, secret) SignedToken
+    +verifyAnalysisToken(token, secret, owner) AnalysisClaims
   }
   class StoriesEditorService {
-    +addPage() deletePage()
-    +addCheckpoint() deleteCheckpoint()
-    +reviewStory(user, id)
+    <<service>>
+    +updatePage(user, id, pageId, body) Story
+    +addPage(user, id, body) Story
+    +deletePage(user, id, pageId) Story
+    +updateCheckpoint(user, id, cpId, body) Story
+    +reviewStory(user, id) Story
   }
   class GenerationService {
-    +startGeneration(user, storyId)
-    +getGeneration(user, storyId)
-    +getAiPricing()
+    <<service>>
+    +startGeneration(user, storyId) GenerationTicket
+    +getGeneration(user, storyId) GenerationStatus
+    +getAiPricing() AiPricing
+  }
+  class StoriesAccess {
+    <<utility>>
+    +loadOwnedStory(user, id) Story
+    +loadStoryForWrite(user, id) Story
+    +lockForWrite(tx, user, id) void
   }
   class GenerationStore {
-    +markProcessing(id, attempt)
-    +loadGenerationInput(id)
-    +persistAiResult(id, response)
-    +finalizeFailure(id, code)
+    <<repository>>
+    +markProcessing(db, id, attempt) bool
+    +loadGenerationInput(db, id) GenerationInput
+    +persistAiResult(db, id, response) void
+    +finalizeFailure(db, id, code) void
   }
   class CreditLedger {
-    +holdCredit(tx, userId, amount, aiRequestId)
-    +consumeCredit(tx, userId, aiRequestId)
-    +releaseCredit(tx, userId, aiRequestId)
+    <<repository>>
+    +holdCredit(tx, userId, amount, aiRequestId) void
+    +consumeCredit(tx, userId, aiRequestId) void
+    +releaseCredit(tx, userId, aiRequestId) void
   }
   class AiQueue {
-    +add(name, data, jobId)
+    <<queue>>
+    +enqueueAiJob(name, data, jobId) Job
   }
   class AiProcessor {
-    +process(job)
+    <<worker>>
+    +processAiJob(job) void
   }
   class AiClient {
-    +callAi(jobName, payload)
+    <<client>>
+    +callAi(jobName, payload) AiResponse
+  }
+  class AiService {
+    <<external>>
+    +POST /v1/story/analyze
+    +POST /v1/story/generate
   }
   class Story {
-    uuid id
-    StoryKind kind
-    StoryEntry entry
-    StoryLength length
-    StoryStatus status
-    string situation
-    string momentSummary
-    bool scored
-    uuid coverSceneId
-    datetime reviewedAt
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryKind kind
+    -StoryEntry entry
+    -StoryLength length
+    -StoryStatus status
+    -UUID topicId
+    -String situation
+    -String momentSummary
+    -Boolean scored
+    -UUID coverSceneId
+    -DateTime reviewedAt
   }
   class AiRequest {
-    uuid id
-    AiRequestType requestType
-    AiRequestStatus status
-    int creditsCharged
-    string idempotencyKey
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -AiRequestType requestType
+    -AiRequestStatus status
+    -Int creditsCharged
+    -String idempotencyKey
   }
-  StoriesRoutes --> StoriesService
-  StoriesRoutes --> StoriesAnalysisService
-  StoriesAnalysisService --> AnalysisToken
-  StoriesAnalysisService --> AiClient : sync, no credit
-  StoriesService --> AnalysisToken
-  StoriesRoutes --> StoriesEditorService
-  StoriesRoutes --> GenerationService
-  GenerationService --> CreditLedger
-  GenerationService --> AiQueue
-  AiQueue --> AiProcessor
-  AiProcessor --> GenerationStore
-  AiProcessor --> AiClient
-  GenerationStore --> CreditLedger
   class StorySubSkill {
-    StorySubSkillSource source
-    int position
+    <<entity>>
+    -UUID storyId
+    -UUID subSkillId
+    -StorySubSkillSource source
+    -Int position
   }
-  Story "1" --> "*" AiRequest
-  Story "1" --> "1..2" StorySubSkill : family entry
+  class StoryStatus {
+    <<enumeration>>
+    draft
+    generating
+    ready
+  }
+  class StoryEntry {
+    <<enumeration>>
+    topic
+    family
+    handwritten
+  }
+  class AiRequestStatus {
+    <<enumeration>>
+    queued
+    processing
+    succeeded
+    failed
+    blocked
+  }
+
+  StoriesController --> StoriesService : uses
+  StoriesController --> StoriesAnalysisService : uses
+  StoriesController --> StoriesEditorService : uses
+  StoriesController --> GenerationService : uses
+  StoriesAnalysisService ..> AnalysisToken : signs
+  StoriesService ..> AnalysisToken : verifies (family entry)
+  StoriesAnalysisService ..> AiClient : synchronous, 0 credit
+  StoriesEditorService ..> StoriesAccess
+  GenerationService ..> StoriesAccess
+  GenerationService ..> CreditLedger : hold
+  GenerationService ..> AiQueue : enqueue story_text
+  AiQueue ..> AiProcessor : delivers job
+  AiProcessor --> GenerationStore : persists result
+  AiProcessor ..> AiClient : calls
+  AiClient ..> AiService : HTTP + INTERNAL_TOKEN
+  GenerationStore ..> CreditLedger : consume / release
+  StoriesService ..> Story : persists
+  GenerationStore ..> AiRequest : persists
+  Story "1" --> "*" AiRequest : has
+  Story "1" --> "0..2" StorySubSkill : family entry
+  Story --> StoryStatus
+  Story --> StoryEntry
+  AiRequest --> AiRequestStatus

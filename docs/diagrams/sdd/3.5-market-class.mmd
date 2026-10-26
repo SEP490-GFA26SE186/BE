@@ -1,50 +1,112 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
+  direction TB
   class MarketRoutes {
-    +GET listings()
-    +GET listing(id)
-    +GET owned()
-    +POST checkout()
+    <<controller>>
+    +GET /market/listings
+    +GET /market/listings/:id
+    +GET /market/owned
+    +POST /market/checkout
+  }
+  class ReviewsRoutes {
+    <<controller>>
+    +GET /market/listings/:listingId/reviews
+    +PUT /market/listings/:listingId/review
+    +POST /market/reviews/:reviewId/reply
+  }
+  class RefundRoutes {
+    <<controller>>
+    +GET /payments/orders
+    +POST /payments/order-items/:itemId/refund
+    +POST /admin/refunds/:refundId/decision
   }
   class MarketService {
-    +listListings(query)
-    +getListing(id)
-    +listOwned(user)
-    +checkoutListing(user, listingId)
-  }
-  class BillingService {
-    +checkoutOrder(user, item)
-  }
-  class BillingStore {
-    -deliverListing(tx, buyerId, item)
-  }
-  class EarningLedger {
-    +recordEarning(tx, sellerId, amount, availableAt)
-    +releaseDueEarnings(now)
+    <<service>>
+    +listListings(query) Page~Listing~
+    +getListing(id) Listing
+    +listOwned(user) List~Listing~
+    +checkoutListing(user, listingId) CheckoutResult
   }
   class ReviewsService {
-    +listReviews(listingId)
-    +upsertReview(user, listingId, body)
-    +replyReview(user, reviewId, reply)
+    <<service>>
+    +listReviews(listingId) List~Review~
+    +upsertReview(user, listingId, body) Review
+    +replyReview(user, reviewId, reply) Review
+    +hideReview(moderator, reviewId) void
+  }
+  class RefundsService {
+    <<service>>
+    +listMyOrders(user) List~OrderItem~
+    +requestRefund(user, orderItemId, reason) RefundRequest
+    +listRefunds(query) List~RefundRequest~
+    +decideRefund(admin, refundId, body) RefundRequest
+  }
+  class BillingService {
+    <<service>>
+    +checkoutOrder(user, price, itemName, item, returnPath) CheckoutResult
+  }
+  class BillingStore {
+    <<repository>>
+    +fulfillOrder(tx, orderId) bool
+    -deliverListing(tx, buyerId, item) void
+  }
+  class EarningLedger {
+    <<repository>>
+    +recordEarning(tx, sellerId, amount, availableAt) void
+    +releaseDueEarnings(db, now) int
+    +moveEarning(tx, entry) void
   }
   class Entitlement {
-    uuid parentId
-    uuid listingId
-    datetime revokedAt
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -UUID listingId
+    -UUID orderItemId
+    -DateTime revokedAt
+  }
+  class RefundRequest {
+    <<entity>>
+    -UUID id
+    -UUID orderItemId
+    -RequestStatus status
+    -String reason
+    -String bankTransactionRef
   }
   class Wallet {
-    WalletType type
-    bigint earningPendingVnd
-    bigint earningAvailableVnd
+    <<entity>>
+    -UUID userId
+    -Int creditBalance
+    -BigInt earningPendingVnd
+    -BigInt earningAvailableVnd
+    -BigInt earningLockedVnd
   }
   class WalletLedger {
-    LedgerEntryType entryType
-    bigint amount
-    string idempotencyKey
+    <<entity>>
+    -UUID id
+    -LedgerEntryType entryType
+    -BigInt amount
+    -String idempotencyKey
   }
-  MarketRoutes --> MarketService
-  MarketService --> BillingService
-  BillingService --> BillingStore
-  BillingStore --> EarningLedger
-  BillingStore --> Entitlement
-  EarningLedger --> Wallet
-  EarningLedger --> WalletLedger
+  class RequestStatus {
+    <<enumeration>>
+    pending
+    approved
+    rejected
+    cancelled
+  }
+
+  MarketRoutes --> MarketService : uses
+  ReviewsRoutes --> ReviewsService : uses
+  RefundRoutes --> RefundsService : uses
+  MarketService --> BillingService : checkoutOrder
+  BillingService --> BillingStore : fulfillOrder
+  BillingStore ..> Entitlement : grants
+  BillingStore ..> EarningLedger : 80% earning_pending
+  BillingStore ..> RefundRequest : duplicate purchase
+  RefundsService ..> RefundRequest : persists
+  RefundsService ..> EarningLedger : earning_reversal
+  RefundsService ..> Entitlement : revokes
+  EarningLedger ..> Wallet : FOR UPDATE
+  EarningLedger ..> WalletLedger : append only
+  Wallet "1" --> "*" WalletLedger : entries
+  RefundRequest --> RequestStatus

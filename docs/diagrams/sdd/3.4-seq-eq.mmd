@@ -1,12 +1,33 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
-  participant API as ChildrenService
-  participant DB as PostgreSQL
-  participant L as EqLevels / recommend
-  P->>API: GET /children/:id/eq-report
-  API->>DB: own child?
-  API->>DB: checkpoint_answers of first plays, score not null, checkpoint not excluded
-  API->>DB: pedagogy report settings (window 5, min 3, thresholds 0.5 / 0.8)
-  API->>L: buildEqLevels per sub-skill -> competency (lowest level)
-  API->>L: recommendTopics for weakest competencies
-  API-->>P: radar 5 competencies + sub-skills + suggested topics
+  participant W as Web App
+  participant C as :ChildrenController
+  participant S as :ChildrenService
+  participant E as :EqLevels
+  participant R as :Recommend
+  participant DB as Database
+  P->>W: Open EQ report of a child
+  W->>+C: GET /api/v1/children/:id/eq-report
+  C->>+S: getChildEqReport(parentId, childId)
+  S->>DB: SELECT child_profiles WHERE parent = user
+  DB-->>S: ChildProfile or null
+  alt not own child
+    S-->>C: ApiError 404
+    C-->>W: 404
+  else own child
+    S->>DB: checkpoint_answers of first plays, score not null, not excluded
+    DB-->>S: scored answers
+    S->>DB: pedagogy report settings, skills, sub-skills, topics
+    DB-->>S: window 5, min 3, thresholds 0.5 / 0.8
+    S->>+E: buildEqLevels(answers, settings)
+    E-->>-S: level per sub-skill, competency = lowest level
+    S->>+R: recommendTopics(levels, topics, childAge)
+    R-->>-S: suggested topics
+    S-->>C: EqReport
+    C-->>W: 200 radar of 5 competencies + sub-skills + topics
+  end
+  deactivate S
+  deactivate C
+  W-->>P: Show EQ report

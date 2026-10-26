@@ -1,11 +1,23 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
-  participant CR as Cron (every 15 min)
-  participant EL as EarningLedger
-  participant DB as PostgreSQL
-  CR->>EL: releaseDueEarnings(now)
-  EL->>DB: earning_pending rows with available_at <= now, no pending refund
+  autonumber
+  participant CR as :Worker cron (every 15 min)
+  participant EL as :EarningLedger
+  participant DB as Database
+  CR->>+EL: releaseDueEarnings(db, now)
+  EL->>DB: earning_pending rows with available_at <= now, no pending refund, not reversed
+  DB-->>EL: due earnings
   loop each earning
-    EL->>DB: SELECT wallet FOR UPDATE
-    EL->>DB: pending -= amount, available += amount
-    EL->>DB: insert wallet_ledger earning_release (key release:orderItem)
+    EL->>DB: BEGIN
+    EL->>DB: re-check: not released, not reversed, no pending refund
+    alt still due
+      EL->>DB: SELECT wallets FOR UPDATE
+      EL->>DB: earning_pending_vnd -= amount, earning_available_vnd += amount
+      EL->>DB: INSERT wallet_ledger earning_release (key release:orderItem)
+    else skipped
+      EL->>EL: leave for a later run
+    end
+    EL->>DB: COMMIT
   end
+  EL-->>-CR: released count
+  Note over EL,DB: Deterministic idempotency key makes two workers running together safe

@@ -1,57 +1,100 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
+  direction TB
   class AdminRoutes {
-    +GET accounts()
-    +PATCH account(userId)
-    +POST moderators()
-    +GET POST PUT plans()
-    +PUT settings(key)
-    +GET financeSummary()
-    +GET auditLogs()
+    <<controller>>
+    +GET /admin/overview
+    +GET /admin/accounts
+    +PATCH /admin/accounts/:userId
+    +POST /admin/accounts/moderators
+    +GET POST /admin/plans
+    +PUT /admin/plans/:planId
+    +GET /admin/settings
+    +PUT /admin/settings/:key
+    +GET /admin/finance/summary
+    +GET /admin/finance/reconciliation
+    +GET /admin/audit-logs
   }
   class AdminService {
-    +overview()
-    +listAccounts(query)
-    +setAccountActive(admin, userId, isActive)
-    +createModerator(admin, body)
-    +createPlan(admin, body)
-    +updatePlan(admin, id, body)
-    +getSettings()
-    +updateSetting(admin, key, value)
-    +listAuditLogs(query)
+    <<service>>
+    +overview() Overview
+    +listAccounts(query) Page~User~
+    +setAccountActive(admin, userId, isActive) User
+    +createModerator(admin, body) User
+    +listAdminPlans() List~Plan~
+    +createPlan(admin, body) Plan
+    +updatePlan(admin, planId, body) Plan
+    +getSettings() SettingsView
+    +updateSetting(admin, key, value) Setting
+    +listAuditLogs(query) Page~AdminAuditLog~
+    -audit(tx, actorId, action, target, before, after) void
   }
   class FinanceService {
-    +summary(range)
-    +reconciliation()
-    +fixCounters(admin)
+    <<service>>
+    +summary(range) FinanceSummary
+    +reconciliation() Reconciliation
+    +fixCounters(admin) FixResult
   }
   class SettingsRegistry {
-    +SETTINGS
-    +settingError(key, value, current)
-    +describeSettings()
+    <<utility>>
+    +SETTINGS_REGISTRY Map
+    +settingError(key, value, current) string
+    +describeSettings(rows) List~Setting~
+  }
+  class FinanceRules {
+    <<utility>>
+    +revenueSummary(rows) Summary
+    +profitAndLoss(rows) PnL
+    +walletMismatches(wallets, ledger) List~Mismatch~
+  }
+  class PrismaClient {
+    <<repository>>
   }
   class User {
-    UserRole role
-    bool isActive
+    <<entity>>
+    -UUID id
+    -UserRole role
+    -String email
+    -Boolean isActive
   }
   class Plan {
-    bigint priceVnd
-    int durationMonths
-    int creditsPerMonth
-    bool canSell
+    <<entity>>
+    -UUID id
+    -String code
+    -String name
+    -Int durationMonths
+    -BigInt priceVnd
+    -Int creditsPerMonth
+    -Int maxChildren
+    -Boolean canSell
+    -Boolean isActive
   }
   class PlatformSetting {
-    string key
-    json value
+    <<entity>>
+    -String key
+    -Json value
+    -UUID updatedBy
+    -DateTime updatedAt
   }
   class AdminAuditLog {
-    string action
-    json beforeState
-    json afterState
+    <<entity>>
+    -BigInt id
+    -UUID actorId
+    -String action
+    -String targetType
+    -String targetId
+    -Json beforeState
+    -Json afterState
   }
-  AdminRoutes --> AdminService
-  AdminRoutes --> FinanceService
-  AdminService --> SettingsRegistry
-  AdminService --> User
-  AdminService --> Plan
-  AdminService --> PlatformSetting
-  AdminService --> AdminAuditLog : every change
+
+  AdminRoutes --> AdminService : uses
+  AdminRoutes --> FinanceService : uses
+  AdminService ..> SettingsRegistry : validates settings
+  FinanceService ..> FinanceRules : computes
+  AdminService ..> PrismaClient : persists
+  FinanceService ..> PrismaClient : reads
+  PrismaClient ..> User
+  PrismaClient ..> Plan
+  PrismaClient ..> PlatformSetting
+  PrismaClient ..> AdminAuditLog
+  AdminAuditLog "*" --> "1" User : actor

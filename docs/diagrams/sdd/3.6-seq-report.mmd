@@ -1,20 +1,43 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
   actor M as Specialist
-  participant API as MonitoringService
-  participant DB as PostgreSQL
-  P->>API: POST /market/listings/:id/reports {category, pageId?}
-  API->>DB: listing published? not own? not reported before?
-  API->>DB: insert content_reports(open)
-  API->>DB: distinct reporters of open reports in last 24h
-  alt >= moderation.report_threshold
-    API->>DB: listing -> suspended, open report_followup review
+  participant W as Web App
+  participant C as :MonitoringRoutes
+  participant S as :MonitoringService
+  participant R as :MonitoringRules
+  participant PC as :PublishingController
+  participant DB as Database
+  P->>W: Report a listing (category, page)
+  W->>+C: POST /api/v1/market/listings/:listingId/reports {category, description, pageId}
+  C->>+S: createReport(user, listingId, body)
+  S->>DB: BEGIN, SELECT listings FOR UPDATE
+  DB-->>S: Listing
+  alt not published / own listing / already reported
+    S-->>C: ApiError 404 / 422 / 409
+  else ok
+    S->>DB: INSERT content_reports (open)
+    S->>DB: open reports of this listing in the last 24 h
+    DB-->>S: reporter ids
+    S->>R: reachesThreshold(reporters, moderation.report_threshold)
+    R-->>S: true / false
+    opt threshold reached
+      S->>DB: UPDATE listings SET suspended, INSERT moderation_reviews (report_followup)
+    end
+    S->>DB: COMMIT
+    S-->>C: {reportId, suspended}
   end
-  API-->>P: {reportId, suspended}
-  M->>API: claim follow-up review, view pages
-  M->>API: decision approved | taken_down
+  deactivate S
+  C-->>-W: 201 / error
+  M->>W: Claim follow-up review, view all pages
+  W->>PC: POST /moderation/submissions/:reviewId/claim, /pages/:pageId/view
+  M->>W: Decide approved or taken_down
+  W->>+PC: POST /api/v1/moderation/submissions/:reviewId/decision
   alt approved
-    API->>DB: listing -> published, reports resolved
+    PC->>DB: listing back to published, open reports resolved
   else taken_down
-    API->>DB: listing -> archived, issueStrike
+    PC->>DB: listing archived, reports resolved, issueStrikeTx (source takedown)
   end
+  PC-->>-W: 200
+  Note over M,DB: Specialist can also dismiss a report or suspend a listing by hand

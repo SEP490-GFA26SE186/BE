@@ -1,24 +1,59 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
-  participant API as StoriesAnalysisService
-  participant DB as PostgreSQL
+  participant W as Web App
+  participant C as :StoriesController
+  participant A as :StoriesAnalysisService
+  participant S as :StoriesService
+  participant T as :AnalysisToken
+  participant AC as :AiClient
+  participant DB as Database
   participant AI as AI Service
-  P->>API: POST /stories/analyze {situation, characters, length, subSkillIds?}
-  API->>DB: AI usage blocked? analyses today < limits.story_analysis_per_day?
-  alt blocked or daily limit reached
-    API-->>P: 403 / 429
+  P->>W: Tell the family story, choose characters + length
+  W->>+C: POST /api/v1/stories/analyze {situation, characters, length}
+  C->>+A: analyzeStory(user, body)
+  A->>DB: SELECT users.ai_blocked_until
+  DB-->>A: aiBlockedUntil
+  A->>A: tokenizeOrReject (real names -> {NVx}), check blocked keywords
+  A->>DB: COUNT ai_requests story_analysis today, limits.story_analysis_per_day
+  DB-->>A: used, limit
+  alt AI blocked / blocked keyword / limit reached
+    A-->>C: ApiError 403 / 422 / 429
+    C-->>W: error message
+  else ok
+    A->>DB: usable sub-skills (with published template version) + child levels
+    DB-->>A: catalog, levels
+    A->>DB: INSERT ai_requests (story_analysis, processing)
+    DB-->>A: saved
+    A->>+AC: callAi(story_analysis, tokenized payload)
+    AC->>+AI: POST /v1/story/analyze
+    AI-->>-AC: moment summary, seed event, 1-2 sub-skill codes
+    AC-->>-A: AiResponse
+    A->>DB: UPDATE ai_requests status = succeeded
+    DB-->>A: ok
+    A->>+T: signAnalysisToken(owner, situation hash, characters)
+    T-->>-A: token (HMAC, 2 h)
+    A-->>C: summary + sub-skills (names restored) + analysisToken
+    C-->>W: 200 analysis
   end
-  API->>API: replace real names with {NVx}, check blocked keywords
-  API->>DB: usable sub-skills (with a published template version) + child levels
-  API->>AI: analyze tokenized story (synchronous, 0 credit)
-  AI-->>API: moment summary, seed event, 1-2 sub-skill codes
-  API->>API: validate output, sign analysisToken (HMAC, 2 h)
-  API->>DB: insert ai_requests (story_analysis)
-  API-->>P: 200 summary + sub-skills (real names restored) + analysisToken
-  P->>API: POST /stories {entry: family, situation, characters, length, analysisToken}
-  API->>API: verify token (owner, story hash, characters)
+  deactivate A
+  deactivate C
+  W-->>P: Show summary, parent confirms sub-skills
+  P->>W: Click Create story
+  W->>+C: POST /api/v1/stories {entry: family, situation, characters, length, analysisToken}
+  C->>+S: createStory(user, body)
+  S->>+T: verifyAnalysisToken(token, secret, owner)
+  T-->>-S: claims
   alt token expired or story / characters changed
-    API-->>P: 422 analyze again
+    S-->>C: ApiError 422
+    C-->>W: 422 analyse again
+  else valid
+    S->>DB: BEGIN, INSERT stories + story_sub_skills (position 1 = main) + skeleton pages, COMMIT
+    DB-->>S: Story
+    S-->>C: Story
+    C-->>W: 201 draft story
   end
-  API->>DB: create story + story_sub_skills (position 1 = main) + skeleton
-  API-->>P: 201 draft story
+  deactivate S
+  deactivate C
+  W-->>P: Open story editor

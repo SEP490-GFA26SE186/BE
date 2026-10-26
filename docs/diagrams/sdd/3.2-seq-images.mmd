@@ -1,24 +1,56 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
-  participant API as ImagesService
-  participant DB as PostgreSQL
-  participant Q as ai queue
-  participant WK as AI Worker
+  participant W as Web App
+  participant C as :StoriesController
+  participant I as :ImagesService
+  participant L as :CreditLedger
+  participant Q as :AiQueue
+  participant WK as :AiProcessor
+  participant IS as :ImagesStore
+  participant DB as Database
   participant AI as AI Service (FLUX.2 klein)
-  P->>API: POST /stories/:id/images
-  API->>DB: check private story, not generating, AI not blocked
-  API->>DB: portraits missing for story characters -> ai_requests(character_portrait) + holdCredit
-  API->>DB: scenes without image (max 4) -> ai_requests(scene_image) + holdCredit
-  alt not enough credit
-    API-->>P: 402 Not enough credit
+  P->>W: Click Draw illustrations
+  W->>+C: POST /api/v1/stories/:id/images
+  C->>+I: drawStoryImages(user, storyId)
+  I->>DB: load owned private story, ai_blocked_until
+  DB-->>I: Story, User
+  I->>I: queueStoryImages(storyId)
+  loop each character without portrait, each scene without image (max 4)
+    I->>DB: INSERT ai_requests (character_portrait / scene_image, queued)
+    I->>+L: holdCredit(tx, userId, cost, aiRequestId)
+    L-->>-I: held / not enough
   end
-  API->>Q: enqueue portraits, scenes waiting for portrait stay queued
-  API-->>P: {portraits, scenes, waiting}
-  Q->>WK: portrait job
-  WK->>AI: POST /v1/images/portrait (appearance only, no real name)
-  AI-->>WK: image key (uploaded to Cloudinary)
-  WK->>DB: persistImageResult, consumeCredit
-  WK->>API: resumeAfterPortrait -> enqueue waiting scenes
-  Q->>WK: scene job
-  WK->>AI: POST /v1/images/scene (scene description + portrait references)
-  WK->>DB: scene imageStatus=ready, consumeCredit
+  alt nothing could be held
+    I-->>C: ApiError 402
+    C-->>W: 402 Not enough credit to draw
+  else queued
+    I->>Q: enqueue portraits (scenes wait for their portraits)
+    I-->>C: {portraits, scenes, waiting}
+    C-->>W: 200 image plan
+  end
+  deactivate I
+  deactivate C
+  Q->>+WK: job character_portrait
+  WK->>IS: loadPortraitInput (appearance only, no real name)
+  IS-->>WK: PortraitInput
+  WK->>+AI: POST /v1/images/portrait
+  AI-->>-WK: image key (uploaded to Cloudinary)
+  WK->>IS: persistImageResult (portrait ready, consumeCredit)
+  WK->>I: resumeAfterPortrait(characterId)
+  I->>Q: enqueue waiting scenes
+  deactivate WK
+  Q->>+WK: job scene_image
+  WK->>IS: loadSceneInput (scene description + portrait references)
+  IS-->>WK: SceneInput
+  WK->>+AI: POST /v1/images/scene
+  AI-->>-WK: image key
+  alt error after retries
+    WK->>IS: finalizeImageFailure (image failed, releaseCredit)
+  else ok
+    WK->>IS: persistImageResult (scene image ready, consumeCredit)
+  end
+  IS->>DB: UPDATE story_scenes, ai_requests, wallet_ledger (one transaction)
+  deactivate WK
+  W-->>P: Show illustrations as they become ready
