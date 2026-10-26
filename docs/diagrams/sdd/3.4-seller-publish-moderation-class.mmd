@@ -1,0 +1,285 @@
+classDiagram
+  class SellersRoutes {
+    <<router>>
+    +GET /api/v1/sellers/me [parent]
+    +POST /api/v1/sellers/apply [parent]
+  }
+
+  class ListingsRoutes {
+    <<router>>
+    +GET /api/v1/listings/price-tiers
+    +GET /api/v1/listings/mine [parent]
+    +POST /api/v1/listings [parent]
+  }
+
+  class ModerationRoutes {
+    <<router>>
+    +base /api/v1/moderation [mod]
+    +GET /sellers
+    +POST /sellers/:userId/decision
+    +GET /submissions
+    +POST /submissions/:reviewId/claim
+    +GET /submissions/:reviewId
+    +POST /submissions/:reviewId/pages/:pageId/view
+    +POST /submissions/:reviewId/decision
+  }
+
+  class PublishingController {
+    <<controller>>
+    +getMySeller(req, res) void
+    +applySeller(req, res) void
+    +listSellerApplications(req, res) void
+    +decideSeller(req, res) void
+    +listPriceTiers(req, res) void
+    +getMyListings(req, res) void
+    +createListing(req, res) void
+    +getQueue(req, res) void
+    +claimReview(req, res) void
+    +getReview(req, res) void
+    +viewPage(req, res) void
+    +decide(req, res) void
+  }
+
+  class PublishingService {
+    <<service>>
+    +getMySeller(user) Object
+    +applySeller(user, body) Object
+    +listSellerApplications(query) Object
+    +decideSeller(moderator, userId, body) Object
+    +listPriceTiers() Object
+    +getMyListings(user) Object
+    +createListing(user, body) Object
+    +getQueue(moderator) Object
+    +claimReview(moderator, reviewId) Object
+    +getReview(moderator, reviewId) Object
+    +viewPage(moderator, reviewId, pageId, body) Object
+    +decide(moderator, reviewId, body) Object
+  }
+
+  class PublishRules {
+    <<utility>>
+    +identifyingNames(names) Object
+    +aliasErrors(storyCharacters, aliases, forbiddenNames) Object
+    +leftoverNameErrors(story, forbiddenNames, title) Object
+    +findReviewGaps(pages, checkpoints) Object
+    +reviewProgress(pageIds, viewedIds, itemIds, results) Object
+    +claimedByOther(review, moderatorId, now) boolean
+  }
+
+  class StoriesNarrationService {
+    <<service>>
+    +prepareNarration(tx, storyId) Object
+    +dispatchNarration(jobs) boolean
+  }
+
+  class StoriesNarrationStore {
+    <<store>>
+    +loadReadiness(db, storyId) Object
+  }
+
+  class MonitoringService {
+    <<service>>
+    +issueStrikeTx(tx, issuerId, data) Object
+    +closeOpenReports(tx, moderatorId, listingId, decision) void
+  }
+
+  class User {
+    <<entity>>
+    -UUID id
+    -UserRole role
+    -String fullName
+  }
+
+  class Subscription {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -UUID planId
+    -SubscriptionStatus status
+  }
+
+  class Plan {
+    <<entity>>
+    -UUID id
+    -String code
+    -boolean canSell
+  }
+
+  class SellerProfile {
+    <<entity>>
+    -UUID userId
+    -String displayName
+    -String bio
+    -String expertise
+    -SellerStatus status
+    -UUID reviewedBy
+    -DateTime reviewedAt
+  }
+
+  class Listing {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -UUID publishedStoryId
+    -UUID previousListingId
+    -String title
+    -String description
+    -String coverImageKey
+    -UUID priceTierId
+    -ListingStatus status
+    -boolean hasAiContent
+    -DateTime submittedAt
+    -DateTime publishedAt
+  }
+
+  class PriceTier {
+    <<entity>>
+    -UUID id
+    -String label
+    -BigInt priceVnd
+    -boolean isActive
+  }
+
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryKind kind
+    -UUID sourceStoryId
+    -boolean useTts
+    -DateTime reviewedAt
+  }
+
+  class StoryPage {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -int pageOrder
+  }
+
+  class ModerationReview {
+    <<entity>>
+    -UUID id
+    -UUID listingId
+    -ModerationReviewType reviewType
+    -UUID moderatorId
+    -DateTime claimedAt
+    -DateTime claimExpiresAt
+    -ModerationDecision decision
+    -String comment
+    -DateTime decidedAt
+  }
+
+  class ReviewPageView {
+    <<entity>>
+    -UUID reviewId
+    -UUID pageId
+    -DateTime viewedAt
+    -String comment
+  }
+
+  class ChecklistItem {
+    <<entity>>
+    -UUID id
+    -String code
+    -String description
+    -boolean isActive
+  }
+
+  class ReviewChecklistResult {
+    <<entity>>
+    -UUID reviewId
+    -UUID checklistItemId
+    -boolean passed
+  }
+
+  class CreatorStrike {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -StrikeSource source
+    -UUID sourceId
+    -String reason
+    -UUID issuedBy
+    -DateTime expiresAt
+    -DateTime revokedAt
+  }
+
+  class SellerStatus {
+    <<enumeration>>
+    pending
+    approved
+    rejected
+    suspended
+  }
+
+  class ListingStatus {
+    <<enumeration>>
+    submitted
+    in_review
+    changes_requested
+    rejected
+    published
+    suspended
+    archived
+  }
+
+  class ModerationReviewType {
+    <<enumeration>>
+    submission
+    random_audit
+    report_followup
+  }
+
+  class ModerationDecision {
+    <<enumeration>>
+    approved
+    changes_requested
+    rejected
+    taken_down
+  }
+
+  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
+  SellersRoutes ..> PublishingController : delegates
+  ListingsRoutes ..> PublishingController : delegates
+  ModerationRoutes ..> PublishingController : delegates
+  PublishingController ..> PublishingService : uses
+  PublishingService ..> Subscription : checks active plan
+  PublishingService ..> Plan : requires canSell
+  PublishingService ..> SellerProfile : applies / approves / rejects
+  PublishingService ..> PublishRules : name checks / review progress / claim
+  PublishingService ..> Story : copies as published version
+  PublishingService ..> Listing : creates / updates status
+  PublishingService ..> PriceTier : validates tier
+  PublishingService ..> ModerationReview : creates / claims / decides
+  PublishingService ..> ReviewPageView : records page viewed
+  PublishingService ..> ReviewChecklistResult : saves checklist
+  PublishingService ..> StoriesNarrationService : narrates copied story
+  PublishingService ..> StoriesNarrationStore : narration must be ready before claim
+  PublishingService ..> MonitoringService : issues strike / closes reports
+  MonitoringService ..> CreatorStrike : creates
+  MonitoringService ..> SellerProfile : suspends at strike limit
+
+  %% Quan hệ dữ liệu: khóa ngoại trong schema.prisma
+  User "1" --> "0..1" SellerProfile : seller profile
+  User "1" --> "0..*" Subscription : subscribes
+  Plan "1" --> "0..*" Subscription : plan
+  SellerProfile "1" --> "0..*" Listing : sells
+  PriceTier "1" --> "0..*" Listing : priced at
+  Listing "1" --> "1" Story : publishedStory
+  Story "0..1" --> "0..*" Story : sourceStory (copies)
+  Listing "0..1" --> "0..*" Listing : previousListing
+  Story "1" *-- "1..*" StoryPage : pages
+  Listing "1" --> "0..*" ModerationReview : reviews
+  User "0..1" --> "0..*" ModerationReview : moderator
+  ModerationReview "1" *-- "0..*" ReviewPageView : pageViews
+  StoryPage "1" --> "0..*" ReviewPageView : viewed
+  ModerationReview "1" *-- "0..*" ReviewChecklistResult : checklist
+  ChecklistItem "1" --> "0..*" ReviewChecklistResult : item
+  SellerProfile "1" --> "0..*" CreatorStrike : strikes
+  SellerProfile --> SellerStatus
+  Listing --> ListingStatus
+  ModerationReview --> ModerationReviewType
+  ModerationReview --> ModerationDecision
+
+  note "Ghi chú<br/>- Mọi route cần auth; [parent] = authorize('parent'); [mod] = authorize('specialist', 'admin').<br/>- Đăng ký bán: gói đang dùng phải có canSell; hồ sơ pending -> kiểm duyệt viên duyệt approved / rejected; bị từ chối thì nộp lại được.<br/>- Đăng bán: người bán approved, truyện đã review và không còn chỗ trống, đặt bí danh cho nhân vật và gỡ hết tên thật của gia đình (sai -> 422).<br/>- Truyện gốc được sao chép thành Story kind = published (sourceStoryId), tạo Listing submitted + ModerationReview submission, tạo giọng đọc cho bản sao.<br/>- Kiểm duyệt: nhận lượt duyệt giữ 30 phút (người khác đang giữ -> 409); giọng đọc chưa xong -> 409.<br/>- Duyệt approved: phải xem 100% trang và đạt mọi mục checklist; quyết định khác bắt buộc có nhận xét.<br/>- Quyết định -> trạng thái listing: approved = published, changes_requested, rejected, taken_down = archived.<br/>- rejected (tùy chọn) hoặc taken_down -> strike; đủ strike_limit -> SellerProfile suspended.<br/>- Hàng đợi còn nhận lượt random_audit và report_followup do module giám sát tạo (xem 3.10)."
