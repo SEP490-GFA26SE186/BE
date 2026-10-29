@@ -5,27 +5,29 @@ title: "Flow 1: Story Creation & AI-Assisted Authoring"
 flowchart LR
   subgraph ADM["ADMIN (prerequisite)"]
     AA(("👤 Admin")):::actor
-    A1["Set plans, credits per month,<br/>ai_cost, story layouts"]:::ext
+    A1["Set plans, credits per month,<br/>AI credit prices"]:::ext
   end
   subgraph SPEC["SPECIALIST (prerequisite)"]
     SA(("👤 Specialist")):::actor
-    S1["Publish story templates, CASEL<br/>sub-skills, question templates"]:::ext
+    S1["Adjust CASEL sub-skills, publish<br/>question templates + story templates"]:::ext
   end
   subgraph PAR["PARENT"]
     PA(("👤 Parent")):::actor
     P0["Create child profile<br/>+ family characters"]
     P1{"Choose entry"}
     P2["Tell the family story"]
-    P3["Confirm summary<br/>+ 1-2 sub-skills"]
+    P3["Confirm summary + 1-2 sub-skills<br/>(or story only, no scoring)"]
     P4["Click 'Write for me'"]
     P5["Choose / upgrade plan"]
-    P6["Optional: AI illustrations<br/>portraits + max 4 scenes"]
-    P7["Edit text, pick cover,<br/>click 'Finish review'"]
+    P6["Optional: AI illustrations<br/>1 credit per portrait / scene, max 4 scenes"]
+    P7["Edit page text (AI checkpoints locked),<br/>pick cover, click 'Finish review'"]
+    P9["Retry narration"]
     P8["Publish for sale"]
   end
-  subgraph SYS["⚙ SYSTEM (Backend API)"]
-    B1["Replace real names with {NVx},<br/>check blocked keywords"]
-    B2["Create draft story + layout:<br/>short 6p/4cp, medium 8/4, long 10/5"]
+  subgraph SYS["SYSTEM (Backend API)"]
+    B1["Replace real names with {NVx},<br/>check blocked keywords, 30/day"]
+    B2["Create draft story + layout:<br/>short 6p/3 scored, medium 8/3, long 10/4<br/>+ reflection; fill slots with templates"]
+    BH["Create custom story<br/>4-20 pages, max 6 checkpoints,<br/>no AI, not scored"]
     B3{"Enough credit?<br/>short 1, medium 2, long 3"}
     B4["Hold credit,<br/>status = generating"]
     B5["Release credit,<br/>status = draft"]
@@ -35,13 +37,13 @@ flowchart LR
     B9{"Ready for child?<br/>reviewed + all clips ready"}
     B10["Add to child's bookshelf"]
   end
-  subgraph AI["⚙ AI WORKER + AI SERVICE"]
-    I1["Analyze family story<br/>0 credit, max 30/day"]
+  subgraph AI["AI WORKER + AI SERVICE"]
+    I1["Analyze family story<br/>0 credit, synchronous"]
     I2{"Story generated?"}
     I3["Save pages + checkpoints from templates,<br/>consume credit, status = ready"]
-    I4["TTS narration<br/>per segment"]
+    I4["TTS narration per segment<br/>(0 credit)"]
   end
-  subgraph PAY["⚙ payOS"]
+  subgraph PAY["payOS"]
     Y1["VietQR payment<br/>+ signed webhook"]
   end
   subgraph KID["CHILD"]
@@ -56,7 +58,7 @@ flowchart LR
   PA --> P0 --> P1
   P1 -- "Story template" --> B2
   P1 -- "Family story" --> P2 --> B1 --> I1 --> P3 --> B2
-  P1 -- "Handwritten (no AI, 0 credit)" --> P7
+  P1 -- "Handwritten" --> BH --> P7
   B2 --> P4 --> B3
   B3 -- "No: paywall" --> P5 --> Y1 --> B6 --> B3
   B3 -- "Yes" --> B4 --> I2
@@ -65,6 +67,7 @@ flowchart LR
   P7 --> B7
   B7 -- "No: list of gaps" --> P7
   B7 -- "Yes" --> B8 --> I4 --> B9
+  B9 -- "No: some clips failed" --> P9 --> I4
   B9 -- "Yes" --> B10 --> K1
   KA --> K1
   B10 -.-> P8
