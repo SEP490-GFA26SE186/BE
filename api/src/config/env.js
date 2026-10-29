@@ -11,7 +11,8 @@ const env = {
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    // Nhieu origin cach nhau bang dau phay (vd. Web + Expo web: http://localhost:3001,http://localhost:8081)
+    origin: (process.env.CORS_ORIGIN || 'http://localhost:3001').split(',').map((o) => o.trim()).filter(Boolean),
   },
   appUrl: process.env.APP_URL || 'http://localhost:3000',
   redis: {
