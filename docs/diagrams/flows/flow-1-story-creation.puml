@@ -24,7 +24,10 @@ note right
   question templates and story templates;
   Admin has set plans and AI credit prices.
 end note
-:Create child profile and family characters;
+if (Child profile and characters exist?) then (no)
+  :Create child profile and family characters;
+else (yes)
+endif
 :Choose an entry;
 switch (Entry?)
 case (Family story)
@@ -86,12 +89,21 @@ repeat
   :Edit page text (AI checkpoints read-only),\npick cover scene, click "Finish review";
   |System|
 repeat while (Pages and checkpoints complete,\nno blocked keywords?) is (no: list of gaps) not (yes)
-:Set reviewed_at, queue narration clips;
-repeat
+:Set reviewed_at;
+if (Narration on? (use_tts)) then (yes)
+  :Queue narration clips;
   |AI Service|
-  :Text-to-speech for each segment\n(Kim Thanh voice, 0 credit);
+  :Text-to-speech for each segment (0 credit);
   |System|
-repeat while (All clips ready?) is (no: Parent retries narration) not (yes)
+  while (Some clips failed?) is (yes)
+    |Parent|
+    :Retry failed clips;
+    |AI Service|
+    :Text-to-speech for failed segments;
+    |System|
+  endwhile (no)
+else (no: text only)
+endif
 :Story is ready for child;
 |Parent|
 :Add the story to a child's bookshelf\n(child reads it in Flow 4);

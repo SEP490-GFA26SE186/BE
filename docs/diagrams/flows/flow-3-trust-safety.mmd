@@ -17,7 +17,9 @@ flowchart LR
     B6["Seller suspended,<br/>all listings hidden"]
     B7["Duplicate purchase:<br/>auto refund request"]
     B8["Story: revoke entitlement, remove from<br/>bookshelves, reverse seller earning.<br/>Plan: expire credit, cancel, back to Free"]
-    B13["422: seller already withdrew,<br/>handle manually"]
+    B13["422: seller already withdrew;<br/>refund stays pending, settle manually"]
+    BG{"Item granted access?<br/>(not a duplicate)"}
+    B15["Money back only: earlier purchase<br/>keeps access + seller earning"]
     B9["Strike revoked; below limit:<br/>seller approved again"]
     B10["Strike expires<br/>after valid days"]
     B11["Strike stays active"]
@@ -30,6 +32,7 @@ flowchart LR
     M4["Suspend listing manually<br/>(reason)"]
     M1["Claim review,<br/>view all pages"]
     M2{"Decision?"}
+    M5["Issue strike manually"]
   end
   subgraph SEL["SELLER"]
     EA(("Seller")):::actor
@@ -38,7 +41,7 @@ flowchart LR
   end
   subgraph ADM["ADMIN"]
     AA(("Admin")):::actor
-    A1{"Approve appeal?<br/>(not own strike)"}
+    A1{"Approve appeal?<br/>(not the issuer)"}
     A2{"Approve refund?"}
     A3["Transfer money back manually,<br/>enter bank transaction ref"]
   end
@@ -54,7 +57,8 @@ flowchart LR
   B1 -- "Yes" --> B2 --> M1
   B3 --> M1
   MA --> M1 --> M2
-  M2 -- "Keep: published" --> E1
+  M2 -- "Keep: stays / back<br/>to published" --> E1
+  MA -.-> M5 -.-> B4
   M2 -- "Taken down: archived" --> B4
   B4 --> B5
   B5 -- "Yes" --> B6 --> E2
@@ -68,7 +72,9 @@ flowchart LR
   UA --> U2 --> A2
   B7 --> A2
   AA --> A2
-  A2 -- "Yes" --> A3 --> B8
+  A2 -- "Yes" --> A3 --> BG
+  BG -- "Yes" --> B8
+  BG -- "No: duplicate" --> B15
   B8 -. "seller already withdrew" .-> B13
   A2 -- "No (note)" --> B12
 

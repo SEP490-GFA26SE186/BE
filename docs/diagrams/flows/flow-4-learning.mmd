@@ -13,20 +13,23 @@ flowchart LR
     KA(("Child")):::actor
     K1["Open story<br/>from bookshelf"]
     K2["Listen + look<br/>at the page"]
-    K3["Choose emotion / option"]
+    K3["Choose emotion / option<br/>(or skip, except reflection)"]
     K4["Choose again"]
     K5{"Read again?"}
   end
   subgraph SYS["SYSTEM (Backend API)"]
     B0{"Kid Exit PIN set?"}
-    B1{"Ready for child?<br/>reviewed + all clips ready"}
+    B1{"Ready for child?<br/>reviewed, clips ready if narration on,<br/>listing not suspended / taken down"}
     B2["Resume or create play session<br/>(is_first_play on first time)"]
     B3["Send page: narration audio<br/>+ illustration (no correct answers)"]
     B4{"Checkpoint after<br/>this page?"}
-    B5["First choice: snapshot score, sub-skill,<br/>template version<br/>(reflection / not scored / flagged: no score)"]
-    B6{"Wrong emotion /<br/>perspective choice?"}
+    B5["First choice: snapshot score, sub-skill,<br/>template version<br/>(skipped / reflection / not scored / flagged: no score)"]
+    BT{"Checkpoint type?"}
+    B6{"First choice wrong<br/>(not skipped)?"}
     B7["Hint, ask again<br/>(2nd try not scored)"]
-    B8["Outcome + correct<br/>answer audio"]
+    B6b{"Still wrong?"}
+    B8["Tell the correct answer"]
+    B8b["Feedback of the chosen option<br/>(no right / wrong)"]
     B9{"More pages?"}
     B10["Complete session"]
     B11{"Correct PIN?"}
@@ -41,10 +44,14 @@ flowchart LR
   B0 -- "Yes: kid session (24 h)" --> K1 --> B1
   B1 -- "No: 422" --> K1
   B1 -- "Yes" --> B2 --> B3 --> K2 --> B4
-  B4 -- "Yes" --> K3 --> B5 --> B6
-  B6 -- "Yes" --> B7 --> K4 --> B8
-  B6 -- "No" --> B8
-  B8 --> B9
+  B4 -- "Yes" --> K3 --> B5 --> BT
+  BT -- "emotion / perspective" --> B6
+  BT -- "problem_solving" --> B8b --> B9
+  BT -- "reflection: no right / wrong" --> B9
+  B6 -- "Yes" --> B7 --> K4 --> B6b
+  B6b -- "Yes" --> B8 --> B9
+  B6b -- "No" --> B9
+  B6 -- "No" --> B9
   B4 -- "No" --> B9
   B9 -- "Yes: next page" --> B3
   B9 -- "No" --> B10 --> K5

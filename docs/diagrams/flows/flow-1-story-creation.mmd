@@ -13,6 +13,7 @@ flowchart LR
   end
   subgraph PAR["PARENT"]
     PA(("Parent")):::actor
+    P00{"Child profile +<br/>characters exist?"}
     P0["Create child profile<br/>+ family characters"]
     P1{"Choose entry"}
     P2["Tell the family story"]
@@ -33,8 +34,10 @@ flowchart LR
     B5["Release credit,<br/>status = draft"]
     B6["Start new plan period,<br/>grant credits"]
     B7{"Pages + checkpoints complete,<br/>no blocked keywords?"}
-    B8["Set reviewed_at,<br/>queue narration clips"]
-    B9{"Ready for child?<br/>reviewed + all clips ready"}
+    B8["Set reviewed_at"]
+    BT{"Narration on?<br/>(use_tts)"}
+    BQ["Queue narration clips"]
+    B9{"All clips ready?"}
     B10["Add to child's bookshelf"]
   end
   subgraph AI["AI WORKER + AI SERVICE"]
@@ -55,7 +58,9 @@ flowchart LR
   SA --> S1
   A1 -.-> P1
   S1 -.-> P1
-  PA --> P0 --> P1
+  PA --> P00
+  P00 -- "No" --> P0 --> P1
+  P00 -- "Yes" --> P1
   P1 -- "Story template" --> B2
   P1 -- "Family story" --> P2 --> B1 --> I1 --> P3 --> B2
   P1 -- "Handwritten" --> BH --> P7
@@ -66,7 +71,9 @@ flowchart LR
   I2 -- "OK" --> I3 --> P6 --> P7
   P7 --> B7
   B7 -- "No: list of gaps" --> P7
-  B7 -- "Yes" --> B8 --> I4 --> B9
+  B7 -- "Yes" --> B8 --> BT
+  BT -- "Yes" --> BQ --> I4 --> B9
+  BT -- "No: text only" --> B10
   B9 -- "No: some clips failed" --> P9 --> I4
   B9 -- "Yes" --> B10 --> K1
   KA --> K1

@@ -27,8 +27,8 @@ endif
 repeat
   :Open a story from the bookshelf;
   |System|
-  if (Ready for child?\n(reviewed + all clips ready)) then (no)
-    :422 Story not ready;
+  if (Ready for child?\n(reviewed, all clips ready if narration on,\nlisting not suspended / taken down)) then (no)
+    :422 Story not ready / temporarily taken down;
   else (yes)
     :Resume or create play session\n(is_first_play on first time);
     repeat
@@ -38,17 +38,27 @@ repeat
       |System|
       if (Checkpoint after this page?) then (yes)
         |Child|
-        :Choose emotion / option;
+        :Choose emotion / option\n(or skip, except reflection);
         |System|
-        :First choice: snapshot score, sub-skill,\ntemplate version (no score if not scored);
-        if (Wrong emotion / perspective choice?) then (yes)
-          :Give hint, ask again\n(second try not scored);
-          |Child|
-          :Choose again;
-        else (no)
-        endif
-        |System|
-        :Play outcome + correct answer audio;
+        :First choice: snapshot score, sub-skill,\ntemplate version (no score if skipped / not scored);
+        switch (Checkpoint type?)
+        case (emotion / perspective)
+          if (First choice wrong (not skipped)?) then (yes)
+            :Give hint, ask again\n(second try not scored);
+            |Child|
+            :Choose again;
+            |System|
+            if (Still wrong?) then (yes)
+              :Tell the correct answer;
+            else (no)
+            endif
+          else (no)
+          endif
+        case (problem_solving)
+          :Play feedback of the chosen option\n(no right / wrong);
+        case (reflection)
+          :Accept the answer\n(no right / wrong, not scored);
+        endswitch
       else (no)
       endif
     repeat while (More pages?) is (yes) not (no)

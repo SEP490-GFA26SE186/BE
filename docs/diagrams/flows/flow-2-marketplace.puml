@@ -1,5 +1,5 @@
 @startuml flow-2-marketplace
-title Flow 2: Marketplace - Publish, Buy & Payout
+title Flow 2: Marketplace - Publish, Buy & Payout\n(Seller and Buyer are Parent accounts; Specialist steps may also be done by Admin)
 skinparam defaultFontName Arial
 skinparam shadowing false
 skinparam ArrowColor #000000
@@ -46,6 +46,13 @@ if (Decision?) then (changes requested / rejected)
 else (approved)
   |System|
   :listing = published;
+  note right
+    Later the Seller may submit a new version:
+    same review; the old version stays on sale.
+    On approval, entitlements, bookshelves, reviews
+    and counters move to the new version, the old one
+    is archived; narration of unchanged segments is reused.
+  end note
 endif
 |Buyer|
 :Browse marketplace\n(competency, age, price, sort);
@@ -67,6 +74,11 @@ else (yes)
 endif
 |System|
 :Order paid (conditional update, no double delivery);
+if (Buyer already owns this story?) then (yes)
+  :Deliver nothing, open a refund request\nautomatically (Flow 3b);
+  stop
+else (no)
+endif
 fork
   :Grant entitlement, purchase count + 1;
   |Buyer|
