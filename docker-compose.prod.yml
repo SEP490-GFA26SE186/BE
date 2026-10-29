@@ -6,7 +6,8 @@
 #
 # Khac ban dev:
 # - Postgres chay cung may, mat khau lay tu .env, KHONG mo cong ra ngoai.
-# - api khong mo cong 3000 ra ngoai: request vao qua Caddy (80/443, tu xin HTTPS cho SITE_DOMAIN).
+# - api khong mo cong 3000 ra ngoai: request vao qua Cloudflare Tunnel (cloudflared ket noi RA Cloudflare,
+#   may khong mo cong 80/443, IP may chu duoc an). Caddy chi con la phuong an du phong (profile "caddy").
 # - Web KHONG o day: deploy len Cloudflare Pages, goi API qua https://SITE_DOMAIN/api/v1
 #   (CORS_ORIGIN = domain Pages).
 # =============================================================================
@@ -51,7 +52,23 @@ services:
       postgres:
         condition: service_healthy
 
+  # Cong vao duy nhat: Public hostname cua tunnel (Cloudflare Zero Trust) tro SITE_DOMAIN -> http://api:3000.
+  # Token tao trong dashboard, chi nam trong .env tren may.
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?can TUNNEL_TOKEN trong .env}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # DU PHONG khi tunnel loi: tao lai ban ghi A api -> IP may (DNS only), mo lai firewall 80/443, roi
+  #   docker compose --profile caddy up -d caddy
+  # Khong chay mac dinh.
   caddy:
+    profiles: ["caddy"]
     image: caddy:2-alpine
     environment:
       # Domain tro ve IP tinh cua may (vd. 34-87-1-2.sslip.io hoac api.<domain cua ban>).
