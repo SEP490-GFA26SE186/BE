@@ -1,0 +1,121 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class StoriesController {
+    <<controller>>
+    +reviewStory(req, res) void
+    +retryNarration(req, res) void
+    +drawImages(req, res) void
+    +redrawScene(req, res) void
+  }
+  class StoriesEditorService {
+    <<service>>
+    +reviewStory(user, id) Story
+  }
+  class NarrationService {
+    <<service>>
+    +prepareNarration(tx, storyId) List~NarrationJob~
+    +dispatchNarration(jobs) bool
+    +retryNarration(user, storyId) Story
+  }
+  class NarrationStore {
+    <<repository>>
+    +loadReadiness(db, storyId) Readiness
+    +queueNarration(tx, storyId) List~NarrationJob~
+    +markClipGenerating(db, clipId) bool
+    +persistClip(db, clipId, audio) void
+    +failClip(db, clipId, code) void
+  }
+  class ImagesService {
+    <<service>>
+    +startPortrait(user, characterId) AiRequest
+    +drawStoryImages(user, storyId) ImagePlan
+    +redrawScene(user, storyId, sceneId) AiRequest
+    +resumeAfterPortrait(characterId) void
+  }
+  class ImagesStore {
+    <<repository>>
+    +loadPortraitInput(db, aiRequestId) PortraitInput
+    +loadSceneInput(db, aiRequestId) SceneInput
+    +persistImageResult(db, aiRequestId, image) void
+    +finalizeImageFailure(db, aiRequestId, code) void
+  }
+  class CreditLedger {
+    <<repository>>
+    +holdCredit(tx, userId, amount, aiRequestId) void
+    +consumeCredit(tx, userId, aiRequestId) void
+    +releaseCredit(tx, userId, aiRequestId) void
+  }
+  class NarrationProcessor {
+    <<worker>>
+    +processNarrationJob(job) void
+  }
+  class AiProcessor {
+    <<worker>>
+    +processAiJob(job) void
+  }
+  class AiClient {
+    <<client>>
+    +callAi(jobName, payload) AiResponse
+  }
+  class AiService {
+    <<external>>
+    +POST /v1/tts/synthesize
+    +POST /v1/images/portrait
+    +POST /v1/images/scene
+  }
+  class Cloudinary {
+    <<external>>
+    +upload(file, type=authenticated) key
+  }
+  class AssetUrl {
+    <<utility>>
+    +assetUrl(key) string
+  }
+  class NarrationClip {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -String segment
+    -String fingerprint
+    -String audioKey
+    -GenerationStatus status
+  }
+  class StoryScene {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -Int sceneOrder
+    -String description
+    -String imageKey
+    -GenerationStatus imageStatus
+  }
+  class GenerationStatus {
+    <<enumeration>>
+    none
+    queued
+    generating
+    ready
+    failed
+  }
+
+  StoriesController --> StoriesEditorService : uses
+  StoriesController --> NarrationService : uses
+  StoriesController --> ImagesService : uses
+  StoriesEditorService ..> NarrationService : after review
+  NarrationService --> NarrationStore : persists
+  ImagesService --> ImagesStore : persists
+  ImagesService ..> CreditLedger : hold per image
+  ImagesStore ..> CreditLedger : consume / release
+  NarrationProcessor --> NarrationStore : persists clip
+  AiProcessor --> ImagesStore : persists image
+  NarrationProcessor ..> AiClient : calls
+  AiProcessor ..> AiClient : calls
+  AiClient ..> AiService : HTTP
+  AiService ..> Cloudinary : uploads media
+  NarrationStore ..> NarrationClip
+  ImagesStore ..> StoryScene
+  NarrationClip ..> AssetUrl : signed URL
+  StoryScene ..> AssetUrl : signed URL
+  NarrationClip --> GenerationStatus
+  StoryScene --> GenerationStatus

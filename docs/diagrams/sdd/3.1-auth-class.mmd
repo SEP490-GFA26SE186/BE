@@ -1,67 +1,150 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
+  direction TB
   class AuthRoutes {
-    +POST register()
-    +POST login()
-    +POST refreshTokens()
-    +POST logout()
-    +POST forgotPassword()
-    +POST resetPassword()
-    +POST kidPinSet()
-    +POST kidModeEnter()
-    +POST kidModeExit()
+    <<routes>>
+    +POST /auth/register
+    +POST /auth/login
+    +POST /auth/refresh-tokens
+    +POST /auth/logout
+    +POST /auth/forgot-password
+    +POST /auth/reset-password
+    +POST /auth/kid-pin/set
+    +POST /auth/kid-mode/enter
+    +POST /auth/kid-mode/exit
   }
-  class AuthController
+  class AuthMiddleware {
+    <<security>>
+    +auth(req, res, next) void
+    +authorize(roles) Middleware
+    +validate(schema) Middleware
+  }
+  class AuthController {
+    <<controller>>
+    +register(req, res) void
+    +login(req, res) void
+    +refreshTokens(req, res) void
+    +logout(req, res) void
+    +forgotPassword(req, res) void
+    +resetPassword(req, res) void
+    +setKidPin(req, res) void
+    +enterKidMode(req, res) void
+    +exitKidMode(req, res) void
+  }
   class AuthService {
-    +register(data)
-    +login(identifier, password)
-    +refreshTokens(refreshToken)
-    +setKidPin(userId, pin)
-    +changeKidPin(userId, oldPin, newPin)
-    +enterKidMode(parentId, childId)
-    +exitKidMode(kidToken, pin)
-    +forgotPassword(email)
-    +resetPassword(code, password)
+    <<service>>
+    +register(body) AuthResult
+    +login(body) AuthResult
+    +refreshTokens(refreshToken) AuthTokens
+    +logout(refreshToken) void
+    +forgotPassword(body) void
+    +resetPassword(body) void
+    +setKidPin(userId, pin) void
+    +changeKidPin(userId, currentPin, newPin) void
+    +enterKidMode(parentId, childId) KidSession
+    +exitKidMode(body) AuthResult
   }
   class TokenService {
-    +generateAuthTokens(user)
-    +verifyAndRotateRefreshToken(token)
-    +generateKidSessionToken(parent, childId)
-    +verifyKidSessionToken(token)
-    +consumeKidSessionToken(token)
-    +generatePasswordResetToken(user)
+    <<service>>
+    +generateAuthTokens(user) AuthTokens
+    +verifyAndRotateRefreshToken(token) AuthResult
+    +revokeRefreshToken(token) void
+    +generatePasswordResetToken(user) string
+    +resetPasswordWithToken(token, hash) void
+    +generateKidSessionToken(parent, childId) string
+    +verifyKidSessionToken(token) AuthToken
+    +consumeKidSessionToken(token) void
+  }
+  class KidPinLimiter {
+    <<utility>>
+    +lockRemainingMs(userId) int
+    +recordFailure(userId) void
+    +reset(userId) void
   }
   class BillingStore {
-    +ensureFreeSubscription(tx, parentId)
+    <<repository>>
+    +ensureFreeSubscription(tx, parentId) Subscription
   }
+  class EmailService {
+    <<service>>
+    +sendVerificationEmail(email, token, name) void
+    +sendPasswordResetEmail(email, token, name) void
+  }
+  class PrismaClient {
+    <<repository>>
+    +user.findFirst(where) User
+    +user.create(data) User
+    +authToken.create(data) AuthToken
+    +childProfile.findFirst(where) ChildProfile
+  }
+
   class User {
-    uuid id
-    string email
-    string passwordHash
-    UserRole role
-    string kidExitPinHash
-    bool isActive
-    datetime aiBlockedUntil
+    <<entity>>
+    -UUID id
+    -UserRole role
+    -String username
+    -String email
+    -String passwordHash
+    -String kidExitPinHash
+    -Boolean isActive
+    -DateTime lastLoginAt
+    -DateTime aiBlockedUntil
   }
+
+  class ChildProfile {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -String name
+    -Date birthDate
+    -String preferredVoice
+    -DateTime deletedAt
+  }
+
   class AuthToken {
-    uuid id
-    AuthTokenType type
-    string tokenHash
-    datetime expiresAt
-    datetime consumedAt
-    uuid childId
+    <<entity>>
+    -UUID id
+    -UUID userId
+    -AuthTokenType type
+    -String tokenHash
+    -UUID childId
+    -DateTime expiresAt
+    -DateTime consumedAt
   }
   class ChildProfile {
-    uuid id
-    uuid parentId
-    string name
-    date birthDate
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -String name
+    -Date birthDate
   }
-  AuthRoutes --> AuthController
-  AuthController --> AuthService
-  AuthService --> TokenService
-  AuthService --> BillingStore : on register
-  TokenService --> AuthToken
-  AuthService --> User
-  AuthService --> ChildProfile
-  User "1" --> "*" AuthToken
-  User "1" --> "*" ChildProfile
+  class UserRole {
+    <<enumeration>>
+    admin
+    specialist
+    parent
+  }
+  class AuthTokenType {
+    <<enumeration>>
+    refresh
+    email_verify
+    password_reset
+    kid_session
+  }
+
+  AuthRoutes ..> AuthMiddleware : applies
+  AuthRoutes --> AuthController : routes to
+  AuthController --> AuthService : uses
+  AuthService --> TokenService : issues tokens
+  AuthService ..> KidPinLimiter : exit PIN attempts
+  AuthService ..> BillingStore : Free plan on register
+  AuthService ..> EmailService : sends mail
+  AuthService ..> PrismaClient : persists
+  TokenService ..> PrismaClient : persists
+  PrismaClient ..> User
+  PrismaClient ..> AuthToken
+  PrismaClient ..> ChildProfile
+  User "1" --> "*" AuthToken : has
+  User "1" --> "*" ChildProfile : parent of
+  User --> UserRole
+  AuthToken --> AuthTokenType

@@ -3,8 +3,6 @@ erDiagram
   seller_profiles ||--o{ listings : "sells"
   listings ||--o{ product_reviews : ""
   listings ||--o{ moderation_reviews : ""
-  moderation_reviews ||--o{ review_checklist_results : ""
-  checklist_items ||--o{ review_checklist_results : ""
   moderation_reviews ||--o{ review_page_views : ""
   listings |o--o{ content_reports : ""
   product_reviews |o--o{ content_reports : ""

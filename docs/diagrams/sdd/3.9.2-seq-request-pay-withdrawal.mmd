@@ -1,0 +1,49 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+sequenceDiagram
+  autonumber
+  actor S as Seller
+  actor A as Admin
+  participant W as Web App
+  participant C as :WithdrawalRoutes
+  participant WS as :WithdrawalsService
+  participant EL as :EarningLedger
+  participant DB as Database
+  S->>W: Enter amount, click Withdraw
+  W->>+C: POST /api/v1/sellers/me/withdrawals {amountVnd}
+  C->>+WS: requestWithdrawal(user, amountVnd)
+  WS->>DB: SELECT seller_profiles (approved, bank account), market.min_withdrawal_vnd
+  DB-->>WS: SellerProfile, settings
+  alt no bank / bank changed < 24 h / amount < minimum
+    WS-->>C: ApiError 422
+  else ok
+    WS->>DB: BEGIN, SELECT seller_profiles FOR UPDATE
+    WS->>DB: no open request? INSERT withdrawal_requests (requested, bank snapshot)
+    WS->>+EL: moveEarning(withdrawal_hold: available -> locked)
+    EL->>DB: SELECT wallets FOR UPDATE, INSERT wallet_ledger
+    EL-->>-WS: ok / 422 balance too low (rollback)
+    WS->>DB: COMMIT
+    WS-->>C: WithdrawalRequest
+  end
+  deactivate WS
+  C-->>-W: 201 / error
+  A->>W: Open withdrawal list (full account number)
+  A->>A: Transfer money to the seller by bank app
+  A->>W: Enter bank transaction ref, click Mark paid
+  W->>+C: POST /api/v1/admin/withdrawals/:id/mark-paid {bankTransactionRef}
+  C->>+WS: markWithdrawalPaid(admin, id, bankTransactionRef)
+  WS->>DB: BEGIN, UPDATE withdrawal_requests SET paid WHERE status = requested
+  alt not requested any more
+    WS-->>C: ApiError 409
+  else updated
+    WS->>EL: moveEarning(withdrawal_paid: locked -= amount)
+    WS->>DB: COMMIT
+    WS-->>C: WithdrawalRequest
+  end
+  deactivate WS
+  C-->>-W: 200 / 409
+  opt Admin rejects instead (reason required)
+    W->>C: POST /api/v1/admin/withdrawals/:id/reject {reason}
+    C->>WS: rejectWithdrawal(admin, id, reason)
+    WS->>EL: moveEarning(withdrawal_release: locked -> available)
+  end
+  W-->>S: Withdrawal paid / rejected

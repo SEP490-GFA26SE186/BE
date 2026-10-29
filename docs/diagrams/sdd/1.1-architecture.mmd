@@ -1,10 +1,11 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 flowchart LR
   subgraph Clients
     WEB[React 19 + Vite web app<br/>Parent / Seller, Kid Mode,<br/>Specialist, Admin portals]
   end
   subgraph Backend [Node.js 22 backend]
     API[REST API<br/>Express 5, Zod, Prisma 6<br/>/api/v1]
-    WK[Worker process<br/>BullMQ AI + narration workers,<br/>billing / earning / payout / audit cron]
+    WK[Worker process<br/>BullMQ AI + narration workers,<br/>billing / earning / audit cron]
   end
   REDIS[(Redis<br/>BullMQ queues)]
   DB[(PostgreSQL<br/>Supabase)]
@@ -17,7 +18,7 @@ flowchart LR
   VN[VieNeu-TTS<br/>self-hosted]
   CF[Cloudflare Workers AI<br/>FLUX.2 klein]
   CLD[(Cloudinary<br/>authenticated assets)]
-  PAY[payOS<br/>VietQR collection + payout]
+  PAY[payOS<br/>VietQR collection]
   MAIL[Email<br/>Brevo API / SMTP]
   WEB -->|HTTPS JSON, JWT| API
   WEB -->|signed media URLs| CLD
@@ -36,5 +37,4 @@ flowchart LR
   IMG --> CLD
   API -->|payment links, status| PAY
   PAY -->|webhook| API
-  WK -->|payout status| PAY
   API --> MAIL

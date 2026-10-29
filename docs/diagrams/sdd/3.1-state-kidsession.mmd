@@ -1,7 +1,0 @@
-stateDiagram-v2
-  [*] --> Active : Parent enters Kid Mode (PIN set)
-  Active --> Consumed : Correct exit PIN
-  Active --> Expired : expires_at passed
-  Active --> Consumed : Parent enters Kid Mode again (old session closed)
-  Consumed --> [*]
-  Expired --> [*]

@@ -1,0 +1,116 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class RefundRoutes {
+    <<controller>>
+    +GET /payments/orders
+    +POST /payments/order-items/:itemId/refund
+    +GET /admin/refunds
+    +POST /admin/refunds/:refundId/decision
+  }
+  class RefundsService {
+    <<service>>
+    +listMyOrders(user) List~OrderItem~
+    +requestRefund(user, orderItemId, reason) RefundRequest
+    +listRefunds(query) List~RefundRequest~
+    +decideRefund(admin, refundId, body) RefundRequest
+    -refundWindowDays(db) int
+    -refundableState(order, item, windowDays, now) RefundState
+    -impact(item) RefundImpact
+    -revokeDelivery(tx, item, buyerId, now) void
+  }
+  class BillingStore {
+    <<repository>>
+    +fulfillOrder(tx, orderId) bool
+    +ensureFreeSubscription(tx, parentId) Subscription
+  }
+  class CreditLedger {
+    <<repository>>
+    +expireCredit(tx, userId, key) void
+  }
+  class EarningLedger {
+    <<repository>>
+    +moveEarning(tx, entry) void
+  }
+  class PrismaClient {
+    <<repository>>
+  }
+  class Order {
+    <<entity>>
+    -UUID id
+    -UUID buyerId
+    -OrderStatus status
+    -BigInt totalVnd
+    -DateTime paidAt
+  }
+  class OrderItem {
+    <<entity>>
+    -UUID id
+    -UUID orderId
+    -OrderItemType itemType
+    -UUID planId
+    -UUID listingId
+    -BigInt unitPriceVnd
+    -BigInt sellerAmountVnd
+    -OrderItemStatus status
+  }
+  class RefundRequest {
+    <<entity>>
+    -UUID id
+    -UUID orderItemId
+    -UUID requesterId
+    -String reason
+    -RequestStatus status
+    -UUID handledBy
+    -DateTime handledAt
+    -String bankTransactionRef
+    -String decisionNote
+  }
+  class Entitlement {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -UUID listingId
+    -DateTime revokedAt
+  }
+  class Subscription {
+    <<entity>>
+    -UUID id
+    -UUID orderItemId
+    -SubscriptionStatus status
+  }
+  class AdminAuditLog {
+    <<entity>>
+    -UUID actorId
+    -String action
+    -Json beforeState
+    -Json afterState
+  }
+  class RequestStatus {
+    <<enumeration>>
+    pending
+    approved
+    rejected
+  }
+  class OrderItemStatus {
+    <<enumeration>>
+    active
+    refunded
+  }
+
+  RefundRoutes --> RefundsService : uses
+  RefundsService ..> BillingStore : plan refund falls back to Free
+  RefundsService ..> CreditLedger : expire credit of refunded plan
+  BillingStore ..> RefundRequest : duplicate purchase auto-request
+  RefundsService ..> EarningLedger : earning_reversal
+  RefundsService ..> PrismaClient : persists
+  PrismaClient ..> RefundRequest
+  PrismaClient ..> Entitlement : revoke (listing item)
+  PrismaClient ..> Subscription : cancel (plan item)
+  PrismaClient ..> AdminAuditLog : refund.approved / refund.rejected
+  Order "1" --> "1..*" OrderItem : items
+  OrderItem "1" --> "0..1" RefundRequest : refund
+  OrderItem "1" --> "0..1" Entitlement : listing item
+  OrderItem "1" --> "0..1" Subscription : plan item
+  RefundRequest --> RequestStatus
+  OrderItem --> OrderItemStatus

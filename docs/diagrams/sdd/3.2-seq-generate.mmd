@@ -1,32 +1,69 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
-  participant API as GenerationService
-  participant DB as PostgreSQL
-  participant Q as Redis/BullMQ
-  participant WK as AI Worker
-  participant AI as AI Service (FastAPI)
-  P->>API: POST /stories/:id/generate
-  API->>DB: load owned story, check not custom, AI not blocked
-  API->>API: assertNoLeftoverNames (real names must be tokens)
-  API->>DB: BEGIN, UPDATE stories SET status=generating WHERE status!=generating
-  alt 0 rows
-    API-->>P: 409 Story is being generated
+  participant W as Web App
+  participant C as :StoriesController
+  participant G as :GenerationService
+  participant L as :CreditLedger
+  participant Q as :AiQueue
+  participant WK as :AiProcessor
+  participant GS as :GenerationStore
+  participant DB as Database
+  participant AI as AI Service
+  P->>W: Click Write for me
+  W->>+C: POST /api/v1/stories/:id/generate
+  C->>+G: startGeneration(user, storyId)
+  G->>DB: load owned story, ai_blocked_until
+  DB-->>G: Story, User
+  G->>G: check length != custom, assertNoLeftoverNames
+  G->>DB: BEGIN, UPDATE stories SET status = generating WHERE status != generating
+  DB-->>G: rows updated
+  alt 0 rows / already read by child
+    G-->>C: ApiError 409
+    C-->>W: 409 Story is being generated
+  else updated
+    G->>DB: INSERT ai_requests (story_text, queued)
+    G->>+L: holdCredit(tx, userId, cost, aiRequestId)
+    L->>DB: SELECT wallets FOR UPDATE, INSERT wallet_ledger credit_hold
+    alt insufficient credit
+      L-->>G: ApiError 402
+      G->>DB: ROLLBACK
+      G-->>C: 402
+      C-->>W: 402 Not enough credit
+    else held
+      L-->>-G: ok
+      G->>DB: COMMIT
+      G->>Q: enqueueAiJob(story_text, aiRequestId)
+      alt enqueue fails
+        G->>GS: finalizeFailure (release credit, story back to draft)
+        G-->>C: ApiError 503
+        C-->>W: 503 credit refunded
+      else queued
+        G-->>C: {aiRequestId}
+        C-->>W: 202 Accepted
+      end
+    end
   end
-  API->>DB: insert ai_requests(queued), holdCredit (FOR UPDATE wallet)
-  alt insufficient credit
-    API-->>P: 402 rollback
+  deactivate G
+  deactivate C
+  Q->>+WK: job story_text
+  WK->>GS: markProcessing (queued -> processing)
+  WK->>GS: loadGenerationInput (template slots, {NVx} tokens only)
+  GS-->>WK: GenerationInput
+  WK->>+AI: POST /v1/story/generate
+  AI-->>-WK: pages, scenes, checkpoints (JSON)
+  alt AI error after retries
+    WK->>GS: finalizeFailure (status failed, releaseCredit, story draft)
+  else ok
+    WK->>GS: persistAiResult (pages, checkpoints, story ready, consumeCredit)
   end
-  API->>DB: COMMIT
-  API->>Q: add(story_text, ai_request_id)
-  alt enqueue fails
-    API->>DB: finalizeFailure -> releaseCredit, story back to draft
-    API-->>P: 503 credit refunded
+  GS->>DB: one transaction
+  deactivate WK
+  loop poll every few seconds
+    W->>+C: GET /api/v1/stories/:id/generation
+    C->>G: getGeneration(user, storyId)
+    G-->>C: status succeeded / failed + message
+    C-->>-W: 200
   end
-  API-->>P: 202 {aiRequestId}
-  Q->>WK: job
-  WK->>DB: markProcessing (queued -> processing)
-  WK->>AI: POST /v1/story/generate (template slots + {NVx} tokens only)
-  AI-->>WK: pages, scenes, checkpoints (JSON)
-  WK->>DB: persistAiResult: write pages/checkpoints, story ready, consumeCredit
-  P->>API: GET /stories/:id/generation (poll)
-  API-->>P: status succeeded / failed + message
+  W-->>P: Show generated story / error

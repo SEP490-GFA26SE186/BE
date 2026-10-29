@@ -1,0 +1,29 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+sequenceDiagram
+  autonumber
+  actor A as Admin
+  participant W as Web App
+  participant C as :AdminRoutes
+  participant S as :AdminService
+  participant R as :SettingsRegistry
+  participant DB as Database
+  A->>W: Change a setting value, click Save
+  W->>+C: PUT /api/v1/admin/settings/:key {value}
+  C->>+S: updateSetting(admin, key, value)
+  S->>DB: BEGIN, SELECT platform_settings
+  DB-->>S: current settings
+  S->>+R: settingError(key, value, current)
+  R-->>-S: error or null
+  alt unknown key, wrong type, out of range or breaks a cross rule
+    S-->>C: ApiError 422 with reason
+    C-->>W: 422
+  else valid
+    S->>DB: UPSERT platform_settings (value, updated_by = admin)
+    S->>DB: INSERT admin_audit_logs (setting.update, before, after)
+    S->>DB: COMMIT
+    S-->>C: updated setting
+    C-->>W: 200
+  end
+  deactivate S
+  deactivate C
+  W-->>A: Show saved value / error

@@ -6,26 +6,24 @@ skinparam shadowing false
 skinparam defaultFontName Arial
 skinparam usecaseBackgroundColor #EEF3FB
 skinparam usecaseBorderColor #4A6FA5
-actor "Guest" as Guest
 actor "Parent" as Parent
 rectangle "StoryWeaver AI – Marketplace, subscription and payment" {
-  usecase "UC-21\nBrowse marketplace" as UC21
-  usecase "UC-22\nBuy / claim story" as UC22
-  usecase "UC-23\nSubscribe / upgrade plan" as UC23
-  usecase "UC-24\nView payment history" as UC24
-  usecase "UC-25\nRequest refund" as UC25
-  usecase "UC-26\nRate and review story" as UC26
-  usecase "UC-27\nReport content" as UC27
+  usecase "UC-22\nBrowse marketplace" as UC22
+  usecase "UC-23\nBuy / claim story" as UC23
+  usecase "UC-24\nSubscribe / upgrade plan" as UC24
+  usecase "UC-25\nView payment history" as UC25
+  usecase "UC-26\nRequest refund" as UC26
+  usecase "UC-27\nRate and review story" as UC27
+  usecase "UC-28\nReport content" as UC28
 }
-Guest --> UC21
-Parent --> UC21
 Parent --> UC22
 Parent --> UC23
 Parent --> UC24
 Parent --> UC25
 Parent --> UC26
 Parent --> UC27
+Parent --> UC28
 actor "payOS" as payOS
-UC22 --> payOS
 UC23 --> payOS
+UC24 --> payOS
 @enduml

@@ -1,0 +1,101 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class AuthRoutes {
+    <<routes>>
+    +POST /auth/kid-pin/set
+    +PUT /auth/kid-pin/change
+    +POST /auth/kid-mode/enter
+    +POST /auth/kid-mode/exit
+  }
+  class AuthController {
+    <<controller>>
+    +setKidPin(req, res) void
+    +changeKidPin(req, res) void
+    +enterKidMode(req, res) void
+    +exitKidMode(req, res) void
+  }
+  class AuthService {
+    <<service>>
+    +setKidPin(userId, pin) void
+    +changeKidPin(userId, currentPin, newPin) void
+    +enterKidMode(parentId, childId) KidSession
+    +exitKidMode(body) AuthResult
+  }
+  class TokenService {
+    <<service>>
+    +generateKidSessionToken(parent, childId) KidSession
+    +verifyKidSessionToken(token) AuthToken
+    +consumeKidSessionToken(tokenId) void
+    +generateAuthTokens(user) AuthTokens
+  }
+  class KidPinLimiter {
+    <<utility>>
+    +MAX_ATTEMPTS = 5
+    +LOCK_MS = 15 min
+    +lockRemainingMs(parentId) int
+    +recordFailure(parentId) FailureState
+    +reset(parentId) void
+  }
+  class KidAuth {
+    <<security>>
+    +kidAuth(req, res, next) void
+  }
+  class KidRoutes {
+    <<routes>>
+    +GET /kid/bookshelf
+    +POST /kid/sessions
+    +POST /kid/sessions/:sessionId/answers
+  }
+  class PrismaClient {
+    <<repository>>
+  }
+  class User {
+    <<entity>>
+    -UUID id
+    -UserRole role
+    -String kidExitPinHash
+    -Boolean isActive
+  }
+  class ChildProfile {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -String name
+    -Date birthDate
+    -String preferredVoice
+  }
+  class AuthToken {
+    <<entity>>
+    -UUID id
+    -UUID userId
+    -UUID childId
+    -AuthTokenType type
+    -String tokenHash
+    -DateTime expiresAt
+    -DateTime consumedAt
+  }
+  class AuthTokenType {
+    <<enumeration>>
+    refresh
+    email_verify
+    password_reset
+    kid_session
+  }
+
+  AuthRoutes --> AuthController : routes to
+  AuthController --> AuthService : uses
+  AuthService --> TokenService : kid / parent tokens
+  AuthService ..> KidPinLimiter : exit PIN attempts
+  AuthService ..> PrismaClient : PIN hash, child
+  TokenService ..> PrismaClient : persists
+  KidRoutes ..> KidAuth : every /kid/* call
+  KidAuth ..> TokenService : verifyKidSessionToken
+  KidAuth ..> PrismaClient : child still owned
+  PrismaClient ..> User
+  PrismaClient ..> ChildProfile
+  PrismaClient ..> AuthToken
+  User "1" --> "*" ChildProfile : parent of
+  User "1" --> "*" AuthToken : has
+  ChildProfile "1" --> "*" AuthToken : kid_session
+  AuthToken --> AuthTokenType

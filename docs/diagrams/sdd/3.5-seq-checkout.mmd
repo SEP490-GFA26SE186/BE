@@ -1,28 +1,53 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
+  autonumber
   actor P as Parent
   participant W as Web App
-  participant API as BillingService
-  participant DB as PostgreSQL
+  participant C as :BillingController
+  participant S as :BillingService
+  participant ST as :BillingStore
+  participant DB as Database
   participant PO as payOS
-  P->>W: Choose plan
-  W->>API: POST /payments/plans/checkout {planId}
-  API->>DB: insert orders(pending, expiresAt) + order_items(snapshot price)
-  API->>PO: paymentRequests.create(orderCode, amount, returnUrl)
+  P->>W: Choose plan, click Pay
+  W->>+C: POST /api/v1/payments/plans/checkout {planId}
+  C->>+S: checkoutPlan(user, planId)
+  S->>DB: SELECT plans WHERE id = ? AND is_active
+  DB-->>S: Plan
+  S->>DB: INSERT orders (pending, payos_order_code, expires_at) + order_items (price snapshot)
+  DB-->>S: Order
+  S->>+PO: paymentRequests.create(orderCode, amount, returnUrl, expiredAt)
+  PO-->>-S: checkoutUrl / error
   alt payOS error
-    API->>DB: order failed
-    API-->>W: 503
+    S->>DB: UPDATE orders SET status = failed
+    S-->>C: ApiError 503
+    C-->>W: 503 Payment unavailable
+  else link created
+    S->>DB: UPDATE orders SET payos_payment_link_id
+    S-->>C: {order, checkoutUrl}
+    C-->>W: 201
   end
-  API-->>W: checkoutUrl
+  deactivate S
+  deactivate C
   W->>PO: Redirect, parent pays by VietQR
-  PO->>API: POST /payments/payos/webhook
-  API->>DB: insert webhook_logs
-  API->>PO: webhooks.verify(signature)
-  alt invalid signature / unknown order / amount mismatch
-    API-->>PO: 200 not processed (logged)
+  PO->>+C: POST /api/v1/payments/payos/webhook
+  C->>+S: handleWebhook(body)
+  S->>PO: webhooks.verify(body)
+  S->>DB: INSERT webhook_logs (signature_valid)
+  alt invalid signature / unknown order / code != 00 / amount too low
+    S-->>C: {processed: false, reason}
   else valid
-    API->>DB: fulfillOrder: UPDATE orders SET paid WHERE status IN (pending, expired)
-    API->>DB: startPeriod: close old subscription, new active period, credit_grant
-    API-->>PO: 200 processed
+    S->>+ST: fulfillOrder(tx, orderId)
+    ST->>DB: UPDATE orders SET paid WHERE status IN (pending, expired)
+    ST->>DB: startPeriod (or extend if same plan): close old period, credit_grant
+    ST-->>-S: processed
+    S->>DB: UPDATE webhook_logs SET processed
+    S-->>C: {processed: true}
   end
-  PO-->>W: Redirect to /parent/billing/result
-  W->>API: GET /payments/orders/:id (syncs with payOS if still pending)
+  deactivate S
+  C-->>-PO: 200
+  PO-->>W: Redirect to /parent/billing/result?orderId
+  W->>+C: GET /api/v1/payments/orders/:orderId
+  C->>S: getOrder(user, orderId) (syncs with payOS if still pending)
+  S-->>C: Order
+  C-->>-W: 200 order status
+  W-->>P: Show payment result

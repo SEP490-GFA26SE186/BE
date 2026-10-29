@@ -1,0 +1,119 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class PublishingController {
+    <<controller>>
+    +applySeller(req, res) void
+    +decideSeller(req, res) void
+    +createListing(req, res) void
+    +createListingVersion(req, res) void
+    +getQueue(req, res) void
+    +claimReview(req, res) void
+    +viewPage(req, res) void
+    +decide(req, res) void
+  }
+  class PublishingService {
+    <<service>>
+    +applySeller(user, body) SellerProfile
+    +decideSeller(moderator, userId, approve) SellerProfile
+    +createListing(user, body) Listing
+    +createListingVersion(user, listingId, body) Listing
+    +getQueue(moderator) List~ModerationReview~
+    +claimReview(moderator, reviewId) ModerationReview
+    +viewPage(moderator, reviewId, pageId, comment) ReviewProgress
+    +decide(moderator, reviewId, body) ModerationReview
+    -promoteVersion(tx, listing) void
+  }
+  class PublishRules {
+    <<utility>>
+    +validPriceVnd(price) bool
+    +identifyingNames(names) List~string~
+    +aliasErrors(storyCharacters, aliases, forbidden) List~Error~
+    +leftoverNameErrors(texts, names) List~Error~
+    +reviewProgress(pageIds, viewedIds) ReviewProgress
+    +claimedByOther(review, moderatorId, now) bool
+  }
+  class NarrationService {
+    <<service>>
+    +prepareNarration(tx, storyId) List~NarrationJob~
+    +dispatchNarration(jobs) bool
+  }
+  class NarrationStore {
+    <<repository>>
+    +reuseNarration(tx, copyId, liveStoryId, voice) void
+  }
+  class MonitoringService {
+    <<service>>
+    +issueStrikeTx(tx, issuerId, strike) StrikeResult
+    +closeOpenReports(tx, moderatorId, listingId, decision) void
+  }
+  class PrismaClient {
+    <<repository>>
+  }
+  class SellerProfile {
+    <<entity>>
+    -UUID userId
+    -SellerStatus status
+    -String displayName
+    -Int totalSales
+  }
+  class Listing {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -UUID publishedStoryId
+    -UUID previousListingId
+    -String title
+    -BigInt priceVnd
+    -ListingStatus status
+    -String coverImageKey
+    -Int purchaseCount
+  }
+  class ModerationReview {
+    <<entity>>
+    -UUID id
+    -UUID listingId
+    -ModerationReviewType reviewType
+    -UUID moderatorId
+    -DateTime claimedAt
+    -ModerationDecision decision
+    -String comment
+    -DateTime decidedAt
+  }
+  class ReviewPageView {
+    <<entity>>
+    -UUID reviewId
+    -UUID pageId
+    -String comment
+  }
+  class ListingStatus {
+    <<enumeration>>
+    submitted
+    in_review
+    changes_requested
+    rejected
+    published
+    suspended
+    archived
+  }
+  class ModerationDecision {
+    <<enumeration>>
+    approved
+    changes_requested
+    rejected
+    taken_down
+  }
+
+  PublishingController --> PublishingService : uses
+  PublishingService ..> PublishRules : validates
+  PublishingService ..> NarrationService : voice for the copy
+  PublishingService ..> NarrationStore : new version reuses unchanged segments
+  PublishingService ..> MonitoringService : strike on takedown, optional on reject
+  PublishingService ..> PrismaClient : persists
+  PrismaClient ..> Listing
+  PrismaClient ..> ModerationReview
+  SellerProfile "1" --> "*" Listing : sells
+  Listing "1" --> "*" ModerationReview : reviewed by
+  ModerationReview "1" --> "*" ReviewPageView : page views
+  Listing --> ListingStatus
+  ModerationReview --> ModerationDecision

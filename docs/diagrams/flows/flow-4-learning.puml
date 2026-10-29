@@ -1,0 +1,72 @@
+@startuml flow-4-learning
+title Flow 4: Learning Through Stories
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ArrowColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam SwimlaneBorderColor #000000
+skinparam SwimlaneTitleFontStyle bold
+
+|Parent|
+|Child|
+|System|
+
+|Parent|
+start
+if (Kid Exit PIN set?) then (no)
+  :Set PIN (4-6 digits);
+else (yes)
+endif
+:Choose a child, enter Kid Mode;
+|System|
+:Issue kid_session token\n(24 h, closes the previous one);
+|Child|
+repeat
+  :Open a story from the bookshelf;
+  |System|
+  if (Ready for child?\n(reviewed + all clips ready)) then (no)
+    :422 Story not ready;
+  else (yes)
+    :Resume or create play session\n(is_first_play on first time);
+    repeat
+      :Send page: narration + illustration\n(no correct answers sent);
+      |Child|
+      :Listen and look at the page;
+      |System|
+      if (Checkpoint after this page?) then (yes)
+        |Child|
+        :Choose emotion / option;
+        |System|
+        :First choice: snapshot score, sub-skill,\ntemplate version (no score if not scored);
+        if (Wrong emotion / perspective choice?) then (yes)
+          :Give hint, ask again\n(second try not scored);
+          |Child|
+          :Choose again;
+        else (no)
+        endif
+        |System|
+        :Play outcome + correct answer audio;
+      else (no)
+      endif
+    repeat while (More pages?) is (yes) not (no)
+    :Complete play session;
+  endif
+  |Child|
+repeat while (Read another story?) is (yes) not (no)
+|Parent|
+repeat
+  :Enter Kid Exit PIN;
+  |System|
+repeat while (Correct PIN?) is (no: attempts left,\n5 wrong = locked 15 min) not (yes)
+:Close kid session, return parent tokens;
+|Parent|
+:Open EQ report of the child;
+|System|
+:Level per sub-skill from first-play scored answers\n(last 5, min 3, thresholds 0.5 / 0.8),\ncompetency = lowest level, suggested story templates;
+|Parent|
+:Talk with the child using suggested prompts,\npick the next story template;
+stop
+@enduml
