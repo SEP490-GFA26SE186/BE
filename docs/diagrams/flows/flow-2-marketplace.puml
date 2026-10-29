@@ -1,0 +1,96 @@
+@startuml flow-2-marketplace
+title Flow 2: Marketplace - Publish, Buy & Payout
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ArrowColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam SwimlaneBorderColor #000000
+skinparam SwimlaneTitleFontStyle bold
+skinparam NoteBackgroundColor #FFFFFF
+skinparam NoteBorderColor #555555
+
+|Seller|
+|Specialist|
+|System|
+|Buyer|
+|payOS|
+|Admin|
+
+|Seller|
+start
+:Apply as seller\n(Family plan with can_sell);
+|Specialist|
+if (Approve seller profile?) then (no)
+  |Seller|
+  :Profile rejected, may apply again;
+  stop
+else (yes)
+endif
+|Seller|
+repeat
+  :Submit a reviewed private story:\nprice 0 or 5,000-500,000 VND,\ngeneric name for each character;
+  |System|
+repeat while (Real names or family details left?) is (yes: 422, fix) not (no)
+:Create de-personalized copy (no family story),\ncopy ready scene images and cover,\nregenerate narration with generic names,\nlisting = submitted;
+|Specialist|
+:Claim review (30 min, narration ready),\nview 100% of pages,\ncheck pedagogy checklist on the web;
+if (Decision?) then (changes requested / rejected)
+  |System|
+  :listing = changes_requested / rejected\n(optional strike on reject, Flow 3);
+  |Seller|
+  :Fix the private story and submit again;
+  stop
+else (approved)
+  |System|
+  :listing = published;
+endif
+|Buyer|
+:Browse marketplace\n(competency, age, price, sort);
+:Buy one story;
+|System|
+:Create order, snapshot price\nand 80% seller share;
+if (Price = 0?) then (no)
+  |Buyer|
+  :Pay by VietQR (link valid 15 min);
+  |payOS|
+  :Send signed webhook;
+  |System|
+  if (Signature, code and amount valid?) then (no)
+    :Order failed / expired, nothing delivered;
+    stop
+  else (yes)
+  endif
+else (yes)
+endif
+|System|
+:Order paid (conditional update, no double delivery);
+fork
+  :Grant entitlement, purchase count + 1;
+  |Buyer|
+  :Add the story to a child's bookshelf\n(child reads it in Flow 4);
+  :Rate the story after a child finished it;
+fork again
+  |System|
+  :Record seller earning as pending (80%);
+  :Cron: move to available after hold days\n(skipped while a refund is pending);
+  |Seller|
+  :Request withdrawal\n(bank set > 24 h ago, >= 50,000 VND);
+  |System|
+  :Hold the amount (available to locked);
+  |Admin|
+  if (Pay the seller?) then (yes)
+    :Transfer by bank app,\nmark paid with transaction ref;
+    |System|
+    :Withdrawal paid (withdrawal_paid);
+  else (no)
+    |Admin|
+    :Reject with reason;
+    |System|
+    :Return amount to available\n(withdrawal_release);
+  endif
+end fork
+stop
+@enduml
