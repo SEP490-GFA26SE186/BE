@@ -4,15 +4,15 @@ title: "Flow 1: Story Creation & AI-Assisted Authoring"
 %%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
 flowchart LR
   subgraph ADM["ADMIN (prerequisite)"]
-    AA(("👤 Admin")):::actor
+    AA(("Admin")):::actor
     A1["Set plans, credits per month,<br/>AI credit prices"]:::ext
   end
   subgraph SPEC["SPECIALIST (prerequisite)"]
-    SA(("👤 Specialist")):::actor
+    SA(("Specialist")):::actor
     S1["Adjust CASEL sub-skills, publish<br/>question templates + story templates"]:::ext
   end
   subgraph PAR["PARENT"]
-    PA(("👤 Parent")):::actor
+    PA(("Parent")):::actor
     P0["Create child profile<br/>+ family characters"]
     P1{"Choose entry"}
     P2["Tell the family story"]
@@ -47,7 +47,7 @@ flowchart LR
     Y1["VietQR payment<br/>+ signed webhook"]
   end
   subgraph KID["CHILD"]
-    KA(("👤 Child")):::actor
+    KA(("Child")):::actor
     K1["Read in Kid Mode<br/>(Flow 4)"]:::ext
   end
 

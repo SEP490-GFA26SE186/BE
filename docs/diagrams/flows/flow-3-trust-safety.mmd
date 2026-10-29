@@ -4,7 +4,7 @@ title: "Flow 3: Trust & Safety, After-sale"
 %%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
 flowchart LR
   subgraph BUY["BUYER (Parent)"]
-    UA(("👤 Buyer")):::actor
+    UA(("Buyer")):::actor
     U1["Report a published listing<br/>(category, page)"]
     U2["Request refund<br/>(within refund window)"]
   end
@@ -24,7 +24,7 @@ flowchart LR
     B12["Refund rejected,<br/>access kept"]
   end
   subgraph SPEC["SPECIALIST"]
-    MA(("👤 Specialist")):::actor
+    MA(("Specialist")):::actor
     M0{"Report valid?"}
     M3["Dismiss report"]
     M4["Suspend listing manually<br/>(reason)"]
@@ -32,12 +32,12 @@ flowchart LR
     M2{"Decision?"}
   end
   subgraph SEL["SELLER"]
-    EA(("👤 Seller")):::actor
+    EA(("Seller")):::actor
     E1["Listing live again"]
     E2["Appeal strike once<br/>(reason)"]
   end
   subgraph ADM["ADMIN"]
-    AA(("👤 Admin")):::actor
+    AA(("Admin")):::actor
     A1{"Approve appeal?<br/>(not own strike)"}
     A2{"Approve refund?"}
     A3["Transfer money back manually,<br/>enter bank transaction ref"]
