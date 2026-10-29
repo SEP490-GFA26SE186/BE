@@ -1,0 +1,103 @@
+@startuml flow-1-story-creation
+title Flow 1: Story Creation & AI-Assisted Authoring
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ArrowColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam SwimlaneBorderColor #000000
+skinparam SwimlaneTitleFontStyle bold
+skinparam NoteBackgroundColor #FFFFFF
+skinparam NoteBorderColor #555555
+
+|Parent|
+|System|
+|AI Service|
+|payOS|
+
+|Parent|
+start
+note right
+  Prerequisite: Specialist has published sub-skills,
+  question templates and story templates;
+  Admin has set plans and AI credit prices.
+end note
+:Create child profile and family characters;
+:Choose an entry;
+switch (Entry?)
+case (Family story)
+  :Tell the family story,\nchoose characters and length;
+  |System|
+  :Replace real names with {NVx} tokens,\ncheck blocked keywords and daily limit (30);
+  |AI Service|
+  :Analyze the story (synchronous, 0 credit):\nhard moment or seed event + 1-2 sub-skills;
+  |Parent|
+  :Confirm summary and sub-skills\n(change skills or "story only, no scoring");
+case (Story template)
+  :Choose a story template (topic),\ncharacters and length;
+case (Handwritten)
+  :Choose "write it myself";
+endswitch
+|System|
+:Create draft story and page layout\n(short 6p, medium 8p, long 10p, custom 4-20p),\nfill scored slots with published template versions;
+if (Handwritten story?) then (no)
+  |Parent|
+  :Click "Write for me";
+  |System|
+  while (Enough credit?\nshort 1 / medium 2 / long 3) is (no: paywall)
+    |Parent|
+    :Buy or upgrade a plan;
+    |payOS|
+    :VietQR payment + signed webhook;
+    |System|
+    :Start new plan period, grant credits;
+  endwhile (yes)
+  :Hold credit, status = generating,\nenqueue story_text job;
+  |AI Service|
+  :Write the whole story from template slots\n(sees {NVx} tokens only);
+  |System|
+  if (Story generated?) then (no)
+    :Release credit, status = draft;
+    |Parent|
+    :See error message, retry later;
+    stop
+  else (yes)
+    |System|
+    :Save pages and checkpoints (locked),\nconsume credit, status = ready;
+  endif
+  |Parent|
+  if (Draw AI illustrations?) then (yes)
+    |System|
+    :Hold 1 credit per missing portrait\nand per scene (max 4 scenes);
+    |AI Service|
+    :Draw portraits, then scenes\n(appearance only, no real names);
+    |System|
+    :Consume credit (release on failure);
+  else (no)
+  endif
+else (yes)
+  |Parent|
+  :Write pages and checkpoints\n(no AI, not scored);
+endif
+|Parent|
+repeat
+  :Edit page text (AI checkpoints read-only),\npick cover scene, click "Finish review";
+  |System|
+repeat while (Pages and checkpoints complete,\nno blocked keywords?) is (no: list of gaps) not (yes)
+:Set reviewed_at, queue narration clips;
+repeat
+  |AI Service|
+  :Text-to-speech for each segment\n(Kim Thanh voice, 0 credit);
+  |System|
+repeat while (All clips ready?) is (no: Parent retries narration) not (yes)
+:Story is ready for child;
+|Parent|
+:Add the story to a child's bookshelf\n(child reads it in Flow 4);
+if (Publish for sale?) then (yes)
+  :Submit the story for sale (Flow 2);
+else (no)
+endif
+stop
+@enduml

@@ -4,39 +4,41 @@ title: "Flow 4: Learning Through Stories"
 %%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
 flowchart LR
   subgraph PAR["PARENT"]
-    PA(("👤 Parent")):::actor
+    PA(("Parent")):::actor
     P0["Choose child,<br/>enter Kid Mode"]
     P1["Enter Kid Exit PIN"]
     P2["Open EQ report"]
   end
   subgraph KID["CHILD"]
-    KA(("👤 Child")):::actor
+    KA(("Child")):::actor
     K1["Open story<br/>from bookshelf"]
     K2["Listen + look<br/>at the page"]
     K3["Choose emotion / option"]
     K4["Choose again"]
     K5{"Read again?"}
   end
-  subgraph SYS["⚙ SYSTEM (Backend API)"]
+  subgraph SYS["SYSTEM (Backend API)"]
     B0{"Kid Exit PIN set?"}
     B1{"Ready for child?<br/>reviewed + all clips ready"}
     B2["Resume or create play session<br/>(is_first_play on first time)"]
     B3["Send page: narration audio<br/>+ illustration (no correct answers)"]
     B4{"Checkpoint after<br/>this page?"}
-    B5["First choice: snapshot score,<br/>sub-skill, template version<br/>(reflection: not scored)"]
+    B5["First choice: snapshot score, sub-skill,<br/>template version<br/>(reflection / not scored / flagged: no score)"]
     B6{"Wrong emotion /<br/>perspective choice?"}
     B7["Hint, ask again<br/>(2nd try not scored)"]
     B8["Outcome + correct<br/>answer audio"]
     B9{"More pages?"}
     B10["Complete session"]
     B11{"Correct PIN?"}
-    B12["EQ per sub-skill from first-play scored answers<br/>(window 5, min 3, 0.5 / 0.8) + suggested topics"]
+    B13{"5 wrong in a row?"}
+    B14["Locked 15 min (429)"]
+    B12["Level per sub-skill from first-play scored answers<br/>(last 5, min 3, 0.5 / 0.8), competency = lowest level<br/>+ conversation prompts + suggested story templates"]
   end
 
   PA --> P0 --> B0
   KA --> K1
   B0 -- "No: set PIN first" --> P0
-  B0 -- "Yes: kid session" --> K1 --> B1
+  B0 -- "Yes: kid session (24 h)" --> K1 --> B1
   B1 -- "No: 422" --> K1
   B1 -- "Yes" --> B2 --> B3 --> K2 --> B4
   B4 -- "Yes" --> K3 --> B5 --> B6
@@ -49,7 +51,9 @@ flowchart LR
   K5 -- "Yes" --> B2
   K5 -- "No: bookshelf" --> K1
   K1 -.-> P1 --> B11
-  B11 -- "No" --> K1
+  B11 -- "No" --> B13
+  B13 -- "No: attempts left" --> K1
+  B13 -- "Yes" --> B14 --> K1
   B11 -- "Yes: Parent dashboard" --> P2 --> B12
 
   classDef default fill:#EEEEEE,stroke:#999999,color:#111111
