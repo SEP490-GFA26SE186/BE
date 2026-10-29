@@ -55,7 +55,9 @@ services:
   # Cong vao duy nhat: Public hostname cua tunnel (Cloudflare Zero Trust) tro SITE_DOMAIN -> http://api:3000.
   # Token tao trong dashboard, chi nam trong .env tren may.
   cloudflared:
-    image: cloudflare/cloudflared:2024.12.2
+    # Ghim version: Cloudflare bao "Unsupported" voi ban cu hon ~1 nam. Nang: xem
+    #   docker run --rm cloudflare/cloudflared:latest --version
+    image: cloudflare/cloudflared:2026.10.6
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?can TUNNEL_TOKEN trong .env}
