@@ -1,0 +1,107 @@
+---
+title: "Sequence Diagram - Review a Story and Create Narration"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor U as Parent
+  participant W as Web App
+  participant R as :StoriesRoutes
+  participant C as :StoriesController
+  participant ES as :StoriesEditorService
+  participant NS as :StoriesNarrationService
+  participant NST as :StoriesNarrationStore
+  participant Q as :NarrationQueue
+  participant P as :NarrationProcessor
+  participant AI as :AiClient
+  participant DB as Database
+  participant AIS as AI Service
+  participant CD as Cloudinary
+
+  Note over U,CD: 1. Review (mark story as finished)
+  U->>W: Click Finish story
+  W->>R: POST /api/v1/stories/:id/review
+  R->>C: reviewStory(req, res)
+  C->>ES: reviewStory(user, storyId)
+  ES->>DB: BEGIN, lock story row (owner, not generating)
+  ES->>DB: SELECT pages, checkpoints, options
+  ES->>ES: findReviewGaps(pages, checkpoints)
+  alt empty page / question / option left
+    ES-->>C: ApiError 422 (list of gaps)
+    C-->>W: 422 Story is not finished
+  else no gaps
+    ES->>DB: check blocked keywords on whole story
+    alt blocked keyword
+      ES-->>C: ApiError 422
+      C-->>W: 422 Unsuitable words
+    else ok
+      ES->>DB: UPDATE stories SET reviewedAt, status
+      ES->>NS: prepareNarration(tx, storyId)
+      opt story.useTts
+        NS->>NST: queueNarration(tx, storyId, voice)
+        NST->>DB: SELECT tts.voice, existing narration_clips
+        NST->>NST: split into segments, fingerprint = hash(text + voice)
+        NST->>DB: INSERT / UPDATE narration_clips (queued, round + 1) for new or changed segments
+        NST-->>NS: clip jobs
+      end
+      ES->>DB: COMMIT
+      ES->>NS: dispatchNarration(jobs)
+      NS->>Q: enqueueNarration(jobs)
+      alt enqueue fails
+        NS->>NST: failClip(ENQUEUE_FAILED) for each job
+      end
+      ES-->>C: story detail + narration progress
+      C-->>W: 200 reviewed story
+    end
+  end
+
+  Note over U,CD: 2. Worker reads each segment (one job at a time)
+  loop each clip job
+    Q->>P: processNarrationJob(clipId, round)
+    P->>NST: markClipGenerating(clipId, round)
+    P->>NST: loadClipInput(clipId)
+    alt text changed since queued (round mismatch)
+      P->>NST: failClip(STALE)
+    else current
+      P->>AI: callAi(narration, text, voice)
+      AI->>AIS: POST /v1/tts/synthesize
+      AIS->>CD: upload audio file
+      CD-->>AIS: audio key
+      AIS-->>AI: audio_key, duration
+      alt success
+        P->>NST: persistClip(clip, audioKey)
+        NST->>DB: narration_clips ready, write audioKey to page / question / hint / option
+      else TTS error after retries
+        P->>NST: failClip(code, message)
+        NST->>DB: narration_clips failed
+      end
+    end
+  end
+
+  Note over U,CD: 3. Retry failed narration
+  U->>W: Click Retry narration
+  W->>R: POST /api/v1/stories/:id/narration/retry
+  R->>C: retryNarration(req, res)
+  C->>NS: retryNarration(user, storyId)
+  NS->>DB: BEGIN, lock story row
+  alt not reviewed / TTS turned off
+    NS-->>C: ApiError 422
+    C-->>W: 422 Finish the story first / narration is off
+  else ok
+    NS->>NST: queueNarration (only failed / missing / changed segments)
+    NS->>DB: COMMIT
+    NS->>Q: enqueueNarration(jobs)
+    alt enqueue fails
+      NS-->>C: ApiError 503
+      C-->>W: 503 Narration service unavailable
+    else queued
+      NS-->>C: story detail
+      C-->>W: 200 narration re-queued
+    end
+  end

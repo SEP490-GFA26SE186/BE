@@ -1,0 +1,110 @@
+---
+title: "Sequence Diagram - Draw Story Illustrations"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor U as Parent
+  participant W as Web App
+  participant R as :StoriesRoutes
+  participant C as :StoriesController
+  participant IS as :StoriesImagesService
+  participant CL as :CreditLedger
+  participant Q as :AiQueue
+  participant P as :AiProcessor
+  participant IST as :StoriesImagesStore
+  participant AI as :AiClient
+  participant DB as Database
+  participant AIS as AI Service
+  participant CD as Cloudinary
+
+  Note over U,CD: 1. Request illustrations (also triggered automatically after AI writes a story with useAiImage)
+  U->>W: Click Draw illustrations
+  W->>R: POST /api/v1/stories/:id/images
+  R->>C: drawImages(req, res)
+  C->>IS: drawStoryImages(user, storyId)
+  IS->>DB: SELECT story (owner), users.aiBlockedUntil
+  alt not found / published copy / story generating / AI blocked
+    IS-->>C: ApiError 404 / 403 / 409 / 403
+    C-->>W: error
+  else ok
+    IS->>DB: UPDATE stories SET useAiImage = true (if off)
+    IS->>IS: queueStoryImages(storyId)
+    IS->>DB: SELECT scenes, story characters, image costs
+    loop each character with appearance and no portrait
+      IS->>DB: BEGIN, character portraitStatus queued, INSERT ai_requests (character_portrait)
+      IS->>CL: holdCredit(userId, portrait cost)
+      IS->>DB: COMMIT
+      IS->>Q: enqueueAiJob(character_portrait)
+    end
+    loop each scene with description and no image
+      alt a character portrait is still being drawn
+        IS->>DB: UPDATE story_scenes SET imageStatus queued (wait for portrait)
+      else portraits ready
+        IS->>DB: BEGIN, INSERT ai_requests (scene_image), scene imageStatus queued
+        IS->>CL: holdCredit(userId, scene cost)
+        IS->>DB: COMMIT
+        IS->>Q: enqueueAiJob(scene_image)
+      end
+    end
+    alt credit ran out before anything was queued
+      IS->>DB: waiting scenes back to imageStatus none
+      IS-->>C: ApiError 402
+      C-->>W: 402 Not enough credit to draw
+    else queued
+      IS-->>C: portraits, scenes, waiting counts
+      C-->>W: 200 drawing started
+      W-->>U: Show drawing progress
+    end
+  end
+
+  Note over U,CD: 2. Worker draws each image (background)
+  loop each portrait / scene job
+    Q->>P: processAiJob(character_portrait or scene_image)
+    P->>IST: markProcessing, loadPortraitInput / loadSceneInput
+    IST->>DB: SELECT appearance / scene description (real names removed), portrait refs
+    P->>AI: callAi(job, payload)
+    AI->>AIS: POST /v1/images/portrait or /v1/images/scene
+    AIS->>CD: upload image
+    CD-->>AIS: image key
+    AIS-->>AI: image_key
+    alt success
+      P->>IST: persistImageResult(aiRequestId, response)
+      IST->>DB: BEGIN, ai_requests succeeded, write portraitImageKey / scene imageKey (ready)
+      IST->>CL: consumeCredit
+      IST->>DB: COMMIT
+      opt portrait finished
+        P->>IS: resumeAfterPortrait(characterId)
+        IS->>IS: queueStoryImages for stories with waiting scenes
+      end
+    else blocked by content filter / AI error
+      P->>IST: finalizeImageFailure(failed or blocked)
+      IST->>DB: BEGIN, ai_requests failed / blocked, status failed
+      IST->>CL: releaseCredit
+      IST->>DB: COMMIT
+    end
+  end
+
+  Note over U,CD: 3. Redraw one scene and set cover
+  U->>W: Click Redraw on a scene
+  W->>R: POST /api/v1/stories/:id/scenes/:sceneId/image
+  R->>C: redrawScene(req, res)
+  C->>IS: redrawScene(user, storyId, sceneId)
+  alt scene not found / no description / already drawing
+    IS-->>C: ApiError 404 / 422 / 409
+    C-->>W: error
+  else ok
+    IS->>IS: queueStoryImages(storyId, [sceneId]) (same as step 1)
+    C-->>W: 200 redraw queued
+  end
+  U->>W: Choose a scene as cover
+  W->>R: PUT /api/v1/stories/:id/cover {sceneId}
+  R->>C: setCover(req, res)
+  C->>DB: StoriesService.setCover: scene must have image (else 422), UPDATE stories SET coverSceneId
+  C-->>W: 200 cover updated

@@ -1,0 +1,28 @@
+---
+title: "State Diagram - Scene Image and Character Portrait"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "NONE" as NONE
+  state "QUEUED" as QUEUED
+  state "GENERATING" as GENERATING
+  state "READY" as READY
+  state "FAILED" as FAILED
+
+  [*] --> NONE : Scene / character created
+  NONE --> QUEUED : Draw requested [credit held, job enqueued]
+  NONE --> QUEUED : Scene waits for character portrait
+  QUEUED --> NONE : Out of credit while waiting
+  QUEUED --> GENERATING : AI worker starts
+  QUEUED --> FAILED : Enqueue failed [credit released]
+  GENERATING --> READY : Image uploaded [credit consumed]
+  GENERATING --> FAILED : Blocked by filter / AI error [credit released]
+  FAILED --> QUEUED : Parent redraws
+  READY --> QUEUED : Redraw scene / regenerate portrait
+  READY --> [*]

@@ -9,8 +9,8 @@ classDiagram
     +POST /api/v1/auth/forgot-password
     +POST /api/v1/auth/reset-password
     +PUT /api/v1/auth/change-password [auth]
-    +POST /api/v1/auth/send-verification-email
-    +GET|POST /api/v1/auth/verify-email
+    +POST /api/v1/auth/send-verification-email [auth]
+    +POST /api/v1/auth/verify-email [auth]
   }
 
   class ProtectedRoutes {
@@ -34,7 +34,6 @@ classDiagram
     +ZodObject forgotPassword
     +ZodObject resetPassword
     +ZodObject changePassword
-    +ZodObject sendVerificationEmail
     +ZodObject verifyEmail
   }
 
@@ -72,8 +71,8 @@ classDiagram
     +forgotPassword(email) Object
     +resetPassword(token, newPassword) Object
     +changePassword(userId, currentPassword, newPassword) Object
-    +sendVerificationEmail(userId, email) Object
-    +verifyEmail(rawToken) Object
+    +sendVerificationEmail(userId) Object
+    +verifyEmail(rawToken, userId) Object
   }
 
   class TokenService {
@@ -83,8 +82,8 @@ classDiagram
     +generateAuthTokens(user) Object
     +verifyAndRotateRefreshToken(rawRefreshToken) Object
     +revokeRefreshToken(rawRefreshToken) void
-    +generateEmailVerificationToken(userId) String
-    +verifyEmailToken(rawToken) User
+    +generateEmailVerificationToken(userId, options) String
+    +verifyEmailToken(rawToken, userId) User
     +generatePasswordResetToken(userId) String
     +resetPasswordWithToken(rawToken, passwordHash) String
   }
@@ -200,4 +199,4 @@ classDiagram
   User --> UserRole : has
   AuthToken --> AuthTokenType : has
 
-  note "Ghi chú<br/>- Access token: JWT {sub, role}, hết hạn 15m.<br/>- Refresh token: randomBytes(40), hết hạn 7d, xoay vòng (replacedBy).<br/>- Refresh / email_verify / password_reset lưu dạng SHA-256 (tokenHash).<br/>- Mật khẩu băm bcrypt cost 10.<br/>- auth: thiếu/sai token -> 401; token kid_session -> 403.<br/>- authorize: sai vai trò -> 403.<br/>- Không có tầng Repository: service gọi thẳng Prisma."
+  note "Ghi chú<br/>- Access token: JWT {sub, role}, hết hạn 15m.<br/>- Refresh token: randomBytes(40), hết hạn 7d, xoay vòng (replacedBy).<br/>- Refresh / email_verify / password_reset lưu dạng SHA-256 (tokenHash).<br/>- Xác thực email bằng mã (không phải link): mã gửi qua email, hiệu lực 24h, người dùng dán mã trên web; phải đăng nhập, mã của tài khoản khác -> 400; gửi lại cách nhau tối thiểu 60s (sớm hơn -> 429).<br/>- Mật khẩu băm bcrypt cost 10.<br/>- auth: thiếu/sai token -> 401; token kid_session -> 403.<br/>- authorize: sai vai trò -> 403.<br/>- Không có tầng Repository: service gọi thẳng Prisma."

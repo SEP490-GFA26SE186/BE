@@ -1,0 +1,103 @@
+---
+title: "Sequence Diagram - Write a Story with AI"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor U as Parent
+  participant W as Web App
+  participant R as :StoriesRoutes
+  participant C as :StoriesController
+  participant GS as :StoriesGenerationService
+  participant CL as :CreditLedger
+  participant Q as :AiQueue
+  participant P as :AiProcessor
+  participant ST as :StoriesGenerationStore
+  participant AI as :AiClient
+  participant DB as Database
+  participant AIS as AI Service
+
+  Note over U,AIS: 1. Start generation
+  U->>W: Click Write with AI on a draft story
+  W->>R: POST /api/v1/stories/:id/generate
+  R->>C: generateStory(req, res)
+  C->>GS: startGeneration(user, storyId)
+  GS->>DB: SELECT story (owner), users.aiBlockedUntil
+  alt not owner / length custom / AI blocked / real name left in content
+    GS-->>C: ApiError 404 / 422 / 403 / 422
+    C-->>W: error
+  else ok
+    GS->>DB: SELECT story_text cost for this length
+    GS->>DB: BEGIN, UPDATE stories SET generating (where not generating)
+    alt already generating / child has read this story
+      GS-->>C: ApiError 409 (rollback)
+      C-->>W: 409 Cannot write now
+    else ok
+      GS->>DB: INSERT ai_requests (story_text, queued, creditsCharged)
+      GS->>CL: holdCredit(userId, cost)
+      alt not enough credit
+        CL-->>GS: ApiError 402 (rollback)
+        GS-->>C: ApiError 402
+        C-->>W: 402 Not enough credit
+      else held
+        CL->>DB: UPDATE wallets, INSERT wallet_ledger (credit_hold), COMMIT
+        GS->>Q: enqueueAiJob(story_text, ai_request_id)
+        alt enqueue fails (Redis down)
+          GS->>ST: finalizeFailure(ENQUEUE_FAILED)
+          ST->>DB: ai_requests failed, recompute story status, release credit
+          GS-->>C: ApiError 503
+          C-->>W: 503 AI unavailable, credit refunded
+        else queued
+          GS-->>C: aiRequestId
+          C-->>W: 202 aiRequestId
+          W-->>U: Show "AI is writing..."
+        end
+      end
+    end
+  end
+
+  Note over U,AIS: 2. Worker writes the story (background)
+  Q->>P: processAiJob(story_text)
+  P->>ST: markProcessing(aiRequestId)
+  ST->>DB: UPDATE ai_requests SET processing (only if queued)
+  P->>ST: loadGenerationInput(aiRequestId)
+  ST->>DB: SELECT story skeleton, characters, topic, checkpoint templates
+  P->>P: buildAiRequest(input)
+  P->>AI: callAi(story_text, payload)
+  AI->>AIS: POST /v1/story/generate
+  AIS-->>AI: pages, scenes, questions, options
+  alt success
+    P->>ST: persistAiResult(aiRequestId, response)
+    ST->>DB: BEGIN, ai_requests succeeded, write pages / checkpoints / options (origin ai), story ready
+    ST->>CL: consumeCredit(userId, aiRequestId)
+    CL->>DB: INSERT wallet_ledger (credit_consume), COMMIT
+    opt story.useAiImage
+      P->>P: queueStoryImages(storyId) (see 3.3b)
+    end
+  else AI error / content blocked / retries exhausted
+    P->>ST: finalizeFailure(failed or blocked)
+    ST->>DB: BEGIN, ai_requests failed / blocked, recompute story status
+    ST->>CL: releaseCredit(userId, amount)
+    CL->>DB: UPDATE wallets, INSERT wallet_ledger (credit_release), COMMIT
+  end
+
+  Note over U,AIS: 3. Web polls generation status
+  loop every few seconds until finished
+    W->>R: GET /api/v1/stories/:id/generation
+    R->>C: getGeneration(req, res)
+    C->>GS: getGeneration(user, storyId)
+    GS->>DB: SELECT latest story_text ai_request
+    opt still queued / processing after 10 minutes
+      GS->>ST: finalizeFailure(STALE)
+      ST->>DB: mark failed, release credit
+    end
+    GS-->>C: status, errorCode, errorMessage
+    C-->>W: 200 generation status
+  end
+  W-->>U: Show written story or error message

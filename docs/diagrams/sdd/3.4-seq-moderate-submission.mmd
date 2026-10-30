@@ -1,0 +1,102 @@
+---
+title: "Sequence Diagram - Moderate a Story Submission"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor SP as Specialist
+  participant W as Web App
+  participant R as :ModerationRoutes
+  participant C as :PublishingController
+  participant PS as :PublishingService
+  participant PR as :PublishRules
+  participant NST as :StoriesNarrationStore
+  participant MS as :MonitoringService
+  participant DB as Database
+
+  Note over SP,DB: 1. Open queue and claim a submission
+  SP->>W: Open moderation queue
+  W->>R: GET /api/v1/moderation/submissions
+  R->>R: auth, authorize(specialist, admin)
+  R->>C: getQueue(req, res)
+  C->>PS: getQueue(moderator)
+  PS->>DB: SELECT undecided moderation_reviews + listing, seller, page count
+  C-->>W: 200 queue
+  SP->>W: Click Review on a submission
+  W->>R: POST /api/v1/moderation/submissions/:reviewId/claim
+  R->>C: claimReview(req, res)
+  C->>PS: claimReview(moderator, reviewId)
+  PS->>DB: BEGIN, SELECT moderation_reviews FOR UPDATE
+  PS->>PR: claimedByOther(review, moderatorId, now)
+  alt already decided / claimed by another specialist
+    PS-->>C: ApiError 409 (rollback)
+    C-->>W: 409 Already decided / being reviewed
+  else free
+    PS->>NST: loadReadiness(publishedStoryId)
+    alt narration still generating or failed
+      PS-->>C: ApiError 409 (rollback)
+      C-->>W: 409 Narration not ready
+    else ready
+      PS->>DB: UPDATE moderation_reviews SET moderatorId, claimExpiresAt = now + 30 min
+      PS->>DB: UPDATE listings SET in_review (if submitted), COMMIT
+      PS->>DB: SELECT published story detail, page views
+      PS->>PR: reviewProgress(pageIds, viewedIds)
+      C-->>W: 200 review detail + progress
+    end
+  end
+
+  Note over SP,DB: 2. Read every page
+  loop each page
+    SP->>W: Open page (optional comment)
+    W->>R: POST /api/v1/moderation/submissions/:reviewId/pages/:pageId/view {comment?}
+    R->>C: viewPage(req, res)
+    C->>PS: viewPage(moderator, reviewId, pageId, body)
+    alt claim expired / not the claimer / page not in story
+      PS-->>C: ApiError 409 / 404
+      C-->>W: error
+    else ok
+      PS->>DB: UPSERT review_page_views (viewedAt, comment)
+      C-->>W: 200 updated progress
+    end
+  end
+
+  Note over SP,DB: 3. Decide
+  SP->>W: Choose decision (+ comment, issue strike?)
+  W->>R: POST /api/v1/moderation/submissions/:reviewId/decision {decision, comment?, issueStrike?}
+  R->>C: decide(req, res)
+  C->>PS: decide(moderator, reviewId, body)
+  PS->>DB: BEGIN, load review, check claim
+  PS->>DB: SELECT pages of published story
+  PS->>PR: reviewProgress(pageIds, viewedIds)
+  alt decision not allowed for this review type
+    PS-->>C: ApiError 422
+    C-->>W: 422 Invalid decision
+  else approved but pages not all viewed / narration not ready
+    PS-->>C: ApiError 422 / 409
+    C-->>W: 422 View all pages first / 409 narration
+  else not approved and no comment
+    PS-->>C: ApiError 422
+    C-->>W: 422 Comment is required
+  else valid
+    PS->>DB: UPDATE moderation_reviews SET decision, comment, decidedAt
+    PS->>DB: UPDATE listings SET status (approved = published, changes_requested, rejected, taken_down = archived)
+    opt approved submission of a new version
+      PS->>DB: move entitlements, product_reviews, bookshelf items, counters to new listing, old listing archived
+    end
+    opt follow-up review (report / random audit)
+      PS->>MS: closeOpenReports(tx, moderatorId, listingId, decision)
+    end
+    opt taken_down, or rejected with issueStrike
+      PS->>MS: issueStrikeTx(tx, moderatorId, seller)
+      MS->>DB: INSERT creator_strikes, suspend seller at strike limit
+    end
+    PS->>DB: COMMIT
+    C-->>W: 200 decision saved
+    W-->>SP: Back to queue
+  end

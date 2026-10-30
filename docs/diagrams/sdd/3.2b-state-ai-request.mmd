@@ -1,0 +1,32 @@
+---
+title: "State Diagram - AI Request"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "QUEUED" as QUEUED
+  state "PROCESSING" as PROCESSING
+  state "SUCCEEDED" as SUCCEEDED
+  state "FAILED" as FAILED
+  state "BLOCKED" as BLOCKED
+
+  [*] --> QUEUED : Generate text / draw image [credit held, job enqueued]
+  [*] --> PROCESSING : Analyze family story (synchronous, no credit)
+  QUEUED --> PROCESSING : Worker picks up job
+  QUEUED --> FAILED : Enqueue failed / stale over 10 min [credit released]
+  PROCESSING --> SUCCEEDED : AI result saved [credit consumed]
+  PROCESSING --> FAILED : AI error after retries / invalid output / stale [credit released]
+  PROCESSING --> BLOCKED : Content filter blocked output [credit released]
+  SUCCEEDED --> [*]
+  FAILED --> [*]
+  BLOCKED --> [*]
+
+  note right of PROCESSING
+    Stays PROCESSING when:
+    - Temporary AI error: job retried
+  end note

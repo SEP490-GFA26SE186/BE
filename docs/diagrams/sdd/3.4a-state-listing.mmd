@@ -1,0 +1,32 @@
+---
+title: "State Diagram - Listing"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "SUBMITTED" as SUBMITTED
+  state "IN REVIEW" as IN_REVIEW
+  state "CHANGES REQUESTED" as CHANGES_REQUESTED
+  state "REJECTED" as REJECTED
+  state "PUBLISHED" as PUBLISHED
+  state "SUSPENDED" as SUSPENDED
+  state "ARCHIVED" as ARCHIVED
+
+  [*] --> SUBMITTED : Seller publishes story / new version [approved seller, no personal info]
+  SUBMITTED --> IN_REVIEW : Specialist claims review [narration ready]
+  IN_REVIEW --> PUBLISHED : Approve [all pages viewed]
+  IN_REVIEW --> CHANGES_REQUESTED : Request changes [comment]
+  IN_REVIEW --> REJECTED : Reject [comment, optional strike]
+  PUBLISHED --> SUSPENDED : Reports reach threshold / specialist suspends
+  SUSPENDED --> PUBLISHED : Follow-up review approved
+  SUSPENDED --> ARCHIVED : Follow-up review taken down [strike]
+  PUBLISHED --> ARCHIVED : Random audit taken down [strike]
+  PUBLISHED --> ARCHIVED : Newer version approved (buyers moved to new listing)
+  CHANGES_REQUESTED --> [*] : Seller submits a new listing
+  REJECTED --> [*]
+  ARCHIVED --> [*]
