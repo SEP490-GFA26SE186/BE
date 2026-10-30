@@ -232,32 +232,46 @@ Web: rollback trên Cloudflare Pages (mục 4.1).
 | Hết ổ đĩa | Image cũ, backup dồn | `docker image prune -f`, xoá backup cũ đã tải về |
 | `git pull` báo xung đột | Có người sửa file trên máy chủ | `git stash && git pull` |
 
-## 12. Chuyển từ Caddy sang Cloudflare Tunnel (làm một lần)
+## 12. Chuyển từ Caddy sang Cloudflare Tunnel (đã làm 29/10/2026)
 
-Có vài phút API không vào được (lúc đổi bản ghi DNS) — **không làm sát giờ demo**. Code đã lên `main` trước.
+Ghi lại để làm lại khi dựng máy mới. Chạy tunnel **song song** với Caddy rồi mới đổi DNS, nên API chỉ gián đoạn
+vài giây. Tên menu Cloudflare: xem DEPLOY.md mục 2a (giao diện mới, dùng `Ctrl + K` để tìm).
 
-1. **Backup DB** (mục 6).
-2. **Tạo tunnel** theo DEPLOY.md mục 2a, bước 1–2: lấy `TUNNEL_TOKEN`, **chưa** thêm Public hostname.
-3. **Trên máy chủ:**
+1. **Backup DB** (mục 6). Code đã lên `main`.
+2. **Tạo tunnel** theo DEPLOY.md mục 2a bước 1–3: lấy `TUNNEL_TOKEN`, để nguyên tab (chưa bấm Continue được).
+3. **Trên máy chủ** — chỉ thêm `cloudflared`, Caddy vẫn chạy:
    ```bash
    cd ~/storyweaver && git pull
-   nano .env          # them dong TUNNEL_TOKEN=<token>; giu nguyen SITE_DOMAIN
-   docker compose rm -sf caddy                 # dung + xoa container caddy (gio chi chay khi bat profile caddy)
-   docker compose up -d                        # tao cloudflared
+   nano .env                                   # them TUNNEL_TOKEN=<token>; giu nguyen SITE_DOMAIN
+   grep -c '^TUNNEL_TOKEN=' .env               # phai ra 1 (khong in gia tri)
+   docker compose up -d cloudflared
    docker compose logs --tail 20 cloudflared   # phai co "Registered tunnel connection"
    ```
-   Từ lúc này API tạm không vào được (Caddy đã dừng, DNS vẫn trỏ IP máy).
-4. **Cloudflare → DNS → Records:** xoá bản ghi **A `api` → `34.143.184.248`**.
-5. **Zero Trust → Networks → Tunnels → `storyweaver-api` → Public Hostname → Add:** `api` . `storyweaver.id.vn`,
-   Service **HTTP** `api:3000` → Save (tự tạo CNAME `api`).
-6. **Security → Bots:** Bot Fight Mode **Off** (để webhook payOS không bị chặn).
-7. **Kiểm tra** (trên laptop):
+   Trang Tunnels: Connected / Healthy, không báo "Unsupported" → bấm **Continue**.
+4. **Cloudflare → DNS → Records:** xoá bản ghi **A `api` → `34.143.184.248`** (từ đây API tạm mất cho tới bước 5).
+5. Tunnel `storyweaver-api` → **Routes → Add route → Published application**: `api` . `storyweaver.id.vn`,
+   Service URL **`http://api:3000`** → Save (tự tạo CNAME `api`).
+6. **Kiểm tra** (trên laptop, Git Bash):
    ```bash
+   ipconfig //flushdns                          # Git Bash: 2 dau gach cheo
+   nslookup api.storyweaver.id.vn 1.1.1.1       # IP Cloudflare, khong con 34.143.184.248
    curl https://api.storyweaver.id.vn/api/v1/health
    ```
-   Rồi mở Web, đăng nhập, và **mua thử một gói rẻ nhất** để chắc webhook payOS vẫn về (đơn chuyển "đã trả").
-8. **Đóng cổng:** GCP → VPC network → Firewall → xoá (hoặc Disable) rule `default-allow-http` và
-   `default-allow-https` (hoặc rule TCP `80,443` đã tạo). Chỉ giữ SSH. Kiểm lại bước 7 sau khi đóng.
+7. **Gỡ Caddy** (trên máy chủ): `docker compose rm -sf caddy`, rồi `curl` lại bước 6.
+8. **Webhook payOS:** Bot fight mode Off (DEPLOY.md mục 2a bước 6), rồi **mua thử gói rẻ nhất** — đơn phải chuyển
+   "đã trả"; `docker compose logs --since 10m api | grep -i webhook` thấy request.
+9. **Đóng cổng 80/443 trên GCP:** VM instances → `storyweaver` → Edit → Networking → **bỏ tích** Allow HTTP /
+   HTTPS traffic → Save. Trang Firewall (`Ctrl + K` → Firewall; thông báo thiếu quyền
+   `compute.organizations.listAssociations` là của policy cấp tổ chức, bỏ qua): xoá / tắt các rule `tcp:80`,
+   `tcp:443` (`default-allow-http`, `default-allow-https`, rule tự tạo). Danh sách không có nút Disable: bấm tên
+   rule → Edit → Enforcement **Disabled**, hoặc Cloud Shell
+   `gcloud compute firewall-rules update default-allow-http --disabled`. **Giữ** `default-allow-ssh`,
+   `default-allow-internal`, `default-allow-icmp`.
+10. **Kiểm tra cuối** (laptop):
+    ```bash
+    curl https://api.storyweaver.id.vn/api/v1/health    # van OK (qua tunnel)
+    curl -m 5 http://34.143.184.248                      # phai timeout (cong da dong)
+    ```
 
 Không cần đổi: webhook URL trên my.payos.vn, `CORS_ORIGIN`, `VITE_API_URL` của Web, app mobile (cùng domain).
 

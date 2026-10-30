@@ -60,20 +60,30 @@ Chi phí ước tính `e2-standard-2` ở Singapore ~$60–70/tháng → $300 đ
 
 ## 2a. Cloudflare Tunnel cho `api.storyweaver.id.vn`
 
-1. dash.cloudflare.com → **Zero Trust** (lần đầu chọn tên team, gói **Free**, có thể phải thêm thẻ nhưng không
-   bị trừ tiền) → **Networks → Tunnels → Create a tunnel** → chọn **Cloudflared** → đặt tên `storyweaver-api` → Save.
-2. Màn hình *Install and run a connector*: chọn Docker, **copy riêng phần token** (chuỗi dài sau `--token`).
-   Đây là `TUNNEL_TOKEN` cho `.env` ở mục 4 — **không dán vào chat, không commit**. Không chạy lệnh `docker run`
-   Cloudflare gợi ý: `docker-compose.prod.yml` đã có service `cloudflared`.
-3. Next → tab **Public Hostname** → Add:
-   - Subdomain `api`, Domain `storyweaver.id.vn`, Path để trống
-   - Service: Type **HTTP**, URL **`api:3000`** (tên service trong compose, không phải localhost)
-   - Save. Cloudflare tự tạo bản ghi CNAME `api` → `<id>.cfargotunnel.com` (đám mây cam). Nếu báo trùng: vào
-     DNS → Records xoá bản ghi `api` cũ trước.
-4. **Webhook payOS không được bị chặn**: Security → Bots → **Bot Fight Mode: Off**. Nếu bật WAF / Bot rule nào khác,
-   thêm rule *Skip* cho đường dẫn `/api/v1/payments/payos/webhook`.
+Giao diện Cloudflare đổi thường xuyên (10/2026: menu Zero Trust không còn nhóm "Networks"). Không thấy mục nào thì
+bấm **`Ctrl + K`** trong dashboard và gõ tên (`Tunnels`, `Bot fight`).
 
-Kiểm tra sau khi chạy BE (mục 5): tunnel hiện **HEALTHY** trong Zero Trust → Networks → Tunnels.
+1. Mở trang **Tunnels** (`Ctrl + K` → `Tunnels`; hoặc dashboard Zero Trust bản cũ **one.dash.cloudflare.com** →
+   Networks → Tunnels). Lần đầu có thể phải chọn tên team, gói **Free**.
+2. **Create a tunnel** → loại **Cloudflared** → Tunnel name `storyweaver-api` (gõ vào, chữ xám chỉ là gợi ý).
+3. *Setup Environment*: chọn **Docker** (không chọn Windows, không tải `.msi`). **Copy riêng phần token** (chuỗi
+   `eyJ...` sau `--token`) — đây là `TUNNEL_TOKEN` cho `.env` ở mục 4, **không dán vào chat, không commit**. Không chạy
+   lệnh `docker run` Cloudflare gợi ý: `docker-compose.prod.yml` đã có service `cloudflared`.
+4. Nút **Continue** chỉ bấm được khi connector đã kết nối: để nguyên tab này, làm mục 3 → 5 (BE chạy cả
+   `cloudflared`), tới khi *Connection status* thành Connected và version **không** báo "Unsupported" (báo
+   Unsupported = ảnh `cloudflared` cũ: nâng tag trong `docker-compose.prod.yml`, xem
+   `docker run --rm cloudflare/cloudflared:latest --version`).
+5. Tunnel `storyweaver-api` → tab **Routes** → **Add route** → **Published application**:
+   - Subdomain `api`, Domain `storyweaver.id.vn`, Path để trống
+   - Service URL **`http://api:3000`** — phải có `http://` (không phải `https://`), dùng tên service trong compose,
+     không phải `localhost`
+   - Save. Cloudflare tự tạo CNAME `api` → `<id>.cfargotunnel.com`. Báo trùng: DNS → Records xoá bản ghi `api` cũ trước.
+6. **Webhook payOS không được bị chặn**: domain → **Security → Settings** → nhóm *Bot traffic* → **Bot fight mode: Off**
+   (mặc định đã tắt). Nghi bị chặn: **Security → Analytics → Events** lọc path `/api/v1/payments/payos/webhook`; cần thì
+   tạo rule *Skip* ở **Security → Security rules**.
+
+Kiểm tra: tunnel hiện **Healthy** trong trang Tunnels; trên laptop `nslookup api.storyweaver.id.vn 1.1.1.1` ra IP
+Cloudflare (`104.x` / `172.67.x` / `2606:4700:...`), không còn IP máy.
 
 ## 2b. Dự phòng: quay lại Caddy
 
@@ -81,7 +91,8 @@ Chỉ dùng khi tunnel hỏng mà cần API chạy gấp:
 
 1. Cloudflare → DNS: xoá CNAME `api` của tunnel, thêm A `api` → `<IP>`, **DNS only (đám mây xám)** — Caddy cần
    nhận thẳng kết nối để xin chứng chỉ Let's Encrypt.
-2. GCP: VPC network → Firewall → Create firewall rule: All instances, nguồn `0.0.0.0/0`, TCP `80,443`.
+2. GCP: VM instances → `storyweaver` → **Edit** → Networking → tích **Allow HTTP traffic** + **Allow HTTPS traffic** →
+   Save (GCP tự tạo lại rule `default-allow-http(s)`).
 3. Trên máy: `docker compose stop cloudflared && docker compose --profile caddy up -d caddy`.
 
 ## 3. Máy chủ: cài Docker, swap
