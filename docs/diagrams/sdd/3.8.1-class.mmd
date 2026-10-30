@@ -1,0 +1,130 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class MarketRoutes {
+    <<controller>>
+    +GET /market/listings
+    +GET /market/listings/:id
+    +GET /market/owned
+    +POST /market/checkout
+  }
+  class ReviewsRoutes {
+    <<controller>>
+    +GET /market/listings/:listingId/reviews
+    +PUT /market/listings/:listingId/review
+    +POST /market/reviews/:reviewId/reply
+  }
+  class MarketService {
+    <<service>>
+    +listListings(query) Page~Listing~
+    +getListing(id) Listing
+    +listOwned(user) List~Listing~
+    +checkoutListing(user, listingId) CheckoutResult
+  }
+  class ReviewsService {
+    <<service>>
+    +listReviews(listingId) List~ProductReview~
+    +upsertReview(user, listingId, body) ProductReview
+    +replyReview(user, reviewId, reply) ProductReview
+  }
+  class BillingService {
+    <<service>>
+    +checkoutOrder(user, price, itemName, item, returnPath) CheckoutResult
+    +handleWebhook(body) WebhookResult
+  }
+  class BillingStore {
+    <<repository>>
+    +fulfillOrder(tx, orderId) bool
+    +loadMarketSettings(db) MarketSettings
+    -deliverListing(tx, buyerId, item) void
+  }
+  class PayOSClient {
+    <<external>>
+    +paymentRequests.create(request) PaymentLink
+    +webhooks.verify(body) WebhookData
+  }
+  class EarningLedger {
+    <<repository>>
+    +recordEarning(tx, sellerId, amount, availableAt) void
+    +releaseDueEarnings(db, now) int
+    +moveEarning(tx, entry) void
+  }
+  class WorkerCron {
+    <<worker>>
+    +releaseDueEarnings() void
+  }
+  class Listing {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -BigInt priceVnd
+    -ListingStatus status
+    -Int purchaseCount
+    -Int freeClaimCount
+  }
+  class OrderItem {
+    <<entity>>
+    -UUID id
+    -UUID orderId
+    -UUID listingId
+    -BigInt unitPriceVnd
+    -Decimal sellerShareRate
+  }
+  class Entitlement {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -UUID listingId
+    -UUID orderItemId
+    -DateTime grantedAt
+    -DateTime revokedAt
+  }
+  class ProductReview {
+    <<entity>>
+    -UUID id
+    -UUID listingId
+    -UUID parentId
+    -Int rating
+    -String sellerReply
+  }
+  class Wallet {
+    <<entity>>
+    -UUID userId
+    -BigInt earningPendingVnd
+    -BigInt earningAvailableVnd
+    -BigInt earningLockedVnd
+  }
+  class WalletLedger {
+    <<entity>>
+    -BigInt id
+    -LedgerEntryType entryType
+    -BigInt amount
+    -String idempotencyKey
+    -DateTime availableAt
+  }
+  class LedgerEntryType {
+    <<enumeration>>
+    earning_pending
+    earning_release
+    earning_reversal
+    withdrawal_hold
+    withdrawal_paid
+    withdrawal_release
+  }
+
+  MarketRoutes --> MarketService : uses
+  ReviewsRoutes --> ReviewsService : uses
+  MarketService --> BillingService : checkoutOrder
+  BillingService ..> PayOSClient : payment link
+  BillingService --> BillingStore : fulfillOrder
+  BillingStore ..> Entitlement : grants
+  BillingStore ..> EarningLedger : seller share as earning_pending
+  WorkerCron ..> EarningLedger : earning_release
+  ReviewsService ..> ProductReview : persists
+  EarningLedger ..> Wallet : FOR UPDATE
+  EarningLedger ..> WalletLedger : append only
+  Listing "1" --> "*" OrderItem : sold as
+  OrderItem "1" --> "0..1" Entitlement : grants
+  Listing "1" --> "*" ProductReview : rated by
+  Wallet "1" --> "*" WalletLedger : entries
+  WalletLedger --> LedgerEntryType

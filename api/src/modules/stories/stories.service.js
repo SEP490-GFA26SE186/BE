@@ -21,7 +21,7 @@ import { hasReadyImage } from './lib/cover.js';
 
 export { formatStoryDetail };
 
-// Tao truyen ~15-30 cau lenh qua mang toi Supabase; mac dinh 5s cua Prisma khong du.
+// Tao truyen ~15-30 cau lenh trong mot transaction; mac dinh 5s cua Prisma co the khong du khi DB cham.
 export const TX_OPTIONS = { timeout: 20000 };
 // Diem dung hoi ve nhan vat khac: co target (mau `needsTarget`); perspective cua mau khong can
 // target thi target null nen khong loc theo kieu.

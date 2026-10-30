@@ -9,14 +9,14 @@ skinparam usecaseBorderColor #4A6FA5
 actor "Parent" as Parent
 actor "Child" as Child
 rectangle "StoryWeaver AI – Kid Mode" {
-  usecase "UC-17\nEnter Kid Mode" as UC17
-  usecase "UC-18\nRead story" as UC18
-  usecase "UC-19\nAnswer checkpoint" as UC19
-  usecase "UC-20\nExit Kid Mode" as UC20
+  usecase "UC-18\nEnter Kid Mode" as UC18
+  usecase "UC-19\nRead story" as UC19
+  usecase "UC-20\nAnswer checkpoint" as UC20
+  usecase "UC-21\nExit Kid Mode" as UC21
 }
-Parent --> UC17
-Child --> UC18
+Parent --> UC18
 Child --> UC19
 Child --> UC20
-Parent --> UC20
+Child --> UC21
+Parent --> UC21
 @enduml

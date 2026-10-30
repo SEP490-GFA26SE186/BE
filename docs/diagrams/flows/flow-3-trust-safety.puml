@@ -1,0 +1,134 @@
+@startuml flow-3a-trust-safety
+title Flow 3a: Trust & Safety - Report, Takedown, Strike, Appeal\n(Buyer and Seller are Parent accounts)
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ArrowColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam SwimlaneBorderColor #000000
+skinparam SwimlaneTitleFontStyle bold
+
+|Buyer|
+|System|
+|Specialist|
+|Seller|
+|Admin|
+
+|Buyer|
+start
+split
+  |Buyer|
+  :Report a published listing\n(category, optional page);
+  |System|
+  if (>= 3 distinct reporters\nin 24 h?) then (yes)
+    :Auto-suspend listing,\nopen follow-up review;
+  else (no)
+    |Specialist|
+    if (Report looks valid?) then (no)
+      :Dismiss the report;
+      stop
+    else (yes)
+      :Suspend listing manually (reason),\nopen follow-up review;
+    endif
+  endif
+split again
+  |System|
+  :Weekly cron: random audit\n(skip listings approved in last 30 days);
+end split
+|Specialist|
+:Claim the review, view all pages;
+if (Violation?) then (no)
+  |System|
+  :Keep: listing stays / returns to published\n(audit never suspends it), open reports closed;
+  stop
+else (yes)
+  |System|
+  :Take down: listing archived,\nreports resolved, issue strike (90 days);
+  note right
+    Strikes also come from a rejected submission
+    with "issue strike" (Flow 2) or are issued
+    manually by a Specialist; same rules below.
+  end note
+endif
+if (Active strikes >= 3?) then (yes)
+  :Seller suspended,\nall listings hidden;
+else (no)
+endif
+|Seller|
+if (Appeal the strike?) then (no)
+  |System|
+  :Strike expires after 90 days;
+  stop
+else (yes)
+  |Seller|
+  :Appeal once with a reason;
+endif
+|Admin|
+if (Approve appeal?\n(not the issuer of the strike)) then (yes)
+  |System|
+  :Revoke strike; if below limit,\nseller approved again;
+else (no)
+  |Admin|
+  :Reject with note;
+  |System|
+  :Strike stays active;
+endif
+stop
+@enduml
+
+@startuml flow-3b-refund
+title Flow 3b: After-sale - Refund
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ArrowColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam SwimlaneBorderColor #000000
+skinparam SwimlaneTitleFontStyle bold
+
+|Buyer|
+|System|
+|Admin|
+
+|Buyer|
+start
+split
+  |Buyer|
+  :Request refund for a paid item\n(within 3 days, once per item);
+split again
+  |System|
+  :Duplicate purchase detected:\nopen refund request automatically;
+end split
+|System|
+:Refund request = pending\n(seller earning not released meanwhile);
+|Admin|
+if (Approve refund?) then (yes)
+  :Transfer money back manually,\nenter bank transaction ref;
+  |System|
+  if (Item type?) then (story)
+    if (This item granted access?\n(not a duplicate purchase)) then (no)
+      :Money back only: the earlier purchase\nkeeps access and seller earning;
+    else (yes)
+      if (Seller already withdrew this earning?) then (yes)
+        :422: refund stays pending,\nadmin settles with the seller manually;
+        stop
+      else (no)
+        :Revoke entitlement, remove from bookshelves,\nreverse seller earning (earning_reversal);
+      endif
+    endif
+  else (plan)
+    :Expire remaining credit, cancel subscription,\nfall back to Free plan;
+  endif
+  :Item refunded, write audit log;
+else (no)
+  |Admin|
+  :Reject with note;
+  |System|
+  :Refund rejected, access kept, write audit log;
+endif
+stop
+@enduml

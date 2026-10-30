@@ -12,7 +12,7 @@ import { recommendTopics } from './lib/recommend.js';
 import { LAST_PORTRAIT_REQUEST } from '../characters/lib/portraitFailure.js';
 import { loadReportSettings } from '../pedagogy-settings/pedagogy-settings.service.js';
 
-// Supabase o xa: moi truy van vai tram ms, mac dinh 5 s cua Prisma khong du cho 4-5 truy van
+// Du phong khi DB cham: mac dinh 5 s cua Prisma co the khong du cho 4-5 truy van
 // (giong TX_OPTIONS cua module stories).
 const TX_OPTIONS = { timeout: 20000 };
 

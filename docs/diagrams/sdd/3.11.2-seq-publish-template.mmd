@@ -1,0 +1,49 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+sequenceDiagram
+  autonumber
+  actor M as Specialist
+  participant W as Web App
+  participant C as :QuestionTemplatesController
+  participant S as :QuestionTemplatesService
+  participant R as :TemplateRules
+  participant DB as Database
+  M->>W: Create template for a sub-skill
+  W->>+C: POST /api/v1/question-templates {subSkillId, title, answerFormat}
+  C->>+S: createTemplate(user, body)
+  S->>R: draftDefaults(answerFormat)
+  R-->>S: default content
+  S->>DB: INSERT question_templates + version 1 (draft)
+  DB-->>S: QuestionTemplate
+  S-->>-C: template
+  C-->>-W: 201 template
+  M->>W: Edit question frame, option descriptions, scores
+  W->>+C: PUT /api/v1/question-templates/:id/draft {content}
+  C->>+S: saveDraft(user, id, body)
+  alt draft exists
+    S->>DB: UPDATE version WHERE status = draft
+  else no draft
+    S->>DB: INSERT version = max + 1 (copied from latest published)
+  end
+  DB-->>S: saved (P2002 -> 409 reload)
+  S-->>-C: template
+  C-->>-W: 200
+  M->>W: Click Publish
+  W->>+C: POST /api/v1/question-templates/:id/publish
+  C->>+S: publish(user, id)
+  S->>DB: SELECT template + versions
+  DB-->>S: QuestionTemplate
+  alt no draft
+    S-->>C: ApiError 409
+    C-->>W: 409 No draft to publish
+  else draft found
+    S->>+R: assertVersionComplete(answerFormat, draft)
+    R-->>-S: ok / ApiError 422 missing fields
+    S->>DB: UPDATE version SET status = published WHERE status = draft
+    DB-->>S: count
+    S-->>C: template with new published version
+    C-->>W: 200
+  end
+  deactivate S
+  deactivate C
+  W-->>M: Show published version
+  Note over S,DB: New stories use the latest published version, old answers keep their snapshot

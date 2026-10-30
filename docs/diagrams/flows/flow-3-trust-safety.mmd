@@ -1,0 +1,83 @@
+---
+title: "Flow 3: Trust & Safety, After-sale"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
+flowchart LR
+  subgraph BUY["BUYER (Parent)"]
+    UA(("Buyer")):::actor
+    U1["Report a published listing<br/>(category, page)"]
+    U2["Request refund<br/>(within refund window)"]
+  end
+  subgraph SYS["SYSTEM (Backend API + Cron)"]
+    B1{"Distinct reports in 24h<br/>>= threshold (3)?"}
+    B2["Auto-suspend listing,<br/>open follow-up review"]
+    B3["Cron: random audit of live listings<br/>(skip approved in last 30 days)"]
+    B4["Issue strike, 90 days<br/>(takedown / rejection / report)"]
+    B5{"Active strikes<br/>>= limit (3)?"}
+    B6["Seller suspended,<br/>all listings hidden"]
+    B7["Duplicate purchase:<br/>auto refund request"]
+    B8["Story: revoke entitlement, remove from<br/>bookshelves, reverse seller earning.<br/>Plan: expire credit, cancel, back to Free"]
+    B13["422: seller already withdrew;<br/>refund stays pending, settle manually"]
+    BG{"Item granted access?<br/>(not a duplicate)"}
+    B15["Money back only: earlier purchase<br/>keeps access + seller earning"]
+    B9["Strike revoked; below limit:<br/>seller approved again"]
+    B10["Strike expires<br/>after valid days"]
+    B11["Strike stays active"]
+    B12["Refund rejected,<br/>access kept"]
+  end
+  subgraph SPEC["SPECIALIST"]
+    MA(("Specialist")):::actor
+    M0{"Report valid?"}
+    M3["Dismiss report"]
+    M4["Suspend listing manually<br/>(reason)"]
+    M1["Claim review,<br/>view all pages"]
+    M2{"Decision?"}
+    M5["Issue strike manually"]
+  end
+  subgraph SEL["SELLER"]
+    EA(("Seller")):::actor
+    E1["Listing live again"]
+    E2["Appeal strike once<br/>(reason)"]
+  end
+  subgraph ADM["ADMIN"]
+    AA(("Admin")):::actor
+    A1{"Approve appeal?<br/>(not the issuer)"}
+    A2{"Approve refund?"}
+    A3["Transfer money back manually,<br/>enter bank transaction ref"]
+  end
+
+  F2(["From Flow 2:<br/>listing live / rejected"]):::ext
+  F2 --> U1
+  F2 -. "rejected + strike chosen" .-> B4
+
+  UA --> U1 --> B1
+  B1 -- "No: report open" --> M0
+  M0 -- "No" --> M3
+  M0 -- "Yes" --> M4 --> M1
+  B1 -- "Yes" --> B2 --> M1
+  B3 --> M1
+  MA --> M1 --> M2
+  M2 -- "Keep: stays / back<br/>to published" --> E1
+  MA -.-> M5 -.-> B4
+  M2 -- "Taken down: archived" --> B4
+  B4 --> B5
+  B5 -- "Yes" --> B6 --> E2
+  B5 -- "No" --> E2
+  B4 --> B10
+  EA --> E2 --> A1
+  AA --> A1
+  A1 -- "Yes" --> B9
+  A1 -- "No (note)" --> B11
+
+  UA --> U2 --> A2
+  B7 --> A2
+  AA --> A2
+  A2 -- "Yes" --> A3 --> BG
+  BG -- "Yes" --> B8
+  BG -- "No: duplicate" --> B15
+  B8 -. "seller already withdrew" .-> B13
+  A2 -- "No (note)" --> B12
+
+  classDef default fill:#EEEEEE,stroke:#999999,color:#111111
+  classDef actor fill:#FFE0A3,stroke:#333333,stroke-width:2px,color:#111111
+  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111

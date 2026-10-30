@@ -1,0 +1,63 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+sequenceDiagram
+  autonumber
+  actor M as Specialist
+  participant W as Web App
+  participant C as :PublishingController
+  participant P as :PublishingService
+  participant R as :PublishRules
+  participant MS as :MonitoringService
+  participant DB as Database
+  M->>W: Open moderation queue
+  W->>+C: GET /api/v1/moderation/submissions
+  C->>P: getQueue(moderator)
+  P->>DB: open reviews (oldest first)
+  C-->>-W: 200 queue
+  M->>W: Click Claim
+  W->>+C: POST /api/v1/moderation/submissions/:reviewId/claim
+  C->>+P: claimReview(moderator, reviewId)
+  P->>DB: SELECT review FOR UPDATE
+  P->>R: claimedByOther(review, moderatorId, now)
+  alt decided / claimed by other within 30 min / narration not ready
+    P-->>C: ApiError 409 / 422
+  else free
+    P->>DB: claim review, listing submitted -> in_review
+    P-->>C: ModerationReview
+  end
+  deactivate P
+  C-->>-W: response
+  loop each page
+    M->>W: Read page (optional comment)
+    W->>+C: POST /api/v1/moderation/submissions/:reviewId/pages/:pageId/view {comment}
+    C->>P: viewPage(moderator, reviewId, pageId, comment)
+    P->>DB: UPSERT review_page_views
+    C-->>-W: 200 progress
+  end
+  Note over M,W: 7-rule pedagogical checklist is checked on the web, not sent
+  M->>W: Choose decision
+  W->>+C: POST /api/v1/moderation/submissions/:reviewId/decision {decision, comment, issueStrike}
+  C->>+P: decide(moderator, reviewId, body)
+  P->>DB: BEGIN, SELECT review FOR UPDATE
+  P->>R: reviewProgress(pageIds, viewedIds)
+  R-->>P: coverage
+  alt approved but coverage < 100% or narration not ready
+    P-->>C: ApiError 422 must view all pages
+  else not approved and no comment
+    P-->>C: ApiError 422 comment required
+  else ok
+    P->>DB: UPDATE moderation_reviews (decision, comment, decided_at)
+    P->>DB: UPDATE listings SET status (published / changes_requested / rejected / archived)
+    opt approved new version
+      P->>DB: promoteVersion (old listing archived)
+    end
+    opt taken_down, or rejected with issueStrike
+      P->>+MS: issueStrikeTx(tx, moderatorId, strike)
+      MS->>DB: INSERT creator_strikes, active >= limit -> seller suspended
+      MS-->>-P: StrikeResult
+    end
+    P->>DB: COMMIT
+    P-->>C: ModerationReview
+  end
+  deactivate P
+  C-->>-W: response
+  W-->>M: Show result

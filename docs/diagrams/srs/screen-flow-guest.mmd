@@ -6,8 +6,7 @@ flowchart LR
   Land["Landing Page<br/>Hero + How it works + CASEL + FAQ"]:::start --> Reg["Register<br/>Account form + Free plan"]
   Land --> Login["Login<br/>Email + Password"]
   Land --> Legal["Privacy Policy / Terms"]
-  Reg --> Verify(["Verify Email Dialog"])
-  Reg --> Login
+  Reg --> PP
   Login --> Forgot(["Forgot Password Dialog<br/>Email → Code → New password"])
   Login --> PP["Parent Portal<br/>see WEB (Parent / Seller)"]
   Login --> SP["Specialist Portal<br/>see WEB (Specialist)"]

@@ -1,0 +1,49 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+sequenceDiagram
+  autonumber
+  actor S as Seller
+  actor A as Admin
+  participant W as Web App
+  participant C as :MonitoringRoutes
+  participant M as :MonitoringService
+  participant R as :MonitoringRules
+  participant DB as Database
+  S->>W: Open My strikes, write appeal reason
+  W->>+C: POST /api/v1/sellers/me/strikes/:strikeId/appeal {reason}
+  C->>+M: appealStrike(user, strikeId, reason)
+  M->>DB: SELECT creator_strikes + appeal
+  DB-->>M: CreatorStrike
+  M->>R: isStrikeActive(strike, now)
+  R-->>M: true / false
+  alt not own strike / not active / already appealed
+    M-->>C: ApiError 404 / 422 / 409
+  else ok
+    M->>DB: INSERT strike_appeals (pending)
+    M-->>C: {appealId, status}
+  end
+  deactivate M
+  C-->>-W: 201 / error
+  A->>W: Open appeals, approve or reject
+  W->>+C: POST /api/v1/admin/appeals/:appealId/decision {approve, note}
+  C->>+M: decideAppeal(admin, appealId, body)
+  M->>DB: BEGIN, SELECT strike_appeals FOR UPDATE
+  alt admin issued this strike
+    M-->>C: ApiError 403 cannot decide own strike
+  else reject without note
+    M-->>C: ApiError 422 note required
+  else reject
+    M->>DB: appeal rejected with note, INSERT admin_audit_logs
+    M-->>C: rejected
+  else approve
+    M->>DB: appeal approved, strike revoked_at = now
+    M->>DB: COUNT active strikes
+    opt active strikes < moderation.strike_limit
+      M->>DB: seller_profiles suspended -> approved
+    end
+    M->>DB: INSERT admin_audit_logs
+    M-->>C: {strikeRevoked, sellerReinstated}
+  end
+  M->>DB: COMMIT
+  deactivate M
+  C-->>-W: response
+  W-->>A: Show result

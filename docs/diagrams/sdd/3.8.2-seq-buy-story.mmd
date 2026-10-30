@@ -1,0 +1,48 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+sequenceDiagram
+  autonumber
+  actor B as Buyer (Parent)
+  participant W as Web App
+  participant C as :MarketRoutes
+  participant M as :MarketService
+  participant S as :BillingService
+  participant ST as :BillingStore
+  participant DB as Database
+  participant PO as payOS
+  B->>W: Click Buy on a listing
+  W->>+C: POST /api/v1/market/checkout {listingId}
+  C->>+M: checkoutListing(user, listingId)
+  M->>DB: SELECT listing published, seller approved
+  DB-->>M: Listing or null
+  alt not found / own listing / already owned
+    M-->>C: ApiError 404 / 422 / 409
+    C-->>W: error
+  else can buy
+    M->>DB: market.seller_share_rate
+    M->>+S: checkoutOrder(user, price, item: listing + share snapshot)
+    alt price = 0
+      S->>+ST: fulfillOrder(tx, orderId)
+      ST->>DB: order paid, INSERT entitlements, free claim count + 1
+      ST-->>-S: ok
+      S-->>M: {order, checkoutUrl: null}
+    else price > 0
+      S->>DB: INSERT orders (pending) + order_items
+      S->>PO: paymentRequests.create
+      PO-->>S: checkoutUrl
+      S-->>M: {order, checkoutUrl}
+    end
+    S-->>-M: CheckoutResult
+    M-->>C: CheckoutResult
+    C-->>W: 201
+  end
+  deactivate M
+  deactivate C
+  PO->>S: POST /payments/payos/webhook (paid)
+  S->>+ST: fulfillOrder(tx, orderId)
+  ST->>DB: order paid, INSERT entitlements, purchase count + 1
+  ST->>DB: recordEarning: seller earning_pending (available after hold days)
+  opt buyer already had an active entitlement
+    ST->>DB: INSERT refund_requests (duplicate purchase)
+  end
+  ST-->>-S: processed
+  W-->>B: Story is in Owned stories, add it to a child bookshelf

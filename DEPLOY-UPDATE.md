@@ -7,8 +7,8 @@ Tài liệu cho cả nhóm khi **đã deploy rồi** và cần đưa thay đổi
 | Phần | Ở đâu | Cập nhật bằng |
 |---|---|---|
 | **Web** `https://storyweaver.id.vn` | Cloudflare Pages, project `storyweaver` | Build trên laptop + `wrangler pages deploy` (Pages **chưa** nối GitHub) |
-| **api, worker, ai, Postgres, Redis, Caddy** `https://api.storyweaver.id.vn` | Google Cloud VM `storyweaver` (Singapore `asia-southeast1`, `e2-standard-2`, IP tĩnh `34.143.184.248`), thư mục `~/storyweaver` | SSH vào máy → `git pull` → `docker compose up -d --build` |
-| **DNS** `storyweaver.id.vn` | Cloudflare (nameserver `ara` / `jihoon.ns.cloudflare.com`, đổi ở Mắt Bão) | Cloudflare → DNS. Bản ghi `api` = A → IP máy, **đám mây xám** |
+| **api, worker, ai, Postgres, Redis, cloudflared** `https://api.storyweaver.id.vn` | Google Cloud VM `storyweaver` (Singapore `asia-southeast1`, `e2-standard-2`, IP tĩnh `34.143.184.248`), thư mục `~/storyweaver` | SSH vào máy → `git pull` → `docker compose up -d --build` |
+| **DNS** `storyweaver.id.vn` | Cloudflare (nameserver `ara` / `jihoon.ns.cloudflare.com`, đổi ở Mắt Bão) | Cloudflare → DNS. Bản ghi `api` = CNAME do **Cloudflare Tunnel** `storyweaver-api` tự tạo (Zero Trust → Networks → Tunnels); máy không mở cổng 80/443. Đang chuyển từ Caddy: mục 12 |
 | Ảnh / audio | Cloudinary, folder `storyweaver-prod` | — |
 | Thanh toán | payOS, webhook `https://api.storyweaver.id.vn/api/v1/payments/payos/webhook` | my.payos.vn |
 | Swagger | `https://api.storyweaver.id.vn/api-docs` | — |
@@ -214,7 +214,7 @@ Web: rollback trên Cloudflare Pages (mục 4.1).
 | Dọn image Docker cũ | Ổ > 80% (`df -h /`) | `docker image prune -f` (chỉ xoá image không dùng; **không** dùng `docker volume prune` — mất DB) |
 | Token Claude | Khi tạo truyện lỗi xác thực Claude | Mục 5 |
 | Credit Google Cloud | Mỗi 2–3 tuần | Billing → Credits. Trial $300 / 90 ngày tính từ ~24/10/2026 (hết khoảng **22/01/2027**): trước hạn nâng cấp tài khoản hoặc backup + dọn máy |
-| Chứng chỉ HTTPS | Không cần | Caddy (api) và Cloudflare (Web) tự gia hạn |
+| Chứng chỉ HTTPS | Không cần | Cloudflare tự gia hạn (cả api qua tunnel lẫn Web) |
 | Tắt máy khi không dùng | Tuỳ | VM instances → Stop. IP tĩnh giữ nguyên; bật lại thì Docker tự chạy lại mọi container |
 
 ## 11. Sự cố thường gặp
@@ -227,7 +227,52 @@ Web: rollback trên Cloudflare Pages (mục 4.1).
 | Tạo truyện kẹt "đang tạo" | worker / ai lỗi giữa chừng | Xem log worker + ai. Job treo quá 10 phút tự hoàn credit, truyện về nháp |
 | Không ra tranh | Key Cloudflare sai / hết quota ngày | `docker compose logs ai \| grep -i cloudflare` |
 | Giọng đọc rất chậm | VieNeu chạy CPU, từng trang một (~30–60 s/trang) | Bình thường. Máy treo: `free -h` xem swap |
-| `api.storyweaver.id.vn` lỗi chứng chỉ | Bản ghi `api` bị bật đám mây cam / sai IP | Cloudflare DNS: A `api` → `34.143.184.248`, DNS only. `docker compose logs caddy` |
-| Thanh toán xong gói không cập nhật | Webhook chưa tới | `docker compose logs api \| grep webhook`; kiểm tra webhook trên my.payos.vn |
+| `api.storyweaver.id.vn` lỗi 1033 / 502 | Tunnel không chạy / Public hostname sai | `docker compose logs cloudflared`. 1033: container `cloudflared` dừng hoặc `TUNNEL_TOKEN` sai. 502: hostname phải trỏ `http://api:3000`, `api` phải healthy. Gấp: quay lại Caddy theo DEPLOY.md mục 2b |
+| Thanh toán xong gói không cập nhật | Webhook chưa tới (hoặc bị Cloudflare chặn) | `docker compose logs api \| grep webhook`; kiểm tra webhook trên my.payos.vn; Cloudflare → Security → Bots: Bot Fight Mode **Off** |
 | Hết ổ đĩa | Image cũ, backup dồn | `docker image prune -f`, xoá backup cũ đã tải về |
 | `git pull` báo xung đột | Có người sửa file trên máy chủ | `git stash && git pull` |
+
+## 12. Chuyển từ Caddy sang Cloudflare Tunnel (đã làm 29/10/2026)
+
+Ghi lại để làm lại khi dựng máy mới. Chạy tunnel **song song** với Caddy rồi mới đổi DNS, nên API chỉ gián đoạn
+vài giây. Tên menu Cloudflare: xem DEPLOY.md mục 2a (giao diện mới, dùng `Ctrl + K` để tìm).
+
+1. **Backup DB** (mục 6). Code đã lên `main`.
+2. **Tạo tunnel** theo DEPLOY.md mục 2a bước 1–3: lấy `TUNNEL_TOKEN`, để nguyên tab (chưa bấm Continue được).
+3. **Trên máy chủ** — chỉ thêm `cloudflared`, Caddy vẫn chạy:
+   ```bash
+   cd ~/storyweaver && git pull
+   nano .env                                   # them TUNNEL_TOKEN=<token>; giu nguyen SITE_DOMAIN
+   grep -c '^TUNNEL_TOKEN=' .env               # phai ra 1 (khong in gia tri)
+   docker compose up -d cloudflared
+   docker compose logs --tail 20 cloudflared   # phai co "Registered tunnel connection"
+   ```
+   Trang Tunnels: Connected / Healthy, không báo "Unsupported" → bấm **Continue**.
+4. **Cloudflare → DNS → Records:** xoá bản ghi **A `api` → `34.143.184.248`** (từ đây API tạm mất cho tới bước 5).
+5. Tunnel `storyweaver-api` → **Routes → Add route → Published application**: `api` . `storyweaver.id.vn`,
+   Service URL **`http://api:3000`** → Save (tự tạo CNAME `api`).
+6. **Kiểm tra** (trên laptop, Git Bash):
+   ```bash
+   ipconfig //flushdns                          # Git Bash: 2 dau gach cheo
+   nslookup api.storyweaver.id.vn 1.1.1.1       # IP Cloudflare, khong con 34.143.184.248
+   curl https://api.storyweaver.id.vn/api/v1/health
+   ```
+7. **Gỡ Caddy** (trên máy chủ): `docker compose rm -sf caddy`, rồi `curl` lại bước 6.
+8. **Webhook payOS:** Bot fight mode Off (DEPLOY.md mục 2a bước 6), rồi **mua thử gói rẻ nhất** — đơn phải chuyển
+   "đã trả"; `docker compose logs --since 10m api | grep -i webhook` thấy request.
+9. **Đóng cổng 80/443 trên GCP:** VM instances → `storyweaver` → Edit → Networking → **bỏ tích** Allow HTTP /
+   HTTPS traffic → Save. Trang Firewall (`Ctrl + K` → Firewall; thông báo thiếu quyền
+   `compute.organizations.listAssociations` là của policy cấp tổ chức, bỏ qua): xoá / tắt các rule `tcp:80`,
+   `tcp:443` (`default-allow-http`, `default-allow-https`, rule tự tạo). Danh sách không có nút Disable: bấm tên
+   rule → Edit → Enforcement **Disabled**, hoặc Cloud Shell
+   `gcloud compute firewall-rules update default-allow-http --disabled`. **Giữ** `default-allow-ssh`,
+   `default-allow-internal`, `default-allow-icmp`.
+10. **Kiểm tra cuối** (laptop):
+    ```bash
+    curl https://api.storyweaver.id.vn/api/v1/health    # van OK (qua tunnel)
+    curl -m 5 http://34.143.184.248                      # phai timeout (cong da dong)
+    ```
+
+Không cần đổi: webhook URL trên my.payos.vn, `CORS_ORIGIN`, `VITE_API_URL` của Web, app mobile (cùng domain).
+
+Tunnel lỗi mà cần API gấp: quay lại Caddy theo DEPLOY.md mục 2b.

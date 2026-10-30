@@ -6,7 +6,8 @@
 #
 # Khac ban dev:
 # - Postgres chay cung may, mat khau lay tu .env, KHONG mo cong ra ngoai.
-# - api khong mo cong 3000 ra ngoai: request vao qua Caddy (80/443, tu xin HTTPS cho SITE_DOMAIN).
+# - api khong mo cong 3000 ra ngoai: request vao qua Cloudflare Tunnel (cloudflared ket noi RA Cloudflare,
+#   may khong mo cong 80/443, IP may chu duoc an). Caddy chi con la phuong an du phong (profile "caddy").
 # - Web KHONG o day: deploy len Cloudflare Pages, goi API qua https://SITE_DOMAIN/api/v1
 #   (CORS_ORIGIN = domain Pages).
 # =============================================================================
@@ -20,7 +21,8 @@ services:
       POSTGRES_USER: storyweaver
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?can POSTGRES_PASSWORD trong .env}
       POSTGRES_DB: storyweaver
-    ports:
+    # !override: thay han cong cua ban dev (mo ra moi interface), khong noi them.
+    ports: !override
       # Chi mo cho chinh may chu (127.0.0.1), KHONG ra Internet. DBeaver noi vao qua SSH tunnel (DEPLOY-UPDATE.md).
       - "127.0.0.1:5432:5432"
     volumes:
@@ -36,7 +38,6 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: *prod-db-url
-      DIRECT_URL: *prod-db-url
     ports: !reset []
     depends_on:
       postgres:
@@ -46,12 +47,29 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: *prod-db-url
-      DIRECT_URL: *prod-db-url
     depends_on:
       postgres:
         condition: service_healthy
 
+  # Cong vao duy nhat: Public hostname cua tunnel (Cloudflare Zero Trust) tro SITE_DOMAIN -> http://api:3000.
+  # Token tao trong dashboard, chi nam trong .env tren may.
+  cloudflared:
+    # Ghim version: Cloudflare bao "Unsupported" voi ban cu hon ~1 nam. Nang: xem
+    #   docker run --rm cloudflare/cloudflared:latest --version
+    image: cloudflare/cloudflared:2026.10.6
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?can TUNNEL_TOKEN trong .env}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # DU PHONG khi tunnel loi: tao lai ban ghi A api -> IP may (DNS only), mo lai firewall 80/443, roi
+  #   docker compose --profile caddy up -d caddy
+  # Khong chay mac dinh.
   caddy:
+    profiles: ["caddy"]
     image: caddy:2-alpine
     environment:
       # Domain tro ve IP tinh cua may (vd. 34-87-1-2.sslip.io hoac api.<domain cua ban>).

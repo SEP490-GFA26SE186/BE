@@ -1,23 +1,38 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 sequenceDiagram
-  actor P as User
+  autonumber
+  actor U as User
   participant W as Web App
-  participant R as AuthRoutes
-  participant S as AuthService
-  participant T as TokenService
-  participant DB as PostgreSQL
-  P->>W: Enter email/username + password
-  W->>R: POST /api/v1/auth/login
+  participant R as :AuthRoutes
+  participant C as :AuthController
+  participant S as :AuthService
+  participant T as :TokenService
+  participant DB as Database
+  U->>W: Enter email/username + password, click Login
+  W->>+R: POST /api/v1/auth/login
   R->>R: validate(loginSchema)
-  R->>S: login(identifier, password)
-  S->>DB: find user by email or username
-  alt user not found or wrong password
-    S-->>W: 401 Invalid email/username or password
+  R->>+C: login(req, res)
+  C->>+S: login(body)
+  S->>DB: SELECT users WHERE email = ? OR username = ?
+  DB-->>S: User | null
+  S->>S: bcrypt.compare(password, passwordHash)
+  alt user not found, deleted or wrong password
+    S-->>C: ApiError 401
+    C-->>R: 401 Invalid email/username or password
   else account deactivated
-    S-->>W: 403 Account has been deactivated
+    S-->>C: ApiError 403
+    C-->>R: 403 Account has been deactivated
   else valid
-    S->>T: generateAuthTokens(user)
-    T->>DB: insert auth_tokens (refresh, hashed)
-    T-->>S: access + refresh token
-    S-->>W: 200 user + tokens
-    W->>P: Redirect to role home
+    S->>DB: UPDATE users SET last_login_at = now()
+    DB-->>S: ok
+    S->>+T: generateAuthTokens(user)
+    T->>DB: INSERT auth_tokens (refresh, token_hash)
+    DB-->>T: saved
+    T-->>-S: access + refresh token
+    S-->>C: {user, tokens}
+    C-->>R: 200 user + tokens
   end
+  deactivate S
+  deactivate C
+  R-->>-W: HTTP response
+  W-->>U: Redirect to role home / show error

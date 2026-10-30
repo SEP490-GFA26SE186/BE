@@ -1,6 +1,0 @@
-stateDiagram-v2
-  [*] --> pending : Parent requests / duplicate purchase auto-request
-  pending --> approved : Admin transfers money back (bank ref)
-  pending --> rejected : Admin rejects with note
-  approved --> [*]
-  rejected --> [*]
