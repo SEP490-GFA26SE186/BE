@@ -1,0 +1,28 @@
+---
+title: "State Diagram - Order"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "PENDING" as PENDING
+  state "PAID" as PAID
+  state "FAILED" as FAILED
+  state "CANCELLED" as CANCELLED
+  state "EXPIRED" as EXPIRED
+
+  [*] --> PENDING : Checkout [price > 0, payOS link requested]
+  [*] --> PAID : Checkout [price = 0] (delivered immediately)
+  PENDING --> FAILED : payOS link creation failed
+  PENDING --> PAID : payOS PAID via webhook or return page [amount ok]
+  PENDING --> CANCELLED : Buyer cancels on payOS
+  PENDING --> EXPIRED : 15 min passed (billing cron / payOS EXPIRED)
+  EXPIRED --> PAID : Payment arrived at the last second [amount ok]
+  PAID --> [*] : Plan started / story delivered
+  FAILED --> [*]
+  CANCELLED --> [*]
+  EXPIRED --> [*]

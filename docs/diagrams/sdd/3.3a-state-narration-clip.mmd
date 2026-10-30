@@ -1,0 +1,25 @@
+---
+title: "State Diagram - Narration Clip"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "QUEUED" as QUEUED
+  state "GENERATING" as GENERATING
+  state "READY" as READY
+  state "FAILED" as FAILED
+
+  [*] --> QUEUED : Review story [useTts, new segment]
+  [*] --> READY : New listing version reuses audio [fingerprint unchanged]
+  QUEUED --> GENERATING : Narration worker picks up job
+  QUEUED --> FAILED : Enqueue failed
+  GENERATING --> READY : Audio uploaded to Cloudinary (audioKey saved)
+  GENERATING --> FAILED : TTS error after retries / text changed (stale round)
+  FAILED --> QUEUED : Retry narration (round + 1)
+  READY --> QUEUED : Text or voice changed, review again (round + 1)
+  READY --> [*]

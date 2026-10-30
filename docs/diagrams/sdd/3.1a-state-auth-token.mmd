@@ -1,0 +1,23 @@
+---
+title: "State Diagram - Auth Token"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "ACTIVE" as ACTIVE
+  state "CONSUMED" as CONSUMED
+  state "EXPIRED" as EXPIRED
+
+  [*] --> ACTIVE : Issue token (login / register / send code / forgot password)
+  ACTIVE --> CONSUMED : Refresh token rotated [replacedById set]
+  ACTIVE --> CONSUMED : Logout / password reset revokes refresh token
+  ACTIVE --> CONSUMED : Email verified / password reset with code
+  ACTIVE --> CONSUMED : New code sent [old unused code invalidated]
+  ACTIVE --> EXPIRED : expiresAt passed (refresh 7d, email code 24h, reset code 1h)
+  CONSUMED --> [*]
+  EXPIRED --> [*]

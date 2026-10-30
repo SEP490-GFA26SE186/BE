@@ -1,0 +1,26 @@
+---
+title: "State Diagram - Subscription"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "ACTIVE" as ACTIVE
+  state "CANCELLED" as CANCELLED
+  state "EXPIRED" as EXPIRED
+
+  [*] --> ACTIVE : Register (FREE plan) / plan order paid [first-month credit granted]
+  ACTIVE --> CANCELLED : Buy a different plan (new subscription starts now)
+  ACTIVE --> EXPIRED : Period ended (paid plan expires, FREE renews as a new FREE subscription)
+  CANCELLED --> [*]
+  EXPIRED --> [*]
+
+  note right of ACTIVE
+    Stays ACTIVE when:
+    - Monthly cron inside period: expire old credit, grant new
+    - Buy the same paid plan again: periodEnd extended
+  end note

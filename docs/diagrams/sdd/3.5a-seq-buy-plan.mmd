@@ -1,0 +1,117 @@
+---
+title: "Sequence Diagram - Buy a Subscription Plan"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor U as Parent
+  participant W as Web App
+  participant R as :BillingRoutes
+  participant C as :BillingController
+  participant BS as :BillingService
+  participant ST as :BillingStore
+  participant CL as :CreditLedger
+  participant PC as :PayOSClient
+  participant BW as :BillingWorker
+  participant DB as Database
+  participant PO as payOS
+
+  Note over U,PO: 1. Checkout
+  U->>W: Choose a plan, click Pay
+  W->>R: POST /api/v1/payments/plans/checkout {planId}
+  R->>R: auth, authorize(parent), validate
+  R->>C: checkoutPlan(req, res)
+  C->>BS: checkoutPlan(user, planId)
+  BS->>DB: SELECT active plan
+  alt plan not found
+    BS-->>C: ApiError 404
+    C-->>W: 404 Plan not found
+  else price = 0
+    BS->>DB: BEGIN, INSERT orders + order_items
+    BS->>ST: fulfillOrder(tx, orderId)
+    ST->>DB: order paid, start new period (see step 3), COMMIT
+    BS-->>C: order, checkoutUrl null
+    C-->>W: 201 order (paid)
+  else price > 0
+    BS->>DB: INSERT orders (pending, payosOrderCode, expires in 15 min) + order_items
+    BS->>PC: paymentRequests.create(orderCode, amount, returnUrl, cancelUrl)
+    PC->>PO: create payment link
+    alt payOS not configured / unavailable
+      BS->>DB: UPDATE orders SET failed
+      BS-->>C: ApiError 503 / 502
+      C-->>W: 503 / 502 Payment not available
+    else link created
+      PO-->>PC: checkoutUrl, paymentLinkId
+      BS->>DB: UPDATE orders SET payosPaymentLinkId
+      BS-->>C: order + checkoutUrl
+      C-->>W: 201 order + checkoutUrl
+      W-->>U: Redirect to payOS page
+      U->>PO: Pay by VietQR / bank transfer
+    end
+  end
+
+  Note over U,PO: 2. Confirm payment (webhook or return page, both idempotent)
+  par payOS webhook
+    PO->>R: POST /api/v1/payments/payos/webhook (signed body)
+    R->>C: payosWebhook(req, res)
+    C->>BS: handleWebhook(body)
+    BS->>PC: webhooks.verify(body)
+    BS->>DB: INSERT webhook_logs (signatureValid)
+    alt invalid signature / unknown order / code not 00 / amount too low
+      BS->>DB: UPDATE webhook_logs SET reason
+    else valid
+      BS->>ST: fulfillOrder(tx, orderId, transactionId)
+      BS->>DB: UPDATE webhook_logs SET processed (or "needs manual refund" if order closed)
+    end
+    C-->>PO: 200 OK
+  and return page
+    PO-->>W: Redirect to /parent/billing/result?orderId
+    W->>R: GET /api/v1/payments/orders/:orderId
+    R->>C: getOrder(req, res)
+    C->>BS: getOrder(user, orderId)
+    BS->>DB: SELECT order (buyer)
+    opt order pending or expired
+      BS->>PC: paymentRequests.get(orderCode)
+      PC->>PO: get payment status
+      alt PAID and amount ok
+        BS->>ST: fulfillOrder(tx, orderId, transactionId)
+      else CANCELLED / EXPIRED
+        BS->>ST: closeOrder(tx, orderId, cancelled / expired)
+      end
+    end
+    C-->>W: 200 order status
+    W-->>U: Show payment result
+  end
+
+  Note over U,PO: 3. fulfillOrder (inside one transaction)
+  ST->>DB: UPDATE orders SET paid (only if pending / expired)
+  alt already paid (duplicate call)
+    ST-->>BS: false (no change)
+  else same paid plan as current subscription
+    ST->>DB: UPDATE subscriptions SET periodEnd + durationMonths (renewal)
+  else different plan
+    ST->>DB: old subscription cancelled, INSERT subscriptions (active, new period)
+    ST->>CL: grantCredit(userId, creditsPerMonth, key grant:sub:0)
+    CL->>DB: UPDATE wallets, INSERT wallet_ledger (credit_grant)
+  end
+
+  Note over U,PO: 4. Billing cycle (worker every 15 minutes)
+  BW->>ST: runBillingCycle(now)
+  ST->>DB: SELECT active subscriptions with nextCreditGrantAt due
+  loop each due subscription
+    alt still inside period
+      ST->>CL: expireCredit (last month), grantCredit (new month)
+      ST->>DB: UPDATE subscriptions SET nextCreditGrantAt + 1 month
+    else period ended (FREE renews, paid plan expires)
+      ST->>CL: expireCredit (remaining)
+      ST->>DB: subscription expired, INSERT new FREE subscription
+      ST->>CL: grantCredit (FREE month)
+    end
+  end
+  ST->>DB: UPDATE orders SET expired where pending and past expiresAt

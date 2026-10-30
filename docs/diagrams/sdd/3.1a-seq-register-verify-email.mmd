@@ -1,0 +1,109 @@
+---
+title: "Sequence Diagram - Register an Account"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor U as Parent
+  participant W as Web App
+  participant R as :AuthRoutes
+  participant A as :AuthMiddleware
+  participant C as :AuthController
+  participant S as :AuthService
+  participant BS as :BillingStore
+  participant T as :TokenService
+  participant E as :EmailService
+  participant DB as Database
+  participant M as Brevo / SMTP
+
+  Note over U,M: 1. Register
+  U->>W: Fill sign-up form (username, email, password, full name, phone)
+  W->>R: POST /api/v1/auth/register
+  R->>R: validate(AuthValidation.register)
+  alt invalid body
+    R-->>W: 400 validation errors
+  else valid
+    R->>C: register(req, res)
+    C->>S: register(data)
+    S->>DB: SELECT user by email or username
+    DB-->>S: user or null
+    alt email or username already used
+      S-->>C: ApiError 409
+      C-->>W: 409 Email / username already taken
+    else available
+      S->>S: bcrypt.hash(password, 10)
+      S->>DB: BEGIN, INSERT users (role parent), INSERT wallets
+      S->>BS: ensureFreeSubscription(tx, userId)
+      BS->>DB: INSERT subscriptions (FREE) + first-month credit, COMMIT
+      S->>T: generateAuthTokens(user)
+      T->>DB: INSERT auth_tokens (refresh, SHA-256 hash)
+      T-->>S: accessToken + refreshToken
+      par send verification code (does not block response)
+        S->>T: generateEmailVerificationToken(userId)
+        T->>DB: invalidate old codes, INSERT auth_tokens (email_verify, 24h)
+        T-->>S: raw code
+        S->>E: sendVerificationEmail(email, code, name)
+        E->>M: send email with code
+      end
+      S-->>C: user + tokens
+      C-->>W: 201 user + tokens
+      W-->>U: Logged in, prompt to verify email
+    end
+  end
+
+  Note over U,M: 2. Resend verification code (optional)
+  U->>W: Click Resend code
+  W->>R: POST /api/v1/auth/send-verification-email (Bearer token)
+  R->>A: auth(req)
+  A->>DB: jwt.verify, SELECT user by sub
+  alt token missing / invalid / user deactivated
+    A-->>W: 401 Unauthorized
+  else authenticated
+    A->>C: sendVerificationEmail(req, res)
+    C->>S: sendVerificationEmail(userId)
+    S->>DB: SELECT user
+    alt email already verified
+      S-->>C: ApiError 400
+      C-->>W: 400 Email already verified
+    else not verified
+      S->>T: generateEmailVerificationToken(userId, cooldown 60s)
+      T->>DB: lock user row, SELECT latest email_verify code
+      alt latest code less than 60s old
+        T-->>C: ApiError 429 (retryAfterSeconds)
+        C-->>W: 429 Please wait before resending
+      else allowed
+        T->>DB: invalidate old codes, INSERT auth_tokens (email_verify, 24h)
+        T-->>S: raw code
+        S->>E: sendVerificationEmail(email, code, name)
+        E->>M: send email with code
+        C-->>W: 200 Code sent (retryAfterSeconds 60)
+      end
+    end
+  end
+
+  Note over U,M: 3. Verify email with code
+  U->>W: Paste code from email, click Verify
+  W->>R: POST /api/v1/auth/verify-email {token} (Bearer token)
+  R->>A: auth(req)
+  A-->>R: req.user
+  R->>R: validate(AuthValidation.verifyEmail)
+  R->>C: verifyEmail(req, res)
+  C->>S: verifyEmail(token, userId)
+  S->>T: verifyEmailToken(token, userId)
+  T->>DB: SELECT auth_tokens by SHA-256 hash
+  alt not found / wrong type / another user's code / used / expired
+    T-->>C: ApiError 400
+    C-->>W: 400 Invalid, used or expired code
+  else valid
+    T->>DB: BEGIN, consume code, UPDATE users SET emailVerifiedAt, COMMIT
+    T-->>S: verified user
+    S-->>C: message + user
+    C-->>W: 200 Email verified
+    W-->>U: Show verified status
+  end

@@ -1,0 +1,253 @@
+classDiagram
+  class PlansRoutes {
+    <<router>>
+    +GET /api/v1/plans
+    +GET /api/v1/plans/:id
+  }
+
+  class SubscriptionsRoutes {
+    <<router>>
+    +GET /api/v1/subscriptions/me [auth]
+    +GET /api/v1/subscriptions/me/credit-history [auth]
+  }
+
+  class BillingRoutes {
+    <<router>>
+    +POST /api/v1/payments/plans/checkout [parent]
+    +GET /api/v1/payments/orders/:orderId [auth]
+    +POST /api/v1/payments/payos/webhook
+  }
+
+  class PlansController {
+    <<controller>>
+    +getPlans(req, res) void
+    +getPlanById(req, res) void
+    +getMySubscription(req, res) void
+    +getCreditHistory(req, res) void
+  }
+
+  class BillingController {
+    <<controller>>
+    +checkoutPlan(req, res) void
+    +getOrder(req, res) void
+    +payosWebhook(req, res) void
+  }
+
+  class PlansService {
+    <<service>>
+    +getPlans() Object
+    +getPlanById(id) Plan
+    +getMySubscription(userId) Object
+    +getCreditHistory(userId, pagination) Object
+  }
+
+  class BillingService {
+    <<service>>
+    +listPlans() Object
+    +checkoutPlan(user, planId) Object
+    +checkoutOrder(user, checkout) Object
+    +getOrder(user, orderId) Object
+    +handleWebhook(body) Object
+    +ensureFreePlan(userId) Subscription
+    -syncWithPayos(order, now) void
+  }
+
+  class BillingStore {
+    <<store>>
+    +ensureFreeSubscription(tx, parentId, now) Subscription
+    +fulfillOrder(tx, orderId, options) boolean
+    +closeOrder(tx, orderId, status) boolean
+    +runBillingCycle(prisma, now) Object
+    -startPeriod(tx, input) Subscription
+  }
+
+  class BillingRules {
+    <<utility>>
+    +addMonths(date, months) Date
+    +newPeriod(plan, now) Object
+    +cycleAction(sub, plan, now) Object
+    +monthsBetween(from, to) number
+    +newOrderCode() number
+    +payosDescription(orderCode) String
+    +formatPlan(plan) Object
+    +formatOrder(order) Object
+  }
+
+  class MySubscriptionFormat {
+    <<utility>>
+    +formatMySubscription(subscription, usage) Object
+  }
+
+  class CreditLedger {
+    <<store>>
+    +grantCredit(tx, userId, amount, key, refId) void
+    +expireCredit(tx, userId, key, refId) void
+  }
+
+  class BillingWorker {
+    <<worker>>
+    +billingTick() void
+  }
+
+  class PayOSClient {
+    <<client>>
+    +payosCollect() PayOS
+    +paymentRequests.create(data) Object
+    +paymentRequests.get(orderCode) Object
+    +webhooks.verify(body) Object
+  }
+
+  class PayOS {
+    <<external>>
+    +payment link / VietQR
+    +webhook callback
+  }
+
+  class Plan {
+    <<entity>>
+    -UUID id
+    -String code
+    -String name
+    -int durationMonths
+    -BigInt priceVnd
+    -int creditsPerMonth
+    -int maxChildren
+    -int maxCharacters
+    -boolean canSell
+    -boolean isActive
+  }
+
+  class Subscription {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -UUID planId
+    -UUID orderItemId
+    -DateTime periodStart
+    -DateTime periodEnd
+    -DateTime nextCreditGrantAt
+    -SubscriptionStatus status
+  }
+
+  class Order {
+    <<entity>>
+    -UUID id
+    -UUID buyerId
+    -BigInt subtotalVnd
+    -BigInt totalVnd
+    -OrderStatus status
+    -BigInt payosOrderCode
+    -String payosPaymentLinkId
+    -String payosTransactionId
+    -DateTime paidAt
+    -DateTime expiresAt
+  }
+
+  class OrderItem {
+    <<entity>>
+    -UUID id
+    -UUID orderId
+    -OrderItemType itemType
+    -UUID planId
+    -UUID listingId
+    -BigInt unitPriceVnd
+  }
+
+  class WebhookLog {
+    <<entity>>
+    -BigInt id
+    -String provider
+    -BigInt payosOrderCode
+    -Json payload
+    -boolean signatureValid
+    -boolean processed
+    -String errorMessage
+    -DateTime receivedAt
+  }
+
+  class Wallet {
+    <<entity>>
+    -UUID userId
+    -int creditBalance
+  }
+
+  class WalletLedger {
+    <<entity>>
+    -BigInt id
+    -UUID userId
+    -WalletType walletType
+    -LedgerEntryType entryType
+    -BigInt amount
+    -BigInt balanceAfter
+    -String idempotencyKey
+    -String refType
+    -UUID refId
+  }
+
+  class User {
+    <<entity>>
+    -UUID id
+    -UserRole role
+  }
+
+  class SubscriptionStatus {
+    <<enumeration>>
+    active
+    expired
+    cancelled
+  }
+
+  class OrderStatus {
+    <<enumeration>>
+    pending
+    paid
+    failed
+    cancelled
+    expired
+  }
+
+  class OrderItemType {
+    <<enumeration>>
+    plan
+    listing
+  }
+
+  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
+  PlansRoutes ..> PlansController : delegates
+  SubscriptionsRoutes ..> PlansController : delegates
+  BillingRoutes ..> BillingController : delegates
+  PlansController ..> PlansService : uses
+  BillingController ..> BillingService : uses
+  PlansService ..> BillingService : listPlans
+  PlansService ..> MySubscriptionFormat : formats current plan + usage
+  PlansService ..> Subscription : reads active subscription
+  PlansService ..> WalletLedger : reads credit history
+  BillingService ..> Plan : reads active plan
+  BillingService ..> Order : creates / syncs status
+  BillingService ..> WebhookLog : logs every webhook
+  BillingService ..> BillingRules : orderCode / description / format
+  BillingService ..> PayOSClient : create link / get status / verify webhook
+  BillingService ..> BillingStore : fulfill / close order
+  PayOSClient ..> PayOS : HTTPS (SDK @payos/node)
+  BillingStore ..> BillingRules : newPeriod / cycleAction / addMonths
+  BillingStore ..> Order : marks paid / closes
+  BillingStore ..> Subscription : starts / extends / expires period
+  BillingStore ..> CreditLedger : grants / expires monthly credit
+  CreditLedger ..> Wallet : updates creditBalance
+  CreditLedger ..> WalletLedger : appends entry (idempotencyKey)
+  BillingWorker ..> BillingStore : runBillingCycle every 15 min
+
+  %% Quan hệ dữ liệu: khóa ngoại trong schema.prisma
+  User "1" --> "0..*" Subscription : subscribes
+  Plan "1" --> "0..*" Subscription : plan
+  User "1" --> "0..*" Order : buys
+  Order "1" *-- "1..*" OrderItem : items
+  Plan "0..1" --> "0..*" OrderItem : plan item
+  OrderItem "0..1" --> "0..*" Subscription : paid by
+  User "1" --> "0..1" Wallet : has
+  User "1" --> "0..*" WalletLedger : entries
+  Subscription --> SubscriptionStatus
+  Order --> OrderStatus
+  OrderItem --> OrderItemType
+
+  note "Ghi chú<br/>- GET /plans công khai; /subscriptions cần auth; checkout cần [parent] = authorize('parent'); webhook không auth (payOS gọi, xác thực bằng chữ ký trong body).<br/>- Trả trước, gia hạn thủ công (VietQR không trừ tiền định kỳ). Gói Miễn phí (FREE) cũng là một dòng subscriptions, tạo khi đăng ký, tự gia hạn hằng tháng.<br/>- Checkout: tạo Order pending + OrderItem (chốt giá), hạn 15 phút, gọi payOS lấy checkoutUrl. Giá 0đ: giao ngay, không qua payOS. Thiếu cấu hình payOS -> 503; payOS lỗi -> 502, đơn failed.<br/>- Hai đường xác nhận, đều idempotent: (1) webhook: ghi WebhookLog, kiểm chữ ký + code '00' + đủ tiền; (2) trang kết quả gọi GET /orders/:id -> BE tự hỏi payOS (không tin query string).<br/>- fulfillOrder: chỉ từ pending hoặc expired (trả ở giây cuối vẫn giao) -> paid. Gói khác -> kỳ mới bắt đầu ngay (kỳ cũ cancelled), cấp đủ credit tháng đầu, credit còn lại giữ. Mua lại đúng gói trả phí đang dùng -> cộng thêm thời hạn vào periodEnd.<br/>- Đã nhận tiền mà đơn đã huỷ / lỗi -> không giao, WebhookLog ghi cần hoàn tay.<br/>- Cron runBillingCycle: tới nextCreditGrantAt thì hết hạn credit cũ + cấp tháng mới; hết kỳ: FREE -> kỳ FREE mới, gói trả phí -> expired, về FREE. Key ghi sổ cố định (grant:sub:tháng) nên chạy lại không cấp trùng. Đồng thời đóng đơn pending quá hạn -> expired.<br/>- Credit history: bỏ dòng credit_consume, mỗi dòng kèm ngữ cảnh (yêu cầu AI hoặc tên gói).<br/>- checkoutOrder dùng chung cho mua truyện (itemType listing, xem 3.6). Admin quản lý gói ở /admin/plans."

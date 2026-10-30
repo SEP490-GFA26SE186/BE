@@ -1,0 +1,101 @@
+---
+title: "Sequence Diagram - Become a Seller and Publish a Story"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor U as Parent (Seller)
+  actor SP as Specialist
+  participant W as Web App
+  participant R as :Sellers / Listings / ModerationRoutes
+  participant C as :PublishingController
+  participant PS as :PublishingService
+  participant PR as :PublishRules
+  participant NS as :StoriesNarrationService
+  participant NST as :StoriesNarrationStore
+  participant DB as Database
+
+  Note over U,DB: 1. Apply to become a seller
+  U->>W: Fill seller profile (display name, bio, expertise)
+  W->>R: POST /api/v1/sellers/apply
+  R->>C: applySeller(req, res)
+  C->>PS: applySeller(user, body)
+  PS->>DB: SELECT active subscription + plan, seller_profiles
+  alt plan cannot sell
+    PS-->>C: ApiError 422
+    C-->>W: 422 Upgrade plan to sell stories
+  else already pending / approved / suspended
+    PS-->>C: ApiError 409 / 403
+    C-->>W: 409 / 403 error
+  else ok (new or previously rejected)
+    PS->>DB: UPSERT seller_profiles (pending)
+    C-->>W: 201 seller profile (pending)
+  end
+
+  Note over U,DB: 2. Specialist approves the seller
+  SP->>W: Open seller applications
+  W->>R: GET /api/v1/moderation/sellers?status=pending
+  R->>C: listSellerApplications(req, res)
+  C-->>W: 200 pending profiles
+  SP->>W: Approve or reject
+  W->>R: POST /api/v1/moderation/sellers/:userId/decision {approve}
+  R->>C: decideSeller(req, res)
+  C->>PS: decideSeller(moderator, userId, body)
+  PS->>DB: UPDATE seller_profiles SET approved / rejected (only if pending)
+  alt no pending profile
+    PS-->>C: ApiError 404
+    C-->>W: 404 error
+  else updated
+    C-->>W: 200 seller profile
+  end
+
+  Note over U,DB: 3. Publish a story (new listing or new version of a live listing)
+  U->>W: Pick a finished story, set title, price, character aliases
+  alt new listing
+    W->>R: POST /api/v1/listings {storyId, title, priceVnd, aliases}
+    R->>C: createListing(req, res)
+    C->>PS: createListing(user, body)
+  else new version of a published listing
+    W->>R: POST /api/v1/listings/:listingId/versions {title, priceVnd, aliases}
+    R->>C: createListingVersion(req, res)
+    C->>PS: createListingVersion(user, listingId, body)
+    PS->>DB: SELECT live listing, pending version
+    alt not published / a version is already pending
+      PS-->>C: ApiError 409
+      C-->>W: 409 error
+    end
+    PS->>PS: createListing(user, body, previousListingId)
+  end
+  PS->>DB: SELECT seller_profiles, active plan
+  PS->>PR: validPriceVnd(priceVnd)
+  alt seller not approved / plan cannot sell / invalid price
+    PS-->>C: ApiError 403 / 422 / 422
+    C-->>W: error
+  else ok
+    PS->>DB: SELECT private story with pages, checkpoints, characters
+    PS->>PR: findReviewGaps, aliasErrors, leftoverNameErrors
+    alt story not reviewed / has gaps / real family name left
+      PS-->>C: ApiError 422 (details)
+      C-->>W: 422 Remove personal info / finish the story
+    else ok
+      PS->>DB: BEGIN, copy story as kind published (aliases, scenes, pages, checkpoints, options)
+      PS->>DB: INSERT listings (submitted, priceVnd, previousListingId), INSERT moderation_reviews (submission)
+      opt new version with narration
+        PS->>NST: reuseNarration(copy, live story, voice)
+        NST->>DB: copy ready clips whose fingerprint did not change
+      end
+      PS->>NS: prepareNarration(tx, copyId)
+      NS->>DB: queue narration clips for remaining segments
+      PS->>DB: COMMIT
+      PS->>NS: dispatchNarration(jobs) (see 3.3a)
+      PS-->>C: listing + narration progress
+      C-->>W: 201 listing submitted
+      W-->>U: Waiting for moderation
+    end
+  end

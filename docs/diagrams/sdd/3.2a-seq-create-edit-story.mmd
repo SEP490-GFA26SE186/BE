@@ -1,0 +1,115 @@
+---
+title: "Sequence Diagram - Create and Edit a Story"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+sequenceDiagram
+  autonumber
+  actor U as Parent
+  participant W as Web App
+  participant R as :StoriesRoutes
+  participant C as :StoriesController
+  participant AS as :StoriesAnalysisService
+  participant S as :StoriesService
+  participant ES as :StoriesEditorService
+  participant FS as :StoriesFamilyStore
+  participant SR as :StoryRules
+  participant AI as :AiClient
+  participant DB as Database
+  participant AIS as AI Service
+
+  Note over U,AIS: 1. Analyze family story (entry = family only)
+  U->>W: Tell what happened at home, pick characters
+  W->>R: POST /api/v1/stories/analyze {situation, characters, length}
+  R->>R: auth, authorize(parent), validate
+  R->>C: analyzeStory(req, res)
+  C->>AS: analyzeStory(user, body)
+  AS->>DB: SELECT users.aiBlockedUntil
+  alt AI blocked
+    AS-->>C: ApiError 403
+    C-->>W: 403 AI writing is temporarily locked
+  else allowed
+    AS->>SR: tokenizeNames(situation) (real names -> {NV1})
+    AS->>DB: SELECT blocked keywords, count today's analyses
+    alt blocked keyword
+      AS-->>C: ApiError 422
+      C-->>W: 422 Story contains unsuitable words
+    else daily limit reached
+      AS-->>C: ApiError 429
+      C-->>W: 429 No analyses left today
+    else ok
+      AS->>FS: loadMainChild, loadUsableCatalog, loadChildSubSkillLevels
+      FS->>DB: SELECT child, sub-skills with usable questions, child levels
+      AS->>DB: INSERT ai_requests (story_analysis, processing, 0 credit)
+      AS->>AI: callAi(story_analysis, payload)
+      AI->>AIS: POST /v1/story/analyze
+      AIS-->>AI: moment summary / seed event + 1-2 sub-skill codes
+      alt AI error or invalid output
+        AS->>DB: UPDATE ai_requests SET failed
+        AS-->>C: ApiError 502
+        C-->>W: 502 Could not analyze, try again
+      else success
+        AS->>DB: UPDATE ai_requests SET succeeded
+        AS->>SR: signAnalysisToken(result, 2h)
+        AS-->>C: summary + sub-skills + analysisToken
+        C-->>W: 200 analysis result
+        W-->>U: Show suggested lesson for confirmation
+      end
+    end
+  end
+
+  Note over U,AIS: 2. Create story skeleton
+  U->>W: Confirm (topic / family / handwritten), title, length
+  W->>R: POST /api/v1/stories {entry, topicId?, length, characters, analysisToken?}
+  R->>C: createStory(req, res)
+  C->>S: createStory(user, data)
+  S->>SR: loadStorySettings (page / checkpoint layouts)
+  S->>DB: SELECT topic, characters, children
+  alt topic missing / inactive / character not owned
+    S-->>C: ApiError 400 / 404
+    C-->>W: 400 / 404 error
+  else ok
+    S->>SR: tokenizeNames(situation)
+    opt entry = family
+      S->>SR: verifyAnalysisToken(analysisToken)
+      alt token expired / situation or characters changed
+        S-->>C: ApiError 422
+        C-->>W: 422 Please analyze again
+      end
+      S->>FS: loadConfirmedSubSkills(ids)
+    end
+    S->>SR: planSlots / planFamilySlots, buildSkeleton(length, layouts, plan)
+    S->>DB: BEGIN, INSERT stories (draft), story_characters, story_sub_skills, placeholder scene, empty pages, checkpoints, COMMIT
+    S-->>C: story detail
+    C-->>W: 201 story (draft)
+    W-->>U: Open story editor
+  end
+
+  Note over U,AIS: 3. Edit a page (same pattern for checkpoints)
+  U->>W: Edit page text, Save
+  W->>R: PUT /api/v1/stories/:id/pages/:pageId {contentText}
+  R->>C: updatePage(req, res)
+  C->>ES: updatePage(user, storyId, pageId, body)
+  ES->>DB: BEGIN, lock story row (owner, not generating)
+  alt not owner / story generating
+    ES-->>C: ApiError 404 / 409
+    C-->>W: 404 / 409 error
+  else ok
+    ES->>S: tokenizeOrReject(text) (leftover real name -> 422)
+    ES->>DB: UPDATE story_pages SET contentText, origin ai_edited, clear audio
+    ES->>S: assertNoBlockedKeywords(storyId, page)
+    alt blocked keyword
+      ES-->>C: ApiError 422 (rollback)
+      C-->>W: 422 Unsuitable words
+    else ok
+      ES->>SR: storyStatusFromPages(pages)
+      ES->>DB: UPDATE stories SET status, COMMIT
+      ES-->>C: story detail
+      C-->>W: 200 updated story
+    end
+  end

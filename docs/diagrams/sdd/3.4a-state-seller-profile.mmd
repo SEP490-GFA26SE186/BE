@@ -1,0 +1,27 @@
+---
+title: "State Diagram - Seller Profile"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "PENDING" as PENDING
+  state "APPROVED" as APPROVED
+  state "REJECTED" as REJECTED
+  state "SUSPENDED" as SUSPENDED
+
+  [*] --> PENDING : Parent applies [plan canSell]
+  PENDING --> APPROVED : Specialist approves
+  PENDING --> REJECTED : Reject
+  REJECTED --> PENDING : Apply again
+  APPROVED --> SUSPENDED : Strike count reaches strike limit
+  SUSPENDED --> APPROVED : Appeal approved / strike revoked
+
+  note right of APPROVED
+    PENDING and APPROVED profiles
+    can be edited without re-review
+  end note

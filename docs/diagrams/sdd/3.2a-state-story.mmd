@@ -1,0 +1,36 @@
+---
+title: "State Diagram - Story"
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "DRAFT" as DRAFT
+  state "GENERATING" as GENERATING
+  state "READY" as READY
+
+  [*] --> DRAFT : Parent creates story skeleton
+  DRAFT --> GENERATING : Write with AI [length not custom, credit held]
+  READY --> GENERATING : Rewrite with AI [no child has read it]
+  GENERATING --> READY : AI result saved [credit consumed]
+  GENERATING --> DRAFT : AI failed / blocked [credit released]
+  DRAFT --> READY : Parent fills every page
+  READY --> DRAFT : Page cleared
+  DRAFT --> [*] : Delete story
+  READY --> [*] : Delete story
+
+  note right of GENERATING
+    On AI failure the status is recomputed
+    from pages: back to READY if every
+    page already had text, else DRAFT
+  end note
+
+  note right of READY
+    Stays READY when:
+    - Parent reviews story with no gaps
+      (reviewedAt set, narration queued)
+  end note
