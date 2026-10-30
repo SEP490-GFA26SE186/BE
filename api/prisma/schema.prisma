@@ -20,7 +20,6 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  directUrl  = env("DIRECT_URL")
   // plpgsql co san trong moi Postgres; khai bao o day de `migrate diff` khong
   // bao drift gia. citext dung cho users.email (so sanh khong phan biet hoa/thuong).
   extensions = [citext, plpgsql]

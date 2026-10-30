@@ -38,7 +38,7 @@ def sign(params: dict[str, str | int], api_secret: str) -> str:
 
 
 class CloudinaryStorage:
-    """Cloudinary over its REST API (no SDK, same reasoning as SupabaseStorage).
+    """Cloudinary over its REST API with httpx (no SDK: one more dependency for two calls).
 
     Assets belong to children (real names, real family events), so they are uploaded with
     `type=authenticated`: the public `res.cloudinary.com/.../upload/...` URL does not serve

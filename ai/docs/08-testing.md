@@ -3,7 +3,7 @@
 ## Nguyên tắc
 
 - `pytest` không bao giờ gọi mạng: dùng provider `mock`; test `GeminiLLMProvider` bằng client giả tiêm vào (không phải
-  `respx`, xem README); `respx` chỉ cho HTTP thô như `SupabaseStorage`. Một fixture `autouse` chặn mọi
+  `respx`, xem README); `respx` chỉ cho HTTP thô như `CloudinaryStorage`. Một fixture `autouse` chặn mọi
   kết nối ngoài loopback.
 - Script thử thật nằm trong `scripts/`, bắt buộc cờ `--confirm`, in chi phí ước tính trước khi chạy.
 

@@ -14,7 +14,7 @@ const swaggerSpec = {
     version: '1.0.0',
     description: `
 **StoryWeaver AI** - Nền tảng sáng tác truyện tương tác cá nhân hóa và giáo dục trí tuệ cảm xúc (EQ) cho trẻ em.
-API Backend cung cấp đầy đủ các chức năng quản lý tài khoản phụ huynh, bảo mật chế độ trẻ em (Kid Mode PIN & Session), xác thực email, và tích hợp cơ sở dữ liệu Supabase.
+API Backend cung cấp đầy đủ các chức năng quản lý tài khoản phụ huynh, bảo mật chế độ trẻ em (Kid Mode PIN & Session), xác thực email, và lưu dữ liệu trên PostgreSQL.
 
 ### Bảng Phân Quyền Truy Cập (Role-Based Access Control - RBAC)
 Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện truy cập:
@@ -173,7 +173,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           name: { type: 'string', example: 'Bé Miu' },
           role: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'], example: 'self' },
           appearance: { type: 'string', example: 'Bé gái 5 tuổi tóc búi hai bên, đeo nơ hồng, mắt to tròn tinh nghịch' },
-          portraitImageKey: { type: 'string', nullable: true, example: 'https://storage.supabase.co/.../miu_portrait.png' },
+          portraitImageKey: { type: 'string', nullable: true, example: 'characters/portraits/3f2a-1.png' },
           genPrompt: { type: 'string', nullable: true, example: 'Portrait of Bé Miu...' },
           genSeed: { type: 'string', nullable: true, example: '123456789' },
           portraitStatus: { type: 'string', enum: ['none', 'queued', 'generating', 'ready', 'failed'], example: 'none' },

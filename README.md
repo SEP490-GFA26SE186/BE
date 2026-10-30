@@ -12,9 +12,9 @@ Backend gồm **hai source riêng biệt** trong cùng một repo:
 | `api/` | Node 22 / Express 5 / Prisma | Nghiệp vụ: auth, CRUD, thương mại, webhook, **và BullMQ worker** |
 | `ai/` | Python 3.12 / FastAPI | Sinh nội dung AI (văn bản / ảnh / TTS). Stateless, **không đọc DB** |
 
-Database dùng chung là **Supabase** (đám mây). Lúc dev nên chạy **Postgres local trong
-Docker** (`docker-compose.localdb.yml`, xem [DB local](#db-local--khuyên-dùng-khi-dev)) vì
-qua Supabase mỗi truy vấn mất gần 1 giây. Queue là **Redis + BullMQ**, nằm hoàn toàn ở phía Node.
+Database là **PostgreSQL 16** chạy trong container `postgres` của compose (xem
+[DB](#db--postgres-trong-docker)). File ảnh / audio nằm trên **Cloudinary**. Queue là
+**Redis + BullMQ**, nằm hoàn toàn ở phía Node.
 
 ---
 
@@ -41,16 +41,9 @@ reload, cổng của service `ai` không mở ra ngoài. Nếu bạn sắp **vi�
 
 ### Trong `.env` phải điền gì
 
-Chỉ **2 biến** là bắt buộc để chạy được, lấy ở Supabase Dashboard →
-Project Settings → Database → Connection string:
-
-| Biến | Lấy ở đâu |
-|---|---|
-| `DATABASE_URL` | Connection pooling, port **6543** |
-| `DIRECT_URL` | Direct connection, port **5432** (dùng cho migration) |
-
-`JWT_SECRET` và `INTERNAL_TOKEN` đã có giá trị dev sẵn trong `.env.example`,
-đổi trước khi deploy là được.
+Không cần điền gì để chạy được: `JWT_SECRET`, `INTERNAL_TOKEN` và `POSTGRES_PASSWORD` đã có giá
+trị dev sẵn trong `.env.example`, đổi trước khi deploy là được. api + worker trong Docker tự nối
+vào container `postgres`; `DATABASE_URL` trong `.env` chỉ dùng cho lệnh chạy ngoài Docker.
 
 **Không cần API key AI.** Mặc định `LLM_PROVIDER=mock` và `TTS_PROVIDER=mock` — trả truyện giả
 nhưng đúng khung request và đi qua validator thật, đủ để chạy trọn luồng từ đầu đến cuối. Đặt
@@ -59,8 +52,8 @@ nhưng đúng khung request và đi qua validator thật, đủ để chạy tr�
 Nếu quên tạo `.env`, compose **dừng lại ngay** và nói rõ thiếu biến nào:
 
 ```
-error while interpolating services.api.environment.DATABASE_URL:
-  required variable DATABASE_URL is missing a value: can DATABASE_URL trong .env o root
+error while interpolating services.api.environment.JWT_SECRET:
+  required variable JWT_SECRET is missing a value: can JWT_SECRET trong .env o root
 ```
 
 ### Chạy migration
@@ -68,13 +61,10 @@ error while interpolating services.api.environment.DATABASE_URL:
 Chạy ngay trong container, không cần Node trên máy:
 
 ```bash
-docker compose exec api npx prisma migrate deploy
+# Tạo bảng + chủ đề, kỹ năng EQ, platform_settings + tài khoản demo (lần đầu, và mỗi khi có migration mới)
+docker compose exec api npm run db:setup
 docker compose exec api npx prisma migrate status    # kiểm tra lại
-docker compose exec api npx prisma db seed           # eq_skills + topics
 ```
-
-Migration **phải** đi qua `DIRECT_URL` (port **5432**). Port 6543 là pgbouncer ở
-chế độ transaction, nó không giữ session nên Prisma migrate sẽ lỗi.
 
 ### `ai` chạy ngoài Docker — chữ thật bằng Claude CLI + giọng đọc VieNeu (chỉ dev)
 
@@ -96,7 +86,7 @@ py -3.12 -m venv .venv312          # hoặc python 3.12 do uv cài
 .venv312/Scripts/python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 # 3. Worker trong Docker gọi sang máy: thêm docker-compose.hostai.yml vào COMPOSE_FILE (.env)
-COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.localdb.yml;docker-compose.hostai.yml
+COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.hostai.yml
 docker compose up -d
 ```
 
@@ -105,49 +95,20 @@ Container `ai` vẫn chạy (worker phụ thuộc nó) nhưng không ai gọi �
 để nó khỏi nạp model giọng đọc. **Không dùng `claude_code` để phục vụ người dùng thật** (gói CLI là
 dùng cá nhân); production dùng `LLM_PROVIDER=claude` + API key.
 
-### DB local — khuyên dùng khi dev
+### DB — Postgres trong Docker
 
-Qua pooler Supabase mỗi truy vấn mất ~600–900 ms (editor lưu một trang 3–19 s, có lúc 500
-vì quá thời gian transaction). Postgres chạy cùng máy chỉ ~1 ms, API trả về trong 20–50 ms.
-
-```bash
-# Gộp thêm file localdb (thêm dòng COMPOSE_FILE vào .env cho đỡ gõ — xem mục Chế độ dev)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.localdb.yml up -d
-# Lần đầu, và mỗi khi có migration mới: tạo bảng + chủ đề, kỹ năng EQ, platform_settings + tài khoản demo
-docker compose exec api npm run db:setup
-```
-
-- `DATABASE_URL` / `DIRECT_URL` của api + worker bị file này **ghi đè** sang container
-  `postgres`, nên `.env` vẫn giữ link Supabase được. Bỏ file localdb ra là quay lại Supabase.
+- Container `postgres` (image `postgres:16-alpine`) nằm sẵn trong `docker-compose.yml`; api + worker
+  chờ nó `healthy` rồi mới chạy. Production dùng cùng container đó, chỉ khác mật khẩu và cổng
+  (`docker-compose.prod.yml`, xem DEPLOY.md).
 - Cổng 5432 mở ra máy để dùng Prisma Studio / DBeaver
   (`postgresql://storyweaver:storyweaver@localhost:5432/storyweaver`). Máy đã có Postgres
   chiếm 5432 thì đặt `POSTGRES_HOST_PORT=5433` trong `.env`.
 - Dữ liệu nằm trong volume `pg-data`. `docker compose down -v` **xoá sạch**, chạy lại
-  `db:setup` là có lại dữ liệu mẫu. Ở đây được dùng `prisma migrate reset` thoải mái.
+  `db:setup` là có lại dữ liệu mẫu. Ở máy dev được dùng `prisma migrate reset` thoải mái.
 - Mỗi người một DB riêng, không thấy dữ liệu test của nhau. Dữ liệu demo cần dùng chung
   thì thêm vào `api/prisma/seed_demo.js`.
 - Sửa `package.json` (thêm script / dependency) thì phải `up --build`: chế độ dev chỉ
   mount `src/`, `prisma/`, `scripts/`.
-
-#### Hai điều cần biết khi làm việc với Supabase
-
-**1. Đừng dùng `prisma migrate reset` trên Supabase.** Nó cố xoá mọi thứ nó thấy
-và sẽ vướng quyền với các schema hệ thống (`auth`, `storage`, `realtime`). Muốn
-dựng lại DB từ đầu thì chạy đoạn này trong Supabase SQL Editor rồi
-`migrate deploy` lại:
-
-```sql
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-GRANT USAGE ON SCHEMA public TO postgres, anon, authenticated, service_role;
-GRANT ALL   ON SCHEMA public TO postgres, service_role;
-```
-
-**2. Cảnh báo "RLS disabled in public" là đúng thiết kế — đừng bật RLS.**
-Supabase Advisor sẽ báo đỏ cả 44 bảng. Chúng ta không dùng Supabase Auth: API tự
-xác thực bằng JWT riêng và kết nối bằng role `postgres`. Bật RLS lên sẽ không
-chặn được gì (role `postgres` bypass) nhưng sẽ làm vỡ mọi truy vấn nếu ai đó
-đồng thời đổi sang role `anon`/`authenticated`.
 
 ### Kiểm tra đã chạy đúng
 
@@ -187,8 +148,6 @@ Nếu bạn làm dev cả ngày và không muốn gõ lại mỗi lần, thêm d
 ```bash
 # Windows — dấu phân cách là  ;
 COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml
-# … hoặc kèm DB local:
-COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.localdb.yml
 
 # Linux / macOS — dấu phân cách là  :
 COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml
@@ -258,7 +217,7 @@ Client ──> api (Express)          chỉ gọi ai/ trực tiếp cho /v1/stor
              │  (ảnh: /v1/images/portrait, /v1/images/scene; giọng: /v1/tts/synthesize)
              ↓
            ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh + TTS: mock)
-             │             └──> Cloudinary / Supabase Storage (ảnh / audio — ai upload, trả key)
+             │             └──> Cloudinary (ảnh / audio — ai upload, trả key)
              ↓
            worker ghi kết quả vào DB + chốt / hoàn credit
 ```
@@ -280,7 +239,7 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 
 | Biến | api | worker | ai |
 |---|:--:|:--:|:--:|
-| `DATABASE_URL`, `DIRECT_URL` | ✓ | ✓ | — |
+| `DATABASE_URL` (dựng từ `POSTGRES_PASSWORD`) | ✓ | ✓ | — |
 | `JWT_SECRET`, `JWT_*` | ✓ | — | — |
 | `BREVO_*`, `CORS_ORIGIN`, `APP_URL` | ✓ | — | — |
 | `REDIS_URL` | ✓ | ✓ | — |
@@ -289,7 +248,7 @@ Storage". Bảng này vừa là cấu hình vừa là tài liệu kiến trúc.
 | `AI_TIMEOUT_MS_<JOB>`, `AI_JOB_ATTEMPTS`, `AI_WORKER_CONCURRENCY` | — | ✓ | — |
 | `LLM_PROVIDER`, `TTS_PROVIDER`, `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL`, `LLM_*`, `TOKENS_PER_WORD`, `PRICE_TEXT_*` | — | — | ✓ |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_FOLDER` | ✓ | — | ✓ |
-| `CLOUDINARY_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | — | — | ✓ |
+| `CLOUDINARY_API_KEY` | — | — | ✓ |
 
 Hai ô đáng chú ý:
 
@@ -373,17 +332,17 @@ BE/
         ├── api/v1/              # story.py, images.py, tts.py
         ├── core/                # orchestrator, validator, prompt, guards, usage
         ├── providers/           # llm/ (mock, gemini, claude, claude_code), image/ (mock), tts/ (mock)
-        └── storage/             # supabase, local (dự phòng)
+        └── storage/             # cloudinary, local (dự phòng)
 ```
 
 ---
 
 ## Kiểm đầu-cuối (queue → worker → ai → DB)
 
-Cần `.env` ở root có `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `INTERNAL_TOKEN`; DB đã migrate +
+Cần `.env` ở root có `DATABASE_URL`, `JWT_SECRET`, `INTERNAL_TOKEN`; DB đã migrate +
 seed (`platform_settings` có `ai_cost.story_text`); một truyện `medium` đã có khung (trang + điểm dừng)
 và chủ truyện còn credit. **Script ghi thật vào DB đang cấu hình và trừ credit thật** — dùng DB test
-riêng, đừng chạy trên DB Supabase dùng chung của nhóm.
+riêng, đừng chạy trên DB có dữ liệu demo.
 
 ```bash
 # 1. Chạy toàn bộ với mock (không gọi Gemini)

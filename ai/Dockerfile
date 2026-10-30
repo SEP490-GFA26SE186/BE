@@ -5,7 +5,7 @@
 #
 # Service nay STATELESS: khong co DB, khong co Redis, khong biet gi ve user hay
 # credit. No chi nhan request -> goi provider -> (neu la anh / audio) upload len
-# Storage (Supabase hoac LocalStorage) -> tra ve KEY + usage (khong tra bytes).
+# Storage (Cloudinary hoac LocalStorage) -> tra ve KEY + usage (khong tra bytes).
 # =============================================================================
 
 FROM python:3.12-slim AS runtime

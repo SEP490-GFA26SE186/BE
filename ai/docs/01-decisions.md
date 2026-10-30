@@ -281,3 +281,10 @@ số mục trong ngoặc là số mục của spec đó)*
 | Chế độ giờ ngủ (bedtime) | Nhóm quyết định bỏ |
 | Thông báo trong app | Thay bằng trạng thái trên giao diện + email |
 | Gói credit mua lẻ, chuyển doanh thu sang credit | Credit chỉ đến từ gói |
+
+## 2026-10-30 — Bỏ Supabase (cả DB lẫn Storage)
+
+- Prod đã chạy Postgres cùng máy (`docker-compose.prod.yml`) và lưu file trên Cloudinary; Supabase chỉ
+  còn là DB dùng chung lúc dev. Bỏ hẳn: container `postgres` nằm trong `docker-compose.yml` (bỏ file
+  `docker-compose.localdb.yml`), bỏ `DIRECT_URL` (không còn pgbouncer), xoá `SupabaseStorage`.
+- Storage chọn theo credential: đủ `CLOUDINARY_*` -> Cloudinary, không thì `LocalStorage`.

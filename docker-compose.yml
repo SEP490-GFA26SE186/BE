@@ -1,8 +1,9 @@
 # =============================================================================
 # StoryWeaver AI — backend (dev/prod-like)
 #
-# Supabase la DB dam may nen KHONG co container Postgres o day. Migration chay
-# tu may dev len Supabase (`npm run db:migrate` trong api).
+# Postgres chay trong container `postgres` (du lieu o volume `pg-data`). Lan dau
+# va moi khi co migration moi: `docker compose exec api npm run db:setup`.
+# `docker compose down -v` XOA SACH du lieu (ca Redis).
 #
 # Moi service khai bao TUONG MINH bien moi truong no duoc nhan, thay vi dung
 # `env_file: .env` mot dong. Lam vay thi container `ai` se nhan luon
@@ -12,7 +13,29 @@
 
 name: storyweaver
 
+x-db-url: &db-url postgresql://storyweaver:${POSTGRES_PASSWORD:-storyweaver}@postgres:5432/storyweaver?schema=public
+
 services:
+  postgres:
+    # citext (users.email) co san trong image nay.
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: storyweaver
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-storyweaver}
+      POSTGRES_DB: storyweaver
+    ports:
+      # Mo ra host de chay Prisma Studio / DBeaver / `npm run dev` ngoai Docker.
+      # Trung cong voi Postgres cai san tren may thi doi: POSTGRES_HOST_PORT=5433
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storyweaver -d storyweaver"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     # appendonly: job dang cho trong queue khong mat khi restart Redis
@@ -32,8 +55,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
-      DATABASE_URL: ${DATABASE_URL:?can DATABASE_URL trong .env o root}
-      DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
+      DATABASE_URL: *db-url
       JWT_SECRET: ${JWT_SECRET:?can JWT_SECRET trong .env o root}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
@@ -63,6 +85,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -74,8 +98,7 @@ services:
     command: ["node", "src/worker.js"]
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      DATABASE_URL: ${DATABASE_URL:?can DATABASE_URL trong .env o root}
-      DIRECT_URL: ${DIRECT_URL:-${DATABASE_URL}}
+      DATABASE_URL: *db-url
       REDIS_URL: redis://redis:6379
       AI_SERVICE_URL: http://ai:8000
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?can INTERNAL_TOKEN trong .env o root}
@@ -98,6 +121,8 @@ services:
       start_period: 20s
       retries: 3
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       ai:
@@ -153,14 +178,11 @@ services:
       PRICE_TEXT_INPUT_PER_MTOK_MICROS: ${PRICE_TEXT_INPUT_PER_MTOK_MICROS:-}
       PRICE_TEXT_OUTPUT_PER_MTOK_MICROS: ${PRICE_TEXT_OUTPUT_PER_MTOK_MICROS:-}
       LOG_LEVEL: ${LOG_LEVEL:-}
-      # Luu file: du 3 bien CLOUDINARY_* -> Cloudinary, khong thi Supabase, khong thi LocalStorage.
+      # Luu file: du 3 bien CLOUDINARY_* -> Cloudinary, khong thi LocalStorage.
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-storyweaver}
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
-      SUPABASE_BUCKET: ${SUPABASE_BUCKET:-story-assets}
       # CO Y khong co DATABASE_URL / REDIS_URL / JWT_SECRET: service nay khong duoc doc DB.
     volumes:
       # Model VieNeu (~580 MB) tai lan dau, giu qua cac lan tao lai container.
@@ -172,5 +194,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  pg-data:
   redis-data:
   hf-cache:

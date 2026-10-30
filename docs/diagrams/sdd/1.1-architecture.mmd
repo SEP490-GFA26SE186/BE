@@ -8,7 +8,7 @@ flowchart LR
     WK[Worker process<br/>BullMQ AI + narration workers,<br/>billing / earning / audit cron]
   end
   REDIS[(Redis<br/>BullMQ queues)]
-  DB[(PostgreSQL<br/>Supabase)]
+  DB[(PostgreSQL)]
   subgraph AISvc [Python AI service - FastAPI, stateless]
     STORY[/v1/story/generate/]
     TTS[/v1/tts/synthesize/]
