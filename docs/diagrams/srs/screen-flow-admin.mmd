@@ -5,18 +5,21 @@ title: WEB (Admin)
 flowchart LR
   Login["Admin Login"]:::start --> L["Admin Layout<br/>Sidebar 9 items"]
   L --> Dash["Dashboard<br/>KPIs + Revenue chart + Pending tasks"]
-  L --> Acc["Accounts<br/>Filters + Table + Lock / Unlock"]
+  L --> Acc["Accounts<br/>Filters + Table"]
   Acc --> SpecM(["Create Specialist Modal"])
+  Acc --> Lock(["Lock / Unlock (inline)"])
   L --> Plans["Plans & Pricing<br/>Plans + Market & moderation settings"]
   Plans --> PlanM(["Plan Form Modal"])
+  L --> AIC["AI Configuration<br/>Credit costs + Providers"]
   L --> Ref["Refunds<br/>Pending / Refunded / Rejected"]
-  Ref --> RefD(["Approve / Reject Form<br/>Bank ref + Note"])
-  L --> WD["Seller Withdrawals<br/>Requested / Processing / Paid / Rejected"]
-  WD --> WDD(["Approve - payOS payout / Reject"])
+  Ref --> RefD(["Approve / Reject (inline)<br/>Bank ref + Note"])
+  L --> WD["Seller Withdrawals<br/>Requested / Paid / Rejected"]
+  WD --> Paid(["Mark as Paid (inline)<br/>Manual transfer + Bank ref"])
+  WD --> WDR(["Reject (inline)"])
   L --> App["Strike Appeals<br/>Pending / Approved / Rejected"]
+  App --> AppD(["Approve / Reject Appeal (inline)"])
   L --> Rev["Revenue Report<br/>Chart + Reconciliation"]
   L --> Log["Audit Logs<br/>Table + Pagination"]
-  L --> AIC["AI Configuration<br/>Credit costs + Providers"]
   classDef default fill:#EEEEEE,stroke:#999999,color:#111111
   classDef start fill:#FFE0A3,stroke:#333333,color:#111111
   classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111

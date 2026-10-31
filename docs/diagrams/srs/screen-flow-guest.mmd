@@ -1,16 +1,17 @@
 ---
-title: WEB (Guest)
+title: WEB (Public & Authentication)
 ---
 %%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 70}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "lineColor": "#555555"}}}%%
 flowchart LR
-  Land["Landing Page<br/>Hero + How it works + CASEL + FAQ"]:::start --> Reg["Register<br/>Account form + Free plan"]
-  Land --> Login["Login<br/>Email + Password"]
-  Land --> Legal["Privacy Policy / Terms"]
-  Reg --> PP
+  Land["Landing Page<br/>Hero + How it works + CASEL + FAQ"]:::start --> Reg["Register<br/>Account form"]
+  Land --> Login["Login<br/>Email or username + Password"]
+  Land --> Privacy["Privacy Policy"]
+  Land --> Terms["Terms of Service"]
+  Reg -->|Free plan| PP
   Login --> Forgot(["Forgot Password Dialog<br/>Email → Code → New password"])
-  Login --> PP["Parent Portal<br/>see WEB (Parent / Seller)"]
-  Login --> SP["Specialist Portal<br/>see WEB (Specialist)"]
-  Login --> AP["Admin Portal<br/>see WEB (Admin)"]
+  Login -->|Parent| PP["Parent Portal<br/>see WEB (Parent / Seller)"]:::ext
+  Login -->|Specialist| SP["Specialist Portal<br/>see WEB (Specialist)"]:::ext
+  Login -->|Admin| AP["Admin Portal<br/>see WEB (Admin)"]:::ext
   classDef default fill:#EEEEEE,stroke:#999999,color:#111111
   classDef start fill:#FFE0A3,stroke:#333333,color:#111111
   classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111

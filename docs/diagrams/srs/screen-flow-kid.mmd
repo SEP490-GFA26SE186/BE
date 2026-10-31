@@ -7,10 +7,12 @@ flowchart LR
   KL --> Shelf["Kid Bookshelf<br/>Story covers"]
   Shelf --> Reader["Story Reader<br/>Pages + Illustrations + Narration"]
   Reader --> CP(["Checkpoint Question<br/>Answer choices"])
-  Reader --> Done(["Story Complete Dialog<br/>Read again / Bookshelf"])
-  Done --> Shelf
+  CP -.->|Answer → next page| Reader
+  Reader --> Done(["Story Complete Dialog"])
+  Done -->|Read again| Reader
+  Done -->|Back to shelf| Shelf
   KL --> Gate(["Parent Gate Dialog<br/>Kid PIN"])
-  Gate --> Parent["Parent Portal<br/>see WEB (Parent / Seller)"]:::ext
+  Gate -->|Correct PIN| Parent["Parent Portal<br/>see WEB (Parent / Seller)"]:::ext
   classDef default fill:#EEEEEE,stroke:#999999,color:#111111
   classDef start fill:#FFE0A3,stroke:#333333,color:#111111
   classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111

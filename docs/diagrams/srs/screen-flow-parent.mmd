@@ -4,42 +4,45 @@ title: WEB (Parent / Seller)
 %%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 70}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "lineColor": "#555555"}}}%%
 flowchart LR
   Login["Parent Login"]:::start --> L["Parent Layout<br/>Sidebar 11 items + Credit badge + Child switcher"]
-  L --> VerifyM
+  L --> VerifyM(["Verify Email Dialog"])
   L --> Dash["Dashboard<br/>Stats + EQ radar + Continue reading + Best sellers"]
+  L --> Set["Settings<br/>Account info + Change password"]
+  Set -.->|Verify email| VerifyM
   L --> Kids["My Children<br/>Child cards + Kid PIN + Reading settings"]
   Kids --> ChildM(["Child Form Modal"])
   Kids --> PinM(["Kid PIN Modal"])
   Kids --> DelChild(["Delete Child Dialog"])
-  Kids --> KidMode["Kid Mode<br/>see WEB (Kid Mode)"]:::ext
+  Kids -->|Enter Kid Mode| KidMode["Kid Mode<br/>see WEB (Kid Mode)"]:::ext
+  L --> Lib["Library<br/>Continue reading + Bookshelf grid / list"]
   L --> Chars["Family Characters<br/>Cards + AI portrait + Plan limit"]
   Chars --> CharM(["Character Form Modal"])
   Chars --> DelChar(["Delete Character Dialog"])
   L --> Studio["Story Studio<br/>Waiting review / Completed"]
-  Studio --> Create["Create Story<br/>3 entries: Family / Template / Handwritten"]
+  Studio --> Create["Create Story<br/>3 entries: Family / Model story / Handwritten"]
   Create --> Analyze(["Story Analysis + Sub-skill Picker"])
   Create --> AddChar(["Add Family Character Modal"])
-  Create --> Editor["Story Editor<br/>AI progress + Pages + Checkpoints"]
-  Studio --> Editor
-  Editor --> Narr["Narration + Cover + Bookshelf panels"]
-  L --> Lib["Library<br/>Continue reading + Bookshelf grid / list"]
+  Create -->|Generate| Editor["Story Editor<br/>AI progress + Pages + Checkpoints"]
+  Studio -->|Open story| Editor
+  Editor --> NarrP(["Narration Panel"])
+  Editor --> CoverP(["Cover Picker"])
+  Editor --> ShelfP(["Add to Bookshelf"])
   L --> EQ["EQ Journey<br/>5 CASEL competencies + Weekly trend"]
   EQ --> SkillM(["Sub-skill Evidence Modal"])
   L --> Market["Marketplace<br/>Filters + Sort + Listing grid"]
   Market --> Detail["Listing Detail<br/>Hero + Reviews + Buy"]
   Detail --> ReportM(["Report Story Dialog"])
-  Detail --> Pay1(["payOS Checkout"]):::ext
+  Detail --> SellerP["Seller Profile"]
+  Detail -->|Buy| Pay1["payOS Checkout"]:::ext
   Pay1 --> PRes["Purchase Result"]
-  L --> Bill["Plans & Credit<br/>Plans + Payment history"]
-  Bill --> Pay2(["payOS Checkout"]):::ext
+  L --> Bill["Plans & Credit<br/>Plans + Credit history + Payment history"]
+  Bill -->|Subscribe| Pay2["payOS Checkout"]:::ext
   Pay2 --> BRes["Billing Result"]
   Bill --> Refund(["Refund Request Form"])
   L --> Sell["Selling<br/>Seller profile + Listings + Earnings + Strikes"]
   Sell --> Apply(["Seller Application Form"])
-  Sell --> NewL["New Listing<br/>Pick story + Price + Narration"]
+  Sell --> NewL["New Listing / New Version<br/>Pick story + Price + Narration"]
   Sell --> Bank(["Bank Account + Withdrawal Form"])
   Sell --> Appeal(["Strike Appeal Form"])
-  L --> Set["Settings<br/>Account info + Change password"]
-  Set --> VerifyM(["Verify Email Dialog"])
   L --> Help["Help"]
   classDef default fill:#EEEEEE,stroke:#999999,color:#111111
   classDef start fill:#FFE0A3,stroke:#333333,color:#111111

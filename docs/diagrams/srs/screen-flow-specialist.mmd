@@ -7,27 +7,33 @@ flowchart LR
   L --> Dash["Moderation Overview<br/>Review queue + Claim"]
   Dash --> WS["Review Workspace<br/>Pages + 7-rule checklist + Decision"]
   L --> Apps["Seller Applications<br/>Pending / Approved / Rejected"]
+  Apps --> AppAct(["Approve / Reject (inline)"])
+  L --> Rep["Content Reports<br/>Open / Resolved / Dismissed"]
+  Rep -->|Open| WS
+  Rep --> SuspF(["Suspend Listing Form"])
+  Rep --> StrikeM(["Issue Strike Modal"])
+  L --> Susp["Suspended Stories<br/>Suspended / Archived"]
+  Susp -->|Open| WS
+  Susp --> StrikeM
+  L --> Aud["Random Audits"]
+  Aud -->|Open| WS
+  L --> Str["Creator Strikes<br/>Active / Expired / Removed"]
+  Str --> StrikeM
   L --> Topics["Model Stories (Topics)<br/>Filters + List"]
   Topics --> TopicM(["Model Story Form Modal"])
   Topics --> DelTopic(["Delete Model Story Dialog"])
   L --> Sub["Sub-skills<br/>CASEL catalogue + Status filter"]
   Sub --> SubM(["Adjust Sub-skill Modal"])
   L --> Tpl["Question Templates<br/>List + Versions"]
-  Tpl --> VerF(["Version Form<br/>Draft / Publish / Duplicate"])
+  Tpl --> VerF(["Template Version Form<br/>Draft / Publish / Duplicate"])
   Tpl --> DelTpl(["Delete Template Dialog"])
   L --> CPR["Checkpoint Review<br/>Queue + Stats per template"]
   CPR --> FlagM(["Flag Question Modal"])
   L --> RS["Report Settings<br/>EQ report parameters"]
   L --> KW["Blocked Keywords<br/>Add form + List"]
   KW --> DelKW(["Delete Keyword Dialog"])
-  L --> Rep["Content Reports<br/>Open / Resolved / Dismissed"]
-  L --> Susp["Suspended Stories<br/>Suspended / Archived"]
-  L --> Str["Creator Strikes<br/>Active / Expired / Removed"]
-  Rep --> StrikeM(["Strike Modal"])
-  Susp --> StrikeM
-  Str --> StrikeM
-  L --> Aud["Random Audits"]
   L --> AIF["AI Usage Alerts"]
+  AIF --> BlockF(["Block AI Usage Form (inline)"])
   classDef default fill:#EEEEEE,stroke:#999999,color:#111111
   classDef start fill:#FFE0A3,stroke:#333333,color:#111111
   classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111
