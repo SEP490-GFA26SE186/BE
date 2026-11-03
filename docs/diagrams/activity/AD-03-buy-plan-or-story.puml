@@ -1,5 +1,5 @@
-@startuml flow-2-marketplace
-title Flow 2: Marketplace - Publish, Buy & Payout\n(Seller and Buyer are Parent accounts)
+@startuml AD-03-buy-plan-or-story
+title AD-03: Buy a Plan or a Story, Seller Payout\n(Buyer and Seller are Parent accounts)
 skinparam defaultFontName Arial
 skinparam shadowing false
 skinparam ArrowColor #000000
@@ -12,55 +12,27 @@ skinparam SwimlaneTitleFontStyle bold
 skinparam NoteBackgroundColor #FFFFFF
 skinparam NoteBorderColor #555555
 
-|Seller|
-|Specialist|
-|System|
 |Buyer|
+|System|
 |payOS|
+|Seller|
 |Admin|
 
-|Seller|
-start
-:Apply as seller\n(Family plan with can_sell);
-|Specialist|
-if (Approve seller profile?) then (no)
-  |Seller|
-  :Profile rejected, may apply again;
-  stop
-else (yes)
-endif
-|Seller|
-repeat
-  :Submit a reviewed private story:\nprice 0 or 5,000-500,000 VND,\ngeneric name for each character;
-  |System|
-repeat while (Real names or family details left?) is (yes: 422, fix) not (no)
-:Create de-personalized copy (no family story),\ncopy ready scene images and cover,\nregenerate narration with generic names,\nlisting = submitted;
-|Specialist|
-:Claim review (30 min, narration ready),\nview 100% of pages,\ncheck pedagogy checklist on the web;
-if (Decision?) then (changes requested / rejected)
-  |System|
-  :listing = changes_requested / rejected\n(optional strike on reject, Flow 3);
-  |Seller|
-  :Fix the private story and submit again;
-  stop
-else (approved)
-  |System|
-  :listing = published;
-  note right
-    Later the Seller may submit a new version:
-    same review; the old version stays on sale.
-    On approval, entitlements, bookshelves, reviews
-    and counters move to the new version, the old one
-    is archived; narration of unchanged segments is reused.
-  end note
-endif
 |Buyer|
-:Browse marketplace\n(competency, age, price, sort);
-:Buy one story;
-|System|
-:Create order, snapshot price\nand 80% seller share;
-if (Price = 0?) then (no)
+start
+if (Buy a plan or a story?) then (plan)
+  :Choose a plan on Plans & Credit\n(or from the paywall in AD-01);
   |System|
+  :Create order, snapshot plan price;
+else (story)
+  |Buyer|
+  :Browse marketplace\n(competency, age, price, sort);
+  :Buy one published story (AD-02);
+  |System|
+  :Create order, snapshot price\nand 80% seller share;
+endif
+|System|
+if (Price = 0?) then (no)
   if (payOS link created?) then (no)
     :Order failed, try again later;
     stop
@@ -80,15 +52,23 @@ else (yes)
 endif
 |System|
 :Order paid (conditional update, no double delivery);
+if (Item type?) then (plan)
+  :Close the active plan period,\nstart the new period and grant\nthis month's credits;
+  |Buyer|
+  :Credits ready for "Write for me" (AD-01);
+  stop
+else (story)
+endif
+|System|
 if (Buyer already owns this story?) then (yes)
-  :Deliver nothing; if paid, open a refund\nrequest automatically (Flow 3b);
+  :Deliver nothing; if paid, open a refund\nrequest automatically (AD-06);
   stop
 else (no)
 endif
 fork
   :Grant entitlement,\npurchase / free-claim count + 1;
   |Buyer|
-  :Add the story to a child's bookshelf\n(child reads it in Flow 4);
+  :Add the story to a child's bookshelf\n(child reads it in AD-04);
   :Rate the story after a child finished it;
 fork again
   |System|
@@ -98,10 +78,6 @@ fork again
   :Request withdrawal\n(bank set > 24 h ago, >= 50,000 VND);
   |System|
   :Hold the amount (available to locked);
-  note right
-    While still requested, the Seller may cancel:
-    withdrawal cancelled, amount back to available.
-  end note
   |Admin|
   if (Pay the seller?) then (yes)
     :Transfer by bank app,\nmark paid with transaction ref;

@@ -1,0 +1,633 @@
+---
+title: Logical ERD
+---
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+erDiagram
+  eq_skills {
+    uuid id PK
+    casel_competency casel_code
+    varchar name_vi
+    varchar name_en
+    text description
+    integer display_order
+  }
+  eq_sub_skills {
+    uuid id PK
+    uuid skill_id FK
+    varchar code
+    varchar name_vi
+    text description_vi
+    text casel_text_en
+    integer age_min
+    integer age_max
+    boolean is_active
+    integer display_order
+    uuid created_by FK
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  story_sub_skills {
+    uuid story_id PK, FK
+    uuid sub_skill_id PK, FK
+    story_sub_skill_source source
+    smallint position
+  }
+  stories {
+    uuid id PK
+    uuid owner_id FK
+    story_kind kind
+    uuid source_story_id FK
+    uuid topic_id FK
+    uuid cover_scene_id FK
+    story_entry entry
+    story_length length
+    varchar title
+    text situation
+    text moment_summary
+    text seed_event
+    boolean scored
+    boolean use_ai_image
+    boolean use_tts
+    story_status status
+    timestamptz reviewed_at
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz deleted_at
+  }
+  users {
+    uuid id PK
+    user_role role
+    varchar username
+    citext email
+    varchar password_hash
+    varchar full_name
+    varchar phone
+    varchar kid_exit_pin_hash
+    timestamptz email_verified_at
+    timestamptz last_login_at
+    boolean is_active
+    timestamptz ai_blocked_until
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz deleted_at
+  }
+  seller_profiles {
+    uuid user_id PK, FK
+    varchar display_name
+    text bio
+    text expertise
+    seller_status status
+    uuid reviewed_by FK
+    timestamptz reviewed_at
+    varchar bank_name
+    varchar bank_bin
+    varchar bank_account_number
+    varchar bank_account_holder
+    timestamptz bank_updated_at
+    integer total_sales
+    decimal rating_avg
+    timestamptz created_at
+  }
+  plans {
+    uuid id PK
+    varchar code
+    varchar name
+    integer duration_months
+    bigint price_vnd
+    integer credits_per_month
+    integer max_children
+    integer max_characters
+    boolean can_sell
+    boolean is_active
+  }
+  wallets {
+    uuid user_id PK, FK
+    integer credit_balance
+    bigint earning_pending_vnd
+    bigint earning_available_vnd
+    bigint earning_locked_vnd
+    timestamptz updated_at
+  }
+  topics {
+    uuid id PK
+    varchar title
+    uuid skill_id FK
+    text guidance
+    integer age_min
+    integer age_max
+    integer display_order
+    boolean is_active
+    uuid created_by FK
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  question_templates {
+    uuid id PK
+    uuid sub_skill_id FK
+    varchar title
+    answer_format answer_format
+    boolean is_active
+    uuid created_by FK
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  story_checkpoints {
+    uuid id PK
+    uuid story_id FK
+    uuid after_page_id FK
+    checkpoint_type type
+    varchar target_token
+    text question
+    emotion answer_emotion
+    text hint
+    content_origin origin
+    varchar question_audio_key
+    varchar hint_audio_key
+    uuid sub_skill_id FK
+    uuid template_version_id FK
+    boolean scored
+    boolean excluded
+    text excluded_reason
+    uuid excluded_by FK
+    timestamptz excluded_at
+    timestamptz reviewed_ok_at
+    uuid reviewed_ok_by FK
+  }
+  story_pages {
+    uuid id PK
+    uuid story_id FK
+    integer page_order
+    uuid scene_id FK
+    text content_text
+    text ai_original_text
+    content_origin origin
+    varchar audio_key
+    generation_status audio_status
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  child_profiles {
+    uuid id PK
+    uuid parent_id FK
+    varchar name
+    date birth_date
+    varchar preferred_voice
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz deleted_at
+  }
+  listings {
+    uuid id PK
+    uuid seller_id FK
+    uuid published_story_id FK
+    uuid previous_listing_id FK
+    varchar title
+    text description
+    varchar cover_image_key
+    bigint price_vnd
+    listing_status status
+    boolean has_ai_content
+    integer purchase_count
+    integer free_claim_count
+    decimal rating_avg
+    integer rating_count
+    timestamptz submitted_at
+    timestamptz published_at
+    timestamptz updated_at
+  }
+  subscriptions {
+    uuid id PK
+    uuid parent_id FK
+    uuid plan_id FK
+    uuid order_item_id FK
+    timestamptz period_start
+    timestamptz period_end
+    timestamptz next_credit_grant_at
+    subscription_status status
+    timestamptz created_at
+  }
+  wallet_ledger {
+    bigint id PK
+    uuid user_id FK
+    wallet_type wallet_type
+    ledger_entry_type entry_type
+    bigint amount
+    bigint balance_after
+    timestamptz available_at
+    varchar idempotency_key
+    varchar ref_type
+    uuid ref_id
+    timestamptz created_at
+  }
+  topic_sub_skills {
+    uuid topic_id PK, FK
+    uuid sub_skill_id PK, FK
+  }
+  question_template_versions {
+    uuid id PK
+    uuid template_id FK
+    integer version
+    template_status status
+    text question_frame
+    text page_setup
+    boolean needs_target
+    emotion_array allowed_emotions
+    text correct_desc
+    text distractor_desc
+    text constructive_desc
+    text avoidant_desc
+    text impulsive_desc
+    decimal constructive_score
+    decimal avoidant_score
+    decimal impulsive_score
+    text hint_guidance
+    text_array parent_prompts
+    text rationale
+    varchar reference_url
+    uuid created_by FK
+    timestamptz created_at
+    uuid published_by FK
+    timestamptz published_at
+  }
+  checkpoint_options {
+    uuid id PK
+    uuid checkpoint_id FK
+    integer option_order
+    text text
+    option_role role
+    boolean is_correct
+    text feedback
+    varchar text_audio_key
+    varchar feedback_audio_key
+  }
+  story_scenes {
+    uuid id PK
+    uuid story_id FK
+    integer scene_order
+    text description
+    varchar image_key
+    generation_status image_status
+  }
+  characters {
+    uuid id PK
+    uuid parent_id FK
+    uuid child_id FK
+    varchar name
+    text appearance
+    varchar portrait_image_key
+    text gen_prompt
+    bigint gen_seed
+    generation_status portrait_status
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz deleted_at
+  }
+  entitlements {
+    uuid id PK
+    uuid parent_id FK
+    uuid listing_id FK
+    uuid order_item_id FK
+    timestamptz granted_at
+    timestamptz revoked_at
+  }
+  orders {
+    uuid id PK
+    uuid buyer_id FK
+    bigint subtotal_vnd
+    bigint total_vnd
+    order_status status
+    bigint payos_order_code
+    varchar payos_payment_link_id
+    varchar payos_transaction_id
+    timestamptz paid_at
+    timestamptz expires_at
+    timestamptz created_at
+  }
+  withdrawal_requests {
+    uuid id PK
+    uuid seller_id FK
+    bigint amount_vnd
+    jsonb bank_snapshot
+    withdrawal_status status
+    uuid handled_by FK
+    timestamptz handled_at
+    varchar bank_transaction_ref
+    text reject_reason
+    timestamptz created_at
+  }
+  ui_audio_assets {
+    uuid id PK
+    varchar key
+    varchar lang
+    text text_content
+    varchar audio_key
+  }
+  blocked_keywords {
+    uuid id PK
+    varchar keyword
+    keyword_severity severity
+    boolean is_active
+    uuid created_by FK
+    timestamptz created_at
+  }
+  checkpoint_answers {
+    bigint id PK
+    uuid session_id FK
+    uuid checkpoint_id FK
+    emotion first_emotion
+    uuid first_option_id FK
+    emotion final_emotion
+    uuid final_option_id FK
+    integer attempts
+    boolean skipped
+    integer time_to_first_ms
+    integer question_replays
+    uuid skill_id FK
+    decimal score
+    uuid sub_skill_id FK
+    uuid template_version_id FK
+    timestamptz answered_at
+  }
+  play_sessions {
+    uuid id PK
+    uuid child_id FK
+    uuid story_id FK
+    boolean is_first_play
+    play_status status
+    uuid current_page_id FK
+    timestamptz started_at
+    timestamptz last_activity_at
+    timestamptz completed_at
+  }
+  auth_tokens {
+    uuid id PK
+    uuid user_id FK
+    auth_token_type type
+    varchar token_hash
+    uuid replaced_by_id FK
+    uuid child_id FK
+    timestamptz expires_at
+    timestamptz consumed_at
+    timestamptz created_at
+  }
+  product_reviews {
+    uuid id PK
+    uuid listing_id FK
+    uuid parent_id FK
+    integer rating
+    text comment
+    timestamptz hidden_at
+    uuid hidden_by FK
+    text seller_reply
+    timestamptz seller_replied_at
+    review_tag_array tags
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  order_items {
+    uuid id PK
+    uuid order_id FK
+    order_item_type item_type
+    uuid plan_id FK
+    uuid listing_id FK
+    bigint unit_price_vnd
+    decimal seller_share_rate
+    bigint seller_amount_vnd
+    order_item_status status
+  }
+  platform_settings {
+    varchar key PK
+    jsonb value
+    uuid updated_by FK
+    timestamptz updated_at
+  }
+  ai_requests {
+    uuid id PK
+    uuid user_id FK
+    ai_request_type request_type
+    uuid story_id FK
+    uuid page_id FK
+    uuid checkpoint_id FK
+    uuid scene_id FK
+    uuid character_id FK
+    varchar provider
+    varchar model_name
+    ai_request_status status
+    integer credits_charged
+    integer input_tokens
+    integer output_tokens
+    integer output_units
+    bigint provider_cost_micros
+    integer attempts
+    timestamptz locked_at
+    text error_message
+    varchar idempotency_key
+    timestamptz created_at
+    timestamptz finished_at
+  }
+  story_characters {
+    uuid story_id PK, FK
+    varchar token PK
+    uuid character_id FK
+    varchar alias_name
+    boolean is_main
+  }
+  bookshelf_items {
+    uuid child_id PK, FK
+    uuid story_id PK, FK
+    timestamptz added_at
+  }
+  moderation_reviews {
+    uuid id PK
+    uuid listing_id FK
+    moderation_review_type review_type
+    uuid moderator_id FK
+    timestamptz claimed_at
+    timestamptz claim_expires_at
+    moderation_decision decision
+    text comment
+    timestamptz decided_at
+    timestamptz created_at
+  }
+  refund_requests {
+    uuid id PK
+    uuid order_item_id FK
+    uuid requester_id FK
+    text reason
+    request_status status
+    uuid handled_by FK
+    timestamptz handled_at
+    varchar bank_transaction_ref
+    text decision_note
+    timestamptz created_at
+  }
+  creator_strikes {
+    uuid id PK
+    uuid seller_id FK
+    strike_source source
+    uuid source_id
+    text reason
+    uuid issued_by FK
+    timestamptz issued_at
+    timestamptz expires_at
+    timestamptz revoked_at
+  }
+  narration_clips {
+    uuid id PK
+    uuid story_id FK
+    varchar segment
+    character_64_ fingerprint
+    generation_status status
+    integer round
+    smallint attempts
+    varchar audio_key
+    decimal duration_seconds
+    varchar error_code
+    varchar error_message
+    timestamptz created_at
+    timestamptz updated_at
+  }
+  review_page_views {
+    uuid review_id PK, FK
+    uuid page_id PK, FK
+    timestamptz viewed_at
+    text comment
+  }
+  content_reports {
+    uuid id PK
+    uuid reporter_id FK
+    uuid listing_id FK
+    uuid page_id FK
+    uuid product_review_id FK
+    report_category category
+    text description
+    report_status status
+    uuid handled_by FK
+    timestamptz handled_at
+    timestamptz created_at
+  }
+  webhook_logs {
+    bigint id PK
+    varchar provider
+    bigint payos_order_code
+    jsonb payload
+    boolean signature_valid
+    boolean processed
+    text error_message
+    timestamptz received_at
+  }
+  strike_appeals {
+    uuid id PK
+    uuid strike_id FK
+    text reason
+    request_status status
+    uuid decided_by FK
+    timestamptz decided_at
+    text decision_note
+    timestamptz created_at
+  }
+  admin_audit_logs {
+    bigint id PK
+    uuid actor_id FK
+    varchar action
+    varchar target_type
+    uuid target_id
+    jsonb before_state
+    jsonb after_state
+    timestamptz created_at
+  }
+  users ||--o{ eq_sub_skills : ""
+  eq_skills ||--o{ eq_sub_skills : ""
+  stories ||--o{ story_sub_skills : ""
+  eq_sub_skills ||--o{ story_sub_skills : ""
+  story_scenes |o--o{ stories : ""
+  users ||--o{ stories : ""
+  stories |o--o{ stories : ""
+  topics |o--o{ stories : ""
+  users |o--o{ seller_profiles : ""
+  users ||--o| seller_profiles : ""
+  users ||--o| wallets : ""
+  users ||--o{ topics : ""
+  eq_skills ||--o{ topics : ""
+  users ||--o{ question_templates : ""
+  eq_sub_skills ||--o{ question_templates : ""
+  story_pages ||--o| story_checkpoints : ""
+  users |o--o{ story_checkpoints : ""
+  users |o--o{ story_checkpoints : ""
+  stories ||--o{ story_checkpoints : ""
+  eq_sub_skills |o--o{ story_checkpoints : ""
+  question_template_versions |o--o{ story_checkpoints : ""
+  story_scenes ||--o{ story_pages : ""
+  stories ||--o{ story_pages : ""
+  users ||--o{ child_profiles : ""
+  listings |o--o{ listings : ""
+  stories ||--o| listings : ""
+  seller_profiles ||--o{ listings : ""
+  order_items |o--o{ subscriptions : ""
+  users ||--o{ subscriptions : ""
+  plans ||--o{ subscriptions : ""
+  users ||--o{ wallet_ledger : ""
+  eq_sub_skills ||--o{ topic_sub_skills : ""
+  topics ||--o{ topic_sub_skills : ""
+  users ||--o{ question_template_versions : ""
+  users |o--o{ question_template_versions : ""
+  question_templates ||--o{ question_template_versions : ""
+  story_checkpoints ||--o{ checkpoint_options : ""
+  stories ||--o{ story_scenes : ""
+  child_profiles |o--o| characters : ""
+  users ||--o{ characters : ""
+  listings ||--o{ entitlements : ""
+  order_items ||--o{ entitlements : ""
+  users ||--o{ entitlements : ""
+  users ||--o{ orders : ""
+  users |o--o{ withdrawal_requests : ""
+  seller_profiles ||--o{ withdrawal_requests : ""
+  users ||--o{ blocked_keywords : ""
+  story_checkpoints ||--o{ checkpoint_answers : ""
+  checkpoint_options |o--o{ checkpoint_answers : ""
+  checkpoint_options |o--o{ checkpoint_answers : ""
+  play_sessions ||--o{ checkpoint_answers : ""
+  eq_skills |o--o{ checkpoint_answers : ""
+  eq_sub_skills |o--o{ checkpoint_answers : ""
+  question_template_versions |o--o{ checkpoint_answers : ""
+  child_profiles ||--o{ play_sessions : ""
+  story_pages |o--o{ play_sessions : ""
+  stories ||--o{ play_sessions : ""
+  child_profiles |o--o{ auth_tokens : ""
+  auth_tokens |o--o{ auth_tokens : ""
+  users ||--o{ auth_tokens : ""
+  users |o--o{ product_reviews : ""
+  listings ||--o{ product_reviews : ""
+  users ||--o{ product_reviews : ""
+  listings |o--o{ order_items : ""
+  orders ||--o{ order_items : ""
+  plans |o--o{ order_items : ""
+  users ||--o{ platform_settings : ""
+  characters |o--o{ ai_requests : ""
+  story_checkpoints |o--o{ ai_requests : ""
+  story_pages |o--o{ ai_requests : ""
+  story_scenes |o--o{ ai_requests : ""
+  stories |o--o{ ai_requests : ""
+  users ||--o{ ai_requests : ""
+  characters |o--o{ story_characters : ""
+  stories ||--o{ story_characters : ""
+  child_profiles ||--o{ bookshelf_items : ""
+  stories ||--o{ bookshelf_items : ""
+  listings ||--o{ moderation_reviews : ""
+  users |o--o{ moderation_reviews : ""
+  users |o--o{ refund_requests : ""
+  order_items ||--o| refund_requests : ""
+  users ||--o{ refund_requests : ""
+  users ||--o{ creator_strikes : ""
+  seller_profiles ||--o{ creator_strikes : ""
+  stories ||--o{ narration_clips : ""
+  story_pages ||--o{ review_page_views : ""
+  moderation_reviews ||--o{ review_page_views : ""
+  users |o--o{ content_reports : ""
+  listings |o--o{ content_reports : ""
+  story_pages |o--o{ content_reports : ""
+  product_reviews |o--o{ content_reports : ""
+  users ||--o{ content_reports : ""
+  users |o--o{ strike_appeals : ""
+  creator_strikes ||--o| strike_appeals : ""
+  users ||--o{ admin_audit_logs : ""

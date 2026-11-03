@@ -1,5 +1,5 @@
-@startuml flow-1-story-creation
-title Flow 1: Story Creation & AI-Assisted Authoring
+@startuml AD-01-create-story
+title AD-01: Create a Personalised Story with AI
 skinparam defaultFontName Arial
 skinparam shadowing false
 skinparam ArrowColor #000000
@@ -19,11 +19,6 @@ skinparam NoteBorderColor #555555
 
 |Parent|
 start
-note right
-  Prerequisite: Specialist has published sub-skills,
-  question templates and model stories;
-  Admin has set plans and AI credit prices.
-end note
 if (Child profile and characters exist?) then (no)
   :Create child profile and family characters;
 else (yes)
@@ -51,7 +46,7 @@ if (Handwritten story?) then (no)
   |System|
   while (Enough credit?\nshort 1 / medium 2 / long 3) is (no: paywall)
     |Parent|
-    :Buy or upgrade a plan;
+    :Buy or upgrade a plan (AD-03);
     |payOS|
     :VietQR payment + signed webhook;
     |System|
@@ -106,9 +101,9 @@ else (no: text only)
 endif
 :Story is ready for child;
 |Parent|
-:Add the story to a child's bookshelf\n(child reads it in Flow 4);
+:Add the story to a child's bookshelf\n(child reads it in AD-04);
 if (Publish for sale?) then (yes)
-  :Submit the story for sale (Flow 2);
+  :Submit the story for sale (AD-02);
 else (no)
 endif
 stop

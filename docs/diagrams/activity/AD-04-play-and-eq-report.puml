@@ -1,5 +1,5 @@
-@startuml flow-4-learning
-title Flow 4: Learning Through Stories
+@startuml AD-04-play-and-eq-report
+title AD-04: Child Plays a Story, Parent Reads the EQ Report
 skinparam defaultFontName Arial
 skinparam shadowing false
 skinparam ArrowColor #000000

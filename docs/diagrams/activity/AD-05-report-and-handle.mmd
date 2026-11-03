@@ -1,12 +1,11 @@
 ---
-title: "Flow 3: Trust & Safety, After-sale"
+title: "AD-05: Report and Handle a Published Story"
 ---
 %%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
 flowchart LR
   subgraph BUY["BUYER (Parent)"]
     UA(("Buyer")):::actor
     U1["Report a published listing<br/>(category, page)"]
-    U2["Request refund<br/>(within refund window)"]
   end
   subgraph SYS["SYSTEM (Backend API + Cron)"]
     B1{"Distinct reports in 24h<br/>>= threshold (3)?"}
@@ -15,15 +14,9 @@ flowchart LR
     B4["Issue strike, 90 days<br/>(takedown / rejection / report)"]
     B5{"Active strikes<br/>>= limit (3)?"}
     B6["Seller suspended,<br/>all listings hidden"]
-    B7["Duplicate purchase:<br/>auto refund request"]
-    B8["Story: revoke entitlement, remove from<br/>bookshelves, reverse seller earning.<br/>Plan: expire credit, cancel, back to Free"]
-    B13["422: seller already withdrew;<br/>refund stays pending, settle manually"]
-    BG{"Item granted access?<br/>(not a duplicate)"}
-    B15["Money back only: earlier purchase<br/>keeps access + seller earning"]
     B9["Strike revoked; below limit:<br/>seller approved again"]
     B10["Strike expires<br/>after valid days"]
     B11["Strike stays active"]
-    B12["Refund rejected,<br/>access kept"]
   end
   subgraph SPEC["SPECIALIST"]
     MA(("Specialist")):::actor
@@ -32,7 +25,6 @@ flowchart LR
     M4["Suspend listing manually<br/>(reason)"]
     M1["Claim review,<br/>view all pages"]
     M2{"Decision?"}
-    M5["Issue strike manually"]
   end
   subgraph SEL["SELLER"]
     EA(("Seller")):::actor
@@ -42,13 +34,10 @@ flowchart LR
   subgraph ADM["ADMIN"]
     AA(("Admin")):::actor
     A1{"Approve appeal?<br/>(not the issuer)"}
-    A2{"Approve refund?"}
-    A3["Transfer money back manually,<br/>enter bank transaction ref"]
   end
 
-  F2(["From Flow 2:<br/>listing live / rejected"]):::ext
+  F2(["From AD-02:<br/>listing live / rejected"]):::ext
   F2 --> U1
-  F2 -. "rejected + strike chosen" .-> B4
 
   UA --> U1 --> B1
   B1 -- "No: report open" --> M0
@@ -58,7 +47,6 @@ flowchart LR
   B3 --> M1
   MA --> M1 --> M2
   M2 -- "Keep: stays / back to published,<br/>open reports dismissed" --> E1
-  MA -.-> M5 -.-> B4
   M2 -- "Taken down: archived,<br/>open reports resolved" --> B4
   B4 --> B5
   B5 -- "Yes" --> B6 --> E2
@@ -68,15 +56,6 @@ flowchart LR
   AA --> A1
   A1 -- "Yes" --> B9
   A1 -- "No (note)" --> B11
-
-  UA --> U2 --> A2
-  B7 --> A2
-  AA --> A2
-  A2 -- "Yes" --> A3 --> BG
-  BG -- "Yes" --> B8
-  BG -- "No: duplicate" --> B15
-  B8 -. "seller already withdrew" .-> B13
-  A2 -- "No (note)" --> B12
 
   classDef default fill:#EEEEEE,stroke:#999999,color:#111111
   classDef actor fill:#FFE0A3,stroke:#333333,stroke-width:2px,color:#111111

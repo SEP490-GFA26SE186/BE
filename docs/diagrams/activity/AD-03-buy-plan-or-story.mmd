@@ -1,0 +1,64 @@
+---
+title: "AD-03: Buy a Plan or a Story, Seller Payout"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
+flowchart LR
+  subgraph BUY["BUYER (Parent)"]
+    UA(("Buyer")):::actor
+    U9{"Buy a plan<br/>or a story?"}
+    UP["Choose a plan<br/>(Plans & Credit or AD-01 paywall)"]
+    U0["Browse: competency,<br/>age, price + sort"]
+    U1["Buy one story"]
+    UC["Credits ready for<br/>'Write for me'"]
+    U2["Add to child's bookshelf"]
+    U3["Rate story<br/>(after child finished)"]
+  end
+  subgraph SYS["SYSTEM (Backend API + Cron)"]
+    BP["Order pending,<br/>snapshot plan price"]
+    B3["Order pending,<br/>snapshot price + seller share"]
+    B4{"Payment verified?"}
+    BT{"Item type?"}
+    BQ["Close active period, start new<br/>plan period, grant month credits"]
+    BD{"Buyer already<br/>owns the story?"}
+    B5["Grant entitlement,<br/>80% seller earning (pending),<br/>20% platform"]
+    B8["Grant entitlement<br/>(free claim, no earning)"]
+    B6["Cron: release earning<br/>after hold days (no pending refund)"]
+    B7["Hold withdrawal amount<br/>(available → locked)"]
+  end
+  subgraph PAY["payOS"]
+    Y1["VietQR payment<br/>+ signed webhook"]
+  end
+  subgraph SEL["SELLER (Parent)"]
+    E3["Request withdrawal<br/>(bank set > 24 h, >= 50,000 VND)"]
+    E4["Payout received"]
+  end
+  subgraph ADM["ADMIN"]
+    AA(("Admin")):::actor
+    A1{"Pay withdrawal?"}
+    A2["Transfer by bank manually,<br/>mark paid + transaction ref"]
+  end
+
+  F2(["From AD-02:<br/>listing live"]):::ext
+  F2 --> U0
+  UA --> U9
+  U9 -- "Plan" --> UP --> BP --> Y1
+  U9 -- "Story" --> U0 --> U1 --> B3
+  B3 -- "Price 0: paid now" --> B8 --> U2
+  B3 -- "Price > 0" --> Y1 --> B4
+  B4 -- "No: order cancelled /<br/>expired (15 min)" --> U9
+  B4 -- "Yes: order paid" --> BT
+  BT -- "Plan" --> BQ --> UC
+  BT -- "Story" --> BD
+  BD -- "No" --> B5 --> U2 --> U3
+  BD -- "Yes: no delivery,<br/>auto refund request" --> F6(["AD-06: Refund"]):::ext
+  U2 -.-> F4(["AD-04: Child plays a story"]):::ext
+  UC -.-> F1(["AD-01: Create a story"]):::ext
+
+  B5 --> B6 --> E3 --> B7 --> A1
+  AA --> A1
+  A1 -- "Yes" --> A2 --> E4
+  A1 -- "No (reason): amount released" --> E3
+
+  classDef default fill:#EEEEEE,stroke:#999999,color:#111111
+  classDef actor fill:#FFE0A3,stroke:#333333,stroke-width:2px,color:#111111
+  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111
