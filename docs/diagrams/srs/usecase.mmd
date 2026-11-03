@@ -1,0 +1,149 @@
+---
+title: Use Case Diagram - StoryWeaver AI
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 70}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "lineColor": "#555555"}}}%%
+flowchart LR
+  User(("User")):::actor
+  Parent(("Parent")):::actor
+  Child(("Child")):::actor
+  subgraph SYS["StoryWeaver AI - AI-Powered Interactive Storytelling & EQ Education Platform"]
+    direction TB
+    UC01(["Log in / Log out"])
+    UC02(["Reset forgotten password"])
+    UC03(["Register account"])
+    UC04(["Verify email"])
+    UC05(["Change password"])
+    UC06(["Browse marketplace"])
+    UC07(["Manage child profiles"])
+    UC08(["Manage family characters"])
+    UC09(["Generate character portrait"])
+    UC10(["Set / change Kid exit PIN"])
+    UC11(["Analyze family narrative"])
+    UC12(["Create story"])
+    UC13(["Write story with AI"])
+    UC14(["Edit story"])
+    UC15(["Generate AI illustrations"])
+    UC16(["Choose story cover"])
+    UC17(["Review story"])
+    UC18(["Retry narration"])
+    UC19(["Delete story"])
+    UC20(["Manage bookshelf"])
+    UC21(["View EQ report"])
+    UC22(["View child overview & reading time"])
+    UC23(["Buy / claim story"])
+    UC24(["Subscribe / upgrade plan"])
+    UC25(["View payment history"])
+    UC26(["View credit history"])
+    UC27(["Request refund"])
+    UC28(["Rate and review story"])
+    UC29(["Report content"])
+    UC30(["Apply to become seller"])
+    UC31(["Enter Kid Mode"])
+    UC32(["Exit Kid Mode"])
+    UC33(["Read story"])
+    UC34(["Answer checkpoint"])
+    UC35(["Manage accounts"])
+    UC36(["Manage plans"])
+    UC37(["Configure platform settings"])
+    UC38(["Decide refund"])
+    UC39(["Process withdrawal"])
+    UC40(["Decide strike appeal"])
+    UC41(["View finance reports"])
+    UC42(["View audit logs"])
+    UC43(["Adjust sub-skills"])
+    UC44(["Manage model stories"])
+    UC45(["Manage question templates"])
+    UC46(["Review generated checkpoints"])
+    UC47(["Configure EQ report settings"])
+    UC48(["Manage blocked keywords"])
+    UC49(["Review seller application"])
+    UC50(["Moderate submission"])
+    UC51(["Handle content reports"])
+    UC52(["Suspend listing"])
+    UC53(["Issue strike"])
+    UC54(["Perform random audit"])
+    UC55(["Hide review"])
+    UC56(["Block AI usage"])
+    UC57(["Submit story for sale"])
+    UC58(["Submit new listing version"])
+    UC59(["View my listings"])
+    UC60(["Reply to review"])
+    UC61(["Manage earnings and bank account"])
+    UC62(["Request / cancel withdrawal"])
+    UC63(["Appeal strike"])
+    UC64(["Update seller profile"])
+  end
+  Admin(("Admin")):::actor
+  Specialist(("Specialist")):::actor
+  Seller(("Seller")):::actor
+  User --- UC01
+  User --- UC02
+  Parent --- UC03
+  Parent --- UC04
+  Parent --- UC05
+  Parent --- UC06
+  Parent --- UC07
+  Parent --- UC08
+  Parent --- UC09
+  Parent --- UC10
+  Parent --- UC11
+  Parent --- UC12
+  Parent --- UC13
+  Parent --- UC14
+  Parent --- UC15
+  Parent --- UC16
+  Parent --- UC17
+  Parent --- UC18
+  Parent --- UC19
+  Parent --- UC20
+  Parent --- UC21
+  Parent --- UC22
+  Parent --- UC23
+  Parent --- UC24
+  Parent --- UC25
+  Parent --- UC26
+  Parent --- UC27
+  Parent --- UC28
+  Parent --- UC29
+  Parent --- UC30
+  Parent --- UC31
+  Parent --- UC32
+  Child --- UC33
+  Child --- UC34
+  UC35 --- Admin
+  UC36 --- Admin
+  UC37 --- Admin
+  UC38 --- Admin
+  UC39 --- Admin
+  UC40 --- Admin
+  UC41 --- Admin
+  UC42 --- Admin
+  UC43 --- Specialist
+  UC44 --- Specialist
+  UC45 --- Specialist
+  UC46 --- Specialist
+  UC47 --- Specialist
+  UC48 --- Specialist
+  UC49 --- Specialist
+  UC50 --- Specialist
+  UC51 --- Specialist
+  UC52 --- Specialist
+  UC53 --- Specialist
+  UC54 --- Specialist
+  UC55 --- Specialist
+  UC56 --- Specialist
+  UC57 --- Seller
+  UC58 --- Seller
+  UC59 --- Seller
+  UC60 --- Seller
+  UC61 --- Seller
+  UC62 --- Seller
+  UC63 --- Seller
+  UC64 --- Seller
+  Parent -.->|"is a"| User
+  Specialist -.->|"is a"| User
+  Admin -.->|"is a"| User
+  Seller -.->|"is a"| Parent
+  classDef default fill:#FFFFFF,stroke:#333333,color:#111111
+  classDef actor fill:#FFE0A3,stroke:#333333,stroke-width:2px,color:#111111
+  style SYS fill:#FFFFFF,stroke:#333333,color:#111111
