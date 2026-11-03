@@ -1,0 +1,39 @@
+---
+title: "AD-06: After-sale - Refund"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
+flowchart LR
+  subgraph BUY["BUYER (Parent)"]
+    UA(("Buyer")):::actor
+    U2["Request refund<br/>(within refund window)"]
+  end
+  subgraph SYS["SYSTEM (Backend API)"]
+    B7["Duplicate purchase:<br/>auto refund request"]
+    B8["Story: revoke entitlement, remove from<br/>bookshelves, reverse seller earning.<br/>Plan: expire credit, cancel, back to Free"]
+    B13["422: seller already withdrew;<br/>refund stays pending, settle manually"]
+    BG{"Item granted access?<br/>(not a duplicate)"}
+    B15["Money back only: earlier purchase<br/>keeps access + seller earning"]
+    B12["Refund rejected,<br/>access kept"]
+  end
+  subgraph ADM["ADMIN"]
+    AA(("Admin")):::actor
+    A2{"Approve refund?"}
+    A3["Transfer money back manually,<br/>enter bank transaction ref"]
+  end
+
+  F3(["From AD-03:<br/>paid order / duplicate purchase"]):::ext
+  F3 --> U2
+  F3 -.-> B7
+
+  UA --> U2 --> A2
+  B7 --> A2
+  AA --> A2
+  A2 -- "Yes" --> A3 --> BG
+  BG -- "Yes" --> B8
+  BG -- "No: duplicate" --> B15
+  B8 -. "seller already withdrew" .-> B13
+  A2 -- "No (note)" --> B12
+
+  classDef default fill:#EEEEEE,stroke:#999999,color:#111111
+  classDef actor fill:#FFE0A3,stroke:#333333,stroke-width:2px,color:#111111
+  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111
