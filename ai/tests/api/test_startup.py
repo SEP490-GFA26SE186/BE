@@ -11,10 +11,10 @@ from app.config import get_settings
 from app.deps import get_llm_provider
 from app.main import app
 from app.providers.llm.gemini import GeminiLLMProvider
-from tests.conftest import TOKEN
-from tests.providers.test_gemini_provider import make_response, make_settings
-from tests.fixtures.llm_outputs import valid_output
 from app.schemas.story import StoryGenerateRequest
+from tests.conftest import TOKEN
+from tests.fixtures.llm_outputs import valid_output
+from tests.providers.test_gemini_provider import make_response, make_settings
 
 SAMPLE = Path(__file__).resolve().parents[2] / "docs" / "samples" / "story_request.json"
 H = {"X-Internal-Token": TOKEN}
@@ -31,7 +31,7 @@ def _clean_overrides():
 class RecordingProvider:
     """Stands in for GeminiLLMProvider inside lifespan; never touches the SDK."""
 
-    instances: list["RecordingProvider"] = []
+    instances: list["RecordingProvider"] = []  # noqa: RUF012 - shared on purpose: records every instance
     fail = False
 
     def __init__(self, settings, client=None) -> None:
@@ -71,9 +71,8 @@ def test_lifespan_gemini_verifies_once_and_shares_provider(recording) -> None:
 def test_lifespan_gemini_startup_fails_when_model_missing(recording) -> None:
     recording.fail = True
     app.dependency_overrides[get_settings] = lambda: make_settings()
-    with pytest.raises(RuntimeError, match="GEMINI_TEXT_MODEL"):
-        with TestClient(app):
-            pass
+    with pytest.raises(RuntimeError, match="GEMINI_TEXT_MODEL"), TestClient(app):
+        pass
 
 
 def test_get_llm_provider_reuses_one_instance(monkeypatch) -> None:

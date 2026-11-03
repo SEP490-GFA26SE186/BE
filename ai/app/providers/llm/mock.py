@@ -18,7 +18,14 @@ from app.errors import AiError
 from app.providers.llm.base import LLMResult, StoryLLMCall
 from app.schemas.analyze import StoryAnalyzeRequest
 from app.schemas.common import ForceCode
-from app.schemas.llm import LlmAnalyzeOutput, LlmCheckpoint, LlmOption, LlmPage, LlmScene, LlmStoryOutput
+from app.schemas.llm import (
+    LlmAnalyzeOutput,
+    LlmCheckpoint,
+    LlmOption,
+    LlmPage,
+    LlmScene,
+    LlmStoryOutput,
+)
 from app.schemas.story import CheckpointFrame, CheckpointType, Emotion, StoryGenerateRequest
 
 # Neutral clauses: no emotion word (the answer must not be spelled out on the page, docs/03),

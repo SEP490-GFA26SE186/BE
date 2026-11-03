@@ -59,7 +59,7 @@ class Topic(StrictModel):
     # Optional until Node sends them (task-10 contract); the prompt falls back to 5-8.
     age_min: PositiveInt | None = None
     age_max: PositiveInt | None = None
-    sub_skills: list[SubSkillIn] = []
+    sub_skills: list[SubSkillIn] = []  # noqa: RUF012 - pydantic copies field defaults
 
     @model_validator(mode="after")
     def _age_range_ordered(self) -> "Topic":
@@ -148,7 +148,7 @@ class FamilyBlock(StrictModel):
     moment: str | None = None  # tokenised; the hard moment found in the parent's story
     seed_event: str | None = None  # tokenised; small event the AI adds when there is none
     anchor_page: str
-    sub_skills: list[SubSkillIn] = []
+    sub_skills: list[SubSkillIn] = []  # noqa: RUF012 - pydantic copies field defaults
 
 
 class BlockedKeyword(StrictModel):

@@ -35,9 +35,9 @@ def test_render_never_contains_forbidden_terms(settings) -> None:
 
 # ---- Task 6: real prompt content -------------------------------------------------------------
 
-import re  # noqa: E402
+import re
 
-from tests.fixtures.frames import make_frame, make_limits  # noqa: E402
+from tests.fixtures.frames import make_frame, make_limits
 
 _ODD_LIMITS = make_limits(
     page_min_words=23,
@@ -114,8 +114,8 @@ def test_render_json_section_names_every_llm_field(settings) -> None:
 
 # ---- retry turn (spec 8.2) ----
 
-from app.core.prompt import render_retry_turn  # noqa: E402
-from app.core.validator import Issue, Severity  # noqa: E402
+from app.core.prompt import render_retry_turn
+from app.core.validator import Issue, Severity
 
 
 def test_retry_turn_lists_non_warn_details_and_reminds_ids() -> None:

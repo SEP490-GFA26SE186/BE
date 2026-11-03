@@ -179,7 +179,7 @@ def _retry_turns(first_text: str) -> list[Turn]:
 
 
 def _forced(force: str, length: str = "medium"):
-    return make_frame(length, **{"__force": force})
+    return make_frame(length, __force=force)
 
 
 async def test_mock_happy_path() -> None:
