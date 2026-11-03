@@ -647,7 +647,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Parent] Chuyển sang Chế độ Trẻ em (Kid Mode)',
         description: '**Quyền truy cập:** `parent` | `admin`.\nKích hoạt Chế độ Trẻ em cho một bé cụ thể, sinh ra token phiên làm việc `kid_session` giới hạn quyền.',
         security: [{ BearerAuth: [] }],
-        description: 'Bắt buộc phụ huynh phải có mã PIN. Cấp token phiên `kid_session` có phạm vi đọc truyện của riêng bé.',
         requestBody: {
           required: true,
           content: {
@@ -704,7 +703,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Kid Session | Parent] Thoát Chế độ Trẻ em về Chế độ Phụ huynh',
         description: '**Quyền truy cập:** Phiên đọc bé (`kid_session`) hoặc Phụ huynh.\nThoát khỏi Chế độ Trẻ em về Chế độ Phụ huynh bằng cách xác thực mã PIN thoát (4-6 chữ số).',
         security: [],
-        description: 'Nhập đúng mã PIN để đóng phiên đọc của bé và khôi phục quyền phụ huynh.',
         requestBody: {
           required: true,
           content: {
@@ -833,7 +831,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Parent] Tạo hồ sơ bé mới',
         description: '**Quyền truy cập:** `parent` | `admin`.\nTạo hồ sơ bé mới (tự động kiểm tra hạn ngạch gói cước, miễn phí tối đa 2 bé).',
         security: [{ BearerAuth: [] }],
-        description: 'Tạo hồ sơ cho bé. Kiểm tra giới hạn số lượng bé theo gói cước (mặc định miễn phí 2 bé).',
         requestBody: {
           required: true,
           content: {
@@ -984,7 +981,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Parent] Xóa hồ sơ bé (Soft delete)',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nXóa mềm hồ sơ bé và tự động thu hồi mọi phiên đọc truyện đang hoạt động.',
         security: [{ BearerAuth: [] }],
-        description: 'Xóa mềm hồ sơ bé và đồng thời thu hồi mọi token phiên Kid Session đang hoạt động của bé.',
         parameters: [
           {
             name: 'id',
@@ -1008,7 +1004,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Kid Session | Parent] Xem thống kê thời lượng sử dụng màn hình của bé',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thống kê thời lượng sử dụng màn hình trong ngày của bé, số phút còn lại và cảnh báo giờ đi ngủ.',
         security: [{ BearerAuth: [] }],
-        description: 'Truy vấn tổng thời lượng bé đã dùng trong ngày, so sánh với giới hạn quy định, tính toán thời gian còn lại.',
         parameters: [
           {
             name: 'id',

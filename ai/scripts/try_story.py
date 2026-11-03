@@ -48,26 +48,26 @@ from typing import Any
 AI_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(AI_DIR))
 
-from app.config import Settings  # noqa: E402
-from app.core.guards import assert_no_forbidden_terms  # noqa: E402
-from app.core.mapping import parse_llm_output  # noqa: E402
-from app.core.prompt import render_story_prompt  # noqa: E402
-from app.core.story import (  # noqa: E402
+from app.config import Settings
+from app.core.guards import assert_no_forbidden_terms
+from app.core.mapping import parse_llm_output
+from app.core.prompt import render_story_prompt
+from app.core.story import (
     _check,
     estimate_max_output_tokens,
     generate_story,
     request_max_output_tokens,
 )
-from app.core.text_utils import count_words  # noqa: E402
-from app.errors import AiError  # noqa: E402
-from app.providers.llm.base import LLMProvider, LLMResult, StoryLLMCall, Turn  # noqa: E402
-from app.providers.llm.claude import ClaudeLLMProvider  # noqa: E402
-from app.providers.llm.claude_code import ClaudeCodeLLMProvider  # noqa: E402
-from app.providers.llm.gemini import GeminiLLMProvider, _build_client  # noqa: E402
-from app.providers.llm.mock import MockLLMProvider  # noqa: E402
-from app.schemas.llm import LlmStoryOutput  # noqa: E402
-from app.schemas.common import ForceCode  # noqa: E402
-from app.schemas.story import StoryGenerateRequest  # noqa: E402
+from app.core.text_utils import count_words
+from app.errors import AiError
+from app.providers.llm.base import LLMProvider, LLMResult, StoryLLMCall, Turn
+from app.providers.llm.claude import ClaudeLLMProvider
+from app.providers.llm.claude_code import ClaudeCodeLLMProvider
+from app.providers.llm.gemini import GeminiLLMProvider, _build_client
+from app.providers.llm.mock import MockLLMProvider
+from app.schemas.common import ForceCode
+from app.schemas.llm import LlmStoryOutput
+from app.schemas.story import StoryGenerateRequest
 
 DEFAULT_SAMPLES = [
     AI_DIR / "docs" / "samples" / "story_request.json",
@@ -472,7 +472,7 @@ async def _confirmed_pipeline(
         # Same startup check as the service (credentials / CLI): fail before any sample.
         await inner.verify_model()
     llm = RecordingLLM(inner, models_client.models if models_client else None)
-    out_dir = OUT_DIR / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir = OUT_DIR / datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     summaries = []
     for path in samples:
@@ -501,7 +501,7 @@ async def _confirmed_pipeline(
 async def _confirmed(samples: list[Path], settings: Settings) -> None:
     models_client = RecordingClient(_build_client(settings))
     provider = GeminiLLMProvider(settings, client=models_client)
-    out_dir = OUT_DIR / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir = OUT_DIR / datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     summaries = []
     for path in samples:
