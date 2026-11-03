@@ -42,8 +42,3 @@ npm-debug.log*
 *.swo
 .DS_Store
 Thumbs.db
-
-# ---- bao cao capstone (ban .docx khong commit vao repo code) ----
-
-
-CLAUDE.md
