@@ -27,13 +27,13 @@ def load_content_rules_from(path: Path) -> ContentRules:
     """Parse and validate a rules file; a missing key or unknown emotion fails at load."""
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError("content_rules: top level must be a mapping")
+        raise ValueError("content_rules: top level must be a mapping")  # noqa: TRY004 - load errors are ValueError by contract
     for key in ("emotion_lexicon", "preachy_phrases"):
         if key not in data:
             raise ValueError(f"content_rules: missing key '{key}'")
     raw = data["emotion_lexicon"]
     if not isinstance(raw, dict):
-        raise ValueError("content_rules: emotion_lexicon must be a mapping")
+        raise ValueError("content_rules: emotion_lexicon must be a mapping")  # noqa: TRY004 - load errors are ValueError by contract
     valid = {e.value for e in Emotion}
     unknown = sorted(set(raw) - valid)
     if unknown:

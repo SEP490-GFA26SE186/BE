@@ -275,13 +275,12 @@ test('DELETE /stories/:id -> xoa mem; GET sau do -> 404', { skip }, async () => 
   assert.equal(res2.status, 404);
 });
 
-test('Route editor/generation da khai bao, tam tra 501', { skip }, async () => {
+// /generate da lam that (xem stories.generation.test.js); chi con publish-version tam tra 501.
+test('Route publish-version da khai bao, tam tra 501', { skip }, async () => {
   const f = await family();
   const story = await createStory(f);
   const res = await api.request('POST', `/stories/${story.id}/publish-version`, { token: f.token });
   assert.equal(res.status, 501);
-  const res2 = await api.request('POST', `/stories/${story.id}/generate`, { token: f.token });
-  assert.equal(res2.status, 501);
 });
 
 test('PUT /stories/:id/characters: bo nhan vat con nam trong situation -> 422, khong doi gi', { skip }, async () => {

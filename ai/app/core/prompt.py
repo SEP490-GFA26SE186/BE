@@ -11,8 +11,8 @@ from string import Template
 import yaml
 
 from app.config import Settings
-from app.schemas.analyze import StoryAnalyzeRequest
 from app.core.validator import Issue, Severity
+from app.schemas.analyze import StoryAnalyzeRequest
 from app.schemas.story import CheckpointFrame, CheckpointType, StoryGenerateRequest, SubSkillIn
 
 # One prompt for every AI story (family-story spec 6.2). story.v1.md / story.v2.md stay in the

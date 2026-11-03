@@ -30,8 +30,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.core.image_prompts import NEGATIVE, image_style, portrait_prompt, scene_prompt  # noqa: E402
-from app.providers.image.cloudflare import (  # noqa: E402
+from app.core.image_prompts import (
+    NEGATIVE,
+    image_style,
+    portrait_prompt,
+    scene_prompt,
+)
+from app.providers.image.cloudflare import (
     PORTRAIT_SIZE,
     CloudflareImageError,
     CloudflareWorkersAI,
@@ -94,7 +99,7 @@ async def run_profile(client, profile, appearance, fixture, stories, args, budge
         try:
             res = await client.generate(profile, prompt, width=w, height=h, seed=seed,
                                         negative=NEGATIVE, references=refs)
-        except (CloudflareImageError, Exception) as e:  # one failure must not stop the comparison
+        except (CloudflareImageError, Exception) as e:  # noqa: BLE001 - one failure must not stop the comparison
             result["errors"].append({"kind": kind, "label": label, "error": str(e)[:300]})
             print(f"  [{profile.name}] {label}: ERROR {str(e)[:120]}")
             return None
@@ -224,7 +229,7 @@ def main() -> None:
     if not account or not token:
         sys.exit("CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN not found (env, ai/.env or BE/.env)")
 
-    out_dir = OUT / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir = OUT / datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     appearance = {c["id"]: c["description"] for c in fixture["characters"]}
     budget = Budget(args.max_calls)

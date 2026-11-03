@@ -165,12 +165,16 @@ test('HTTP 500 khong body -> PROVIDER_ERROR, retryable', async () => {
 });
 
 test('het gio (AI_TIMEOUT_MS_STORY_TEXT=50) -> TIMEOUT, retryable', async () => {
+  // Timer cua AbortSignal.timeout() la unref: fetch gia khong co socket nen phai tu giu event loop,
+  // neu khong Node 22 thay loop rong, ket thuc file va danh dau cac test con lai la cancelled.
   const restore = stubFetch(
     (url, options) =>
       new Promise((resolve, reject) => {
-        options.signal.addEventListener('abort', () =>
-          reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' })),
-        );
+        const keepAlive = setInterval(() => {}, 1000);
+        options.signal.addEventListener('abort', () => {
+          clearInterval(keepAlive);
+          reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
+        });
       }),
   );
   try {
