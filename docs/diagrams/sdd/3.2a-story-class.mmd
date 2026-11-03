@@ -1,17 +1,18 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
+  direction TB
   class StoriesRoutes {
     <<router>>
-    +POST /api/v1/stories/analyze [auth, authorize parent]
-    +POST /api/v1/stories [auth]
-    +GET /api/v1/stories [auth]
-    +GET|PUT|DELETE /api/v1/stories/:id [auth]
-    +PUT /api/v1/stories/:id/characters [auth]
-    +POST /api/v1/stories/:id/pages [auth]
-    +PUT|DELETE /api/v1/stories/:id/pages/:pageId [auth]
-    +POST /api/v1/stories/:id/checkpoints [auth]
-    +PUT|DELETE /api/v1/stories/:id/checkpoints/:cpId [auth]
+    +POST /stories/analyze [auth, authorize parent]
+    +POST /stories [auth]
+    +GET /stories [auth]
+    +GET|PUT|DELETE /stories/:id [auth]
+    +PUT /stories/:id/characters [auth]
+    +POST /stories/:id/pages [auth]
+    +PUT|DELETE /stories/:id/pages/:pageId [auth]
+    +POST /stories/:id/checkpoints [auth]
+    +PUT|DELETE /stories/:id/checkpoints/:cpId [auth]
   }
-
   class StoriesController {
     <<controller>>
     +analyzeStory(req, res) void
@@ -28,7 +29,10 @@ classDiagram
     +updateCheckpoint(req, res) void
     +deleteCheckpoint(req, res) void
   }
-
+  class StoriesAnalysisService {
+    <<service>>
+    +analyzeStory(user, body) Object
+  }
   class StoriesService {
     <<service>>
     +createStory(user, data) Object
@@ -41,7 +45,6 @@ classDiagram
     +tokenizeOrReject(text, nameContext, path) String
     +assertNoBlockedKeywords(db, storyId, paths) void
   }
-
   class StoriesEditorService {
     <<service>>
     +addPage(user, storyId, body) Object
@@ -51,28 +54,6 @@ classDiagram
     +updateCheckpoint(user, storyId, checkpointId, body) Object
     +deleteCheckpoint(user, storyId, checkpointId) Object
   }
-
-  class StoriesAnalysisService {
-    <<service>>
-    +analyzeStory(user, body) Object
-  }
-
-  class StoriesAccess {
-    <<policy>>
-    +loadStoryForRead(user, storyId) Story
-    +loadOwnedStory(user, storyId) Story
-    +loadStoryForWrite(user, storyId) Story
-    +lockForWrite(tx, user, storyId) Story
-  }
-
-  class StoriesFamilyStore {
-    <<store>>
-    +loadMainChild(db, parentId, storyCharacters) Object
-    +loadUsableCatalog(db, hasSecondary, child) Object
-    +loadConfirmedSubSkills(db, ids, hasSecondary) Object
-    +loadChildSubSkillLevels(db, childId, subSkillIds) Object
-  }
-
   class StoryRules {
     <<utility>>
     +loadStorySettings(db) Object
@@ -85,17 +66,14 @@ classDiagram
     +assertCustomLayout(layout, limits) void
     +storyStatusFromPages(pages) StoryStatus
   }
-
   class AiClient {
     <<client>>
     +callAi(jobName, payload) Object
   }
-
   class AiService {
     <<external>>
     +POST /v1/story/analyze
   }
-
   class Story {
     <<entity>>
     -UUID id
@@ -112,7 +90,6 @@ classDiagram
     -boolean useTts
     -DateTime deletedAt
   }
-
   class StoryPage {
     <<entity>>
     -UUID id
@@ -121,7 +98,6 @@ classDiagram
     -String contentText
     -ContentOrigin origin
   }
-
   class StoryCheckpoint {
     <<entity>>
     -UUID id
@@ -134,7 +110,6 @@ classDiagram
     -UUID subSkillId
     -ContentOrigin origin
   }
-
   class CheckpointOption {
     <<entity>>
     -UUID id
@@ -144,7 +119,6 @@ classDiagram
     -boolean isCorrect
     -String feedback
   }
-
   class StoryCharacter {
     <<entity>>
     -UUID storyId
@@ -154,91 +128,18 @@ classDiagram
     -boolean isMain
   }
 
-  class StorySubSkill {
-    <<entity>>
-    -UUID storyId
-    -UUID subSkillId
-    -StorySubSkillSource source
-    -int position
-  }
-
-  class Topic {
-    <<entity>>
-    -UUID id
-    -String title
-    -String guidance
-    -boolean isActive
-  }
-
-  class Character {
-    <<entity>>
-    -UUID id
-    -UUID parentId
-    -String name
-  }
-
-  class User {
-    <<entity>>
-    -UUID id
-    -DateTime aiBlockedUntil
-  }
-
-  class StoryEntry {
-    <<enumeration>>
-    topic
-    family
-    handwritten
-  }
-
-  class StoryLength {
-    <<enumeration>>
-    short
-    medium
-    long
-    custom
-  }
-
-  class StoryStatus {
-    <<enumeration>>
-    draft
-    generating
-    ready
-  }
-
-  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
   StoriesRoutes ..> StoriesController : delegates
   StoriesController ..> StoriesAnalysisService : analyze family story
   StoriesController ..> StoriesService : create / update story
   StoriesController ..> StoriesEditorService : edit pages / checkpoints
-  StoriesAnalysisService ..> User : checks aiBlockedUntil
-  StoriesAnalysisService ..> StoriesFamilyStore : loads child sub-skill levels
-  StoriesAnalysisService ..> StoryRules : tokenizes names / signs analysis token
+  StoriesAnalysisService ..> StoryRules : tokenizes names / signs token
   StoriesAnalysisService ..> AiClient : calls synchronously
   AiClient ..> AiService : HTTP request
-  StoriesService ..> StoriesAccess : checks ownership
-  StoriesService ..> StoriesFamilyStore : loads confirmed sub-skills
   StoriesService ..> StoryRules : verifies token / builds skeleton
-  StoriesService ..> Topic : reads template
   StoriesService ..> Story : creates skeleton
-  StoriesEditorService ..> StoriesAccess : locks story for write
-  StoriesEditorService ..> StoriesService : tokenizes / checks keywords
-  StoriesEditorService ..> StoryRules : custom layout / recomputes status
   StoriesEditorService ..> StoryPage : edits
   StoriesEditorService ..> StoryCheckpoint : edits
-  StoriesEditorService ..> CheckpointOption : upserts
-
-  %% Quan hệ dữ liệu: khóa ngoại trong schema.prisma
-  User "1" --> "0..*" Story : owns
-  Topic "0..1" --> "0..*" Story : template of
   Story "1" *-- "1..*" StoryPage : pages
   Story "1" *-- "0..*" StoryCheckpoint : checkpoints
-  StoryPage "1" --> "0..1" StoryCheckpoint : afterPage
   StoryCheckpoint "1" *-- "0..*" CheckpointOption : options
   Story "1" *-- "1..*" StoryCharacter : characters
-  Character "0..1" --> "0..*" StoryCharacter : played as
-  Story "1" *-- "0..*" StorySubSkill : family sub-skills
-  Story --> StoryEntry
-  Story --> StoryLength
-  Story --> StoryStatus
-
-  note "Ghi chú<br/>- 3 lối vào: topic = chuyện mẫu (bắt buộc chọn Topic), family = kể chuyện nhà mình, handwritten = tự viết (length custom).<br/>- family: gọi analyze trước (AI đồng bộ, không trừ credit, giới hạn lượt/ngày) -> nhận analysisToken HMAC sống 2h -> createStory kiểm token.<br/>- createStory dựng khung truyện: trang + điểm dừng rỗng theo độ dài, status = draft.<br/>- Tên thật được thay bằng token (vd {NV1}) khi lưu; từ khoá bị chặn -> 422.<br/>- Sửa trang / điểm dừng: chữ do AI viết mà phụ huynh sửa -> origin = ai_edited; status tính lại từ các trang.<br/>- Mỗi trang gắn một StoryScene (xem 3.3). Sinh chữ bằng AI: xem 3.2b."

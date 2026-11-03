@@ -13,11 +13,13 @@ sequenceDiagram
   C->>+WS: requestWithdrawal(user, amountVnd)
   WS->>DB: SELECT seller_profiles (approved, bank account), market.min_withdrawal_vnd
   DB-->>WS: SellerProfile, settings
-  alt no bank / bank changed < 24 h / amount < minimum
+  alt seller not approved
+    WS-->>C: ApiError 403
+  else no bank / bank changed < 24 h / amount < minimum
     WS-->>C: ApiError 422
   else ok
     WS->>DB: BEGIN, SELECT seller_profiles FOR UPDATE
-    WS->>DB: no open request? INSERT withdrawal_requests (requested, bank snapshot)
+    WS->>DB: open request exists? 409 (rollback), else INSERT withdrawal_requests (requested, bank snapshot)
     WS->>+EL: moveEarning(withdrawal_hold: available -> locked)
     EL->>DB: SELECT wallets FOR UPDATE, INSERT wallet_ledger
     EL-->>-WS: ok / 422 balance too low (rollback)

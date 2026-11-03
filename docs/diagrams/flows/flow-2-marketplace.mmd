@@ -14,7 +14,7 @@ flowchart LR
   end
   subgraph SPEC["SPECIALIST"]
     MA(("Specialist")):::actor
-    M0{"Approve seller?<br/>(Specialist or Admin)"}
+    M0{"Approve seller?<br/>(Specialist)"}
     M1["Claim review (narration ready),<br/>view 100% pages,<br/>check pedagogy checklist on web"]
     M2{"Decision?"}
   end
@@ -60,7 +60,7 @@ flowchart LR
   UA --> U0 --> U1 --> B3
   B3 -- "Price 0: paid now" --> B8 --> U2
   B3 -- "Price > 0" --> Y1 --> B4
-  B4 -- "No: expired / failed" --> U1
+  B4 -- "No: order cancelled /<br/>expired (15 min)" --> U1
   B4 -- "Yes" --> BD
   BD -- "No" --> B5 --> U2 --> U3
   BD -- "Yes: no delivery,<br/>auto refund request" --> F3
@@ -70,6 +70,7 @@ flowchart LR
   AA --> A1
   A1 -- "Yes" --> A2 --> E4
   A1 -- "No (reason): amount released" --> E3
+  E3 -. "Seller cancels while requested:<br/>amount released" .-> E3
 
   M2 -. "rejected: optional strike" .-> F3(["Flow 3: Trust & Safety"]):::ext
   E2 -. "reports, refunds" .-> F3

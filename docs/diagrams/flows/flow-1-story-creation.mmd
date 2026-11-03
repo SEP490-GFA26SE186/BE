@@ -9,7 +9,7 @@ flowchart LR
   end
   subgraph SPEC["SPECIALIST (prerequisite)"]
     SA(("Specialist")):::actor
-    S1["Adjust CASEL sub-skills, publish<br/>question templates + story templates"]:::ext
+    S1["Adjust CASEL sub-skills, publish<br/>question templates + model stories"]:::ext
   end
   subgraph PAR["PARENT"]
     PA(("Parent")):::actor
@@ -61,7 +61,7 @@ flowchart LR
   PA --> P00
   P00 -- "No" --> P0 --> P1
   P00 -- "Yes" --> P1
-  P1 -- "Story template" --> B2
+  P1 -- "Model story" --> B2
   P1 -- "Family story" --> P2 --> B1 --> I1 --> P3 --> B2
   P1 -- "Handwritten" --> BH --> P7
   B2 --> P4 --> B3

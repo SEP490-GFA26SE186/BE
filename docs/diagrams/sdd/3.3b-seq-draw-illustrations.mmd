@@ -1,5 +1,4 @@
 ---
-title: "Sequence Diagram - Draw Story Illustrations"
 config:
   theme: neutral
   themeVariables:
@@ -96,8 +95,8 @@ sequenceDiagram
   W->>R: POST /api/v1/stories/:id/scenes/:sceneId/image
   R->>C: redrawScene(req, res)
   C->>IS: redrawScene(user, storyId, sceneId)
-  alt scene not found / no description / already drawing
-    IS-->>C: ApiError 404 / 422 / 409
+  alt scene not found / no description / already drawing / not enough credit
+    IS-->>C: ApiError 404 / 422 / 409 / 402
     C-->>W: error
   else ok
     IS->>IS: queueStoryImages(storyId, [sceneId]) (same as step 1)

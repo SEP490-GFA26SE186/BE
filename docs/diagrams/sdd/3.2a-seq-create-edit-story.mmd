@@ -1,5 +1,4 @@
 ---
-title: "Sequence Diagram - Create and Edit a Story"
 config:
   theme: neutral
   themeVariables:
@@ -43,7 +42,7 @@ sequenceDiagram
       AS-->>C: ApiError 429
       C-->>W: 429 No analyses left today
     else ok
-      AS->>FS: loadMainChild, loadUsableCatalog, loadChildSubSkillLevels
+      AS->>FS: loadMainChild, loadUsableCatalog, loadChildSubSkillLevels (no usable sub-skill -> 422)
       FS->>DB: SELECT child, sub-skills with usable questions, child levels
       AS->>DB: INSERT ai_requests (story_analysis, processing, 0 credit)
       AS->>AI: callAi(story_analysis, payload)

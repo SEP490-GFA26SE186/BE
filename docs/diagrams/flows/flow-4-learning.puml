@@ -75,8 +75,8 @@ repeat while (Correct PIN?) is (no: attempts left,\n5 wrong = locked 15 min) not
 |Parent|
 :Open EQ report of the child;
 |System|
-:Level per sub-skill from first-play scored answers\n(last 5, min 3, thresholds 0.5 / 0.8),\ncompetency = lowest level, suggested story templates;
+:Level per sub-skill from first-play scored answers\n(last 5, min 3, thresholds 0.5 / 0.8),\ncompetency = lowest level, suggested model stories;
 |Parent|
-:Talk with the child using suggested prompts,\npick the next story template;
+:Talk with the child using suggested prompts,\npick the next model story;
 stop
 @enduml

@@ -1,52 +1,24 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
 classDiagram
+  direction TB
   class AuthRoutes {
     <<router>>
-    +POST /api/v1/auth/register
-    +POST /api/v1/auth/login
-    +POST /api/v1/auth/refresh-tokens
-    +POST /api/v1/auth/logout
-    +GET /api/v1/auth/me [auth]
-    +POST /api/v1/auth/forgot-password
-    +POST /api/v1/auth/reset-password
-    +PUT /api/v1/auth/change-password [auth]
-    +POST /api/v1/auth/send-verification-email [auth]
-    +POST /api/v1/auth/verify-email [auth]
+    +POST /auth/register
+    +POST /auth/login
+    +POST /auth/refresh-tokens
+    +POST /auth/logout
+    +GET /auth/me [auth]
+    +POST /auth/forgot-password
+    +POST /auth/reset-password
+    +PUT /auth/change-password [auth]
+    +POST /auth/send-verification-email [auth]
+    +POST /auth/verify-email [auth]
   }
-
-  class ProtectedRoutes {
-    <<router>>
-    +admin.routes [auth, authorize admin]
-    +content-library.routes [auth, authorize admin, specialist]
-    +billing.routes [auth, authorize parent]
-  }
-
-  class ValidateMiddleware {
-    <<middleware>>
-    +validate(schema) Function
-  }
-
-  class AuthValidation {
-    <<zod schema>>
-    +ZodObject register
-    +ZodObject login
-    +ZodObject refreshTokens
-    +ZodObject logout
-    +ZodObject forgotPassword
-    +ZodObject resetPassword
-    +ZodObject changePassword
-    +ZodObject verifyEmail
-  }
-
   class AuthMiddleware {
     <<middleware>>
     +auth(req, res, next) void
-  }
-
-  class AuthorizeMiddleware {
-    <<middleware>>
     +authorize(allowedRoles) Function
   }
-
   class AuthController {
     <<controller>>
     +register(req, res) void
@@ -60,7 +32,6 @@ classDiagram
     +sendVerificationEmail(req, res) void
     +verifyEmail(req, res) void
   }
-
   class AuthService {
     <<service>>
     +register(data) Object
@@ -74,7 +45,6 @@ classDiagram
     +sendVerificationEmail(userId) Object
     +verifyEmail(rawToken, userId) Object
   }
-
   class TokenService {
     <<service>>
     +hashToken(token) String
@@ -87,41 +57,16 @@ classDiagram
     +generatePasswordResetToken(userId) String
     +resetPasswordWithToken(rawToken, passwordHash) String
   }
-
   class EmailService {
     <<service>>
     +sendEmail(to, toName, subject, text, html) Object
     +sendVerificationEmail(to, token, username) void
     +sendPasswordResetEmail(to, token, username) void
   }
-
-  class BillingStore {
-    <<store>>
-    +ensureFreeSubscription(tx, parentId) Object
-  }
-
-  class Bcrypt {
-    <<library>>
-    +hash(plain, saltRounds) String
-    +compare(plain, hash) boolean
-  }
-
-  class JsonWebToken {
-    <<library>>
-    +sign(payload, secret, options) String
-    +verify(token, secret) Object
-  }
-
-  class Brevo {
+  class EmailProvider {
     <<external>>
-    +POST /v3/smtp/email
+    +Brevo API, SMTP as fallback
   }
-
-  class SmtpServer {
-    <<external>>
-    +sendMail(message)
-  }
-
   class User {
     <<entity>>
     -UUID id
@@ -136,14 +81,6 @@ classDiagram
     -boolean isActive
     -DateTime deletedAt
   }
-
-  class Wallet {
-    <<entity>>
-    -UUID userId
-    -int creditBalance
-    -BigInt earningAvailableVnd
-  }
-
   class AuthToken {
     <<entity>>
     -UUID id
@@ -155,48 +92,14 @@ classDiagram
     -DateTime consumedAt
   }
 
-  class UserRole {
-    <<enumeration>>
-    admin
-    specialist
-    parent
-  }
-
-  class AuthTokenType {
-    <<enumeration>>
-    refresh
-    email_verify
-    password_reset
-    kid_session
-  }
-
-  %% Phụ thuộc (dependency): lớp này gọi / dùng lớp kia
-  AuthRoutes ..> ValidateMiddleware : registers
-  AuthRoutes ..> AuthMiddleware : registers
+  AuthRoutes ..> AuthMiddleware : auth / authorize
   AuthRoutes ..> AuthController : delegates
-  ProtectedRoutes ..> AuthMiddleware : registers
-  ProtectedRoutes ..> AuthorizeMiddleware : registers
-  ValidateMiddleware ..> AuthValidation : parses request with
-  AuthMiddleware ..> JsonWebToken : verifies access token
-  AuthMiddleware ..> User : loads req.user
-  AuthorizeMiddleware ..> UserRole : checks req.user.role
   AuthController ..> AuthService : uses
   AuthService ..> TokenService : issues / revokes tokens
-  AuthService ..> Bcrypt : hashes / compares password
   AuthService ..> EmailService : sends verify / reset email
-  AuthService ..> BillingStore : creates free plan on register
+  EmailService ..> EmailProvider : sends email
+  AuthMiddleware ..> User : loads req.user
   AuthService ..> User : manages users
-  AuthService ..> Wallet : creates wallet on register
-  TokenService ..> JsonWebToken : signs access token
   TokenService ..> AuthToken : persists token hash
-  EmailService ..> Brevo : sends email
-  EmailService ..> SmtpServer : sends email (fallback)
-
-  %% Quan hệ dữ liệu: khóa ngoại trong schema.prisma
-  User "1" *-- "0..*" AuthToken : owns (onDelete Cascade)
-  User "1" --> "0..1" Wallet : has
+  User "1" *-- "0..*" AuthToken : owns
   AuthToken "0..*" --> "0..1" AuthToken : replacedBy
-  User --> UserRole : has
-  AuthToken --> AuthTokenType : has
-
-  note "Ghi chú<br/>- Access token: JWT {sub, role}, hết hạn 15m.<br/>- Refresh token: randomBytes(40), hết hạn 7d, xoay vòng (replacedBy).<br/>- Refresh / email_verify / password_reset lưu dạng SHA-256 (tokenHash).<br/>- Xác thực email bằng mã (không phải link): mã gửi qua email, hiệu lực 24h, người dùng dán mã trên web; phải đăng nhập, mã của tài khoản khác -> 400; gửi lại cách nhau tối thiểu 60s (sớm hơn -> 429).<br/>- Mật khẩu băm bcrypt cost 10.<br/>- auth: thiếu/sai token -> 401; token kid_session -> 403.<br/>- authorize: sai vai trò -> 403.<br/>- Không có tầng Repository: service gọi thẳng Prisma."

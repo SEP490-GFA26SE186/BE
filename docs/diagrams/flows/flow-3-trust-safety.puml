@@ -41,7 +41,7 @@ end split
 :Claim the review, view all pages;
 if (Violation?) then (no)
   |System|
-  :Keep: listing stays / returns to published\n(audit never suspends it), open reports closed;
+  :Keep: listing stays / returns to published\n(audit never suspends it), open reports dismissed;
   stop
 else (yes)
   |System|

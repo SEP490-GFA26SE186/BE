@@ -21,7 +21,7 @@ skinparam NoteBorderColor #555555
 start
 note right
   Prerequisite: Specialist has published sub-skills,
-  question templates and story templates;
+  question templates and model stories;
   Admin has set plans and AI credit prices.
 end note
 if (Child profile and characters exist?) then (no)
@@ -38,8 +38,8 @@ case (Family story)
   :Analyze the story (synchronous, 0 credit):\nhard moment or seed event + 1-2 sub-skills;
   |Parent|
   :Confirm summary and sub-skills\n(change skills or "story only, no scoring");
-case (Story template)
-  :Choose a story template (topic),\ncharacters and length;
+case (Model story)
+  :Choose a model story (topic),\ncharacters and length;
 case (Handwritten)
   :Choose "write it myself";
 endswitch

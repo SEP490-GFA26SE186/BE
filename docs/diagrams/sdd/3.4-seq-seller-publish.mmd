@@ -1,5 +1,4 @@
 ---
-title: "Sequence Diagram - Become a Seller and Publish a Story"
 config:
   theme: neutral
   themeVariables:
@@ -93,7 +92,7 @@ sequenceDiagram
       PS->>NS: prepareNarration(tx, copyId)
       NS->>DB: queue narration clips for remaining segments
       PS->>DB: COMMIT
-      PS->>NS: dispatchNarration(jobs) (see 3.3a)
+      PS->>NS: dispatchNarration(jobs) (see 3.4)
       PS-->>C: listing + narration progress
       C-->>W: 201 listing submitted
       W-->>U: Waiting for moderation

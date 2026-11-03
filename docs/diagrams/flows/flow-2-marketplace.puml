@@ -1,5 +1,5 @@
 @startuml flow-2-marketplace
-title Flow 2: Marketplace - Publish, Buy & Payout\n(Seller and Buyer are Parent accounts; Specialist steps may also be done by Admin)
+title Flow 2: Marketplace - Publish, Buy & Payout\n(Seller and Buyer are Parent accounts)
 skinparam defaultFontName Arial
 skinparam shadowing false
 skinparam ArrowColor #000000
@@ -60,13 +60,19 @@ endif
 |System|
 :Create order, snapshot price\nand 80% seller share;
 if (Price = 0?) then (no)
+  |System|
+  if (payOS link created?) then (no)
+    :Order failed, try again later;
+    stop
+  else (yes)
+  endif
   |Buyer|
   :Pay by VietQR (link valid 15 min);
   |payOS|
-  :Send signed webhook;
+  :Send signed webhook\n(or return page asks payOS);
   |System|
-  if (Signature, code and amount valid?) then (no)
-    :Order failed / expired, nothing delivered;
+  if (Paid, signature and amount valid?) then (no)
+    :Order stays pending: cancelled if the buyer\ncancels, expired after 15 min, nothing delivered;
     stop
   else (yes)
   endif
@@ -75,23 +81,27 @@ endif
 |System|
 :Order paid (conditional update, no double delivery);
 if (Buyer already owns this story?) then (yes)
-  :Deliver nothing, open a refund request\nautomatically (Flow 3b);
+  :Deliver nothing; if paid, open a refund\nrequest automatically (Flow 3b);
   stop
 else (no)
 endif
 fork
-  :Grant entitlement, purchase count + 1;
+  :Grant entitlement,\npurchase / free-claim count + 1;
   |Buyer|
   :Add the story to a child's bookshelf\n(child reads it in Flow 4);
   :Rate the story after a child finished it;
 fork again
   |System|
-  :Record seller earning as pending (80%);
+  :Paid order only: record seller\nearning as pending (80%);
   :Cron: move to available after hold days\n(skipped while a refund is pending);
   |Seller|
   :Request withdrawal\n(bank set > 24 h ago, >= 50,000 VND);
   |System|
   :Hold the amount (available to locked);
+  note right
+    While still requested, the Seller may cancel:
+    withdrawal cancelled, amount back to available.
+  end note
   |Admin|
   if (Pay the seller?) then (yes)
     :Transfer by bank app,\nmark paid with transaction ref;

@@ -57,9 +57,9 @@ flowchart LR
   B1 -- "Yes" --> B2 --> M1
   B3 --> M1
   MA --> M1 --> M2
-  M2 -- "Keep: stays / back<br/>to published" --> E1
+  M2 -- "Keep: stays / back to published,<br/>open reports dismissed" --> E1
   MA -.-> M5 -.-> B4
-  M2 -- "Taken down: archived" --> B4
+  M2 -- "Taken down: archived,<br/>open reports resolved" --> B4
   B4 --> B5
   B5 -- "Yes" --> B6 --> E2
   B5 -- "No" --> E2

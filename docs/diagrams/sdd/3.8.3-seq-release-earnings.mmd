@@ -20,4 +20,3 @@ sequenceDiagram
     EL->>DB: COMMIT
   end
   EL-->>-CR: released count
-  Note over EL,DB: Deterministic idempotency key makes two workers running together safe

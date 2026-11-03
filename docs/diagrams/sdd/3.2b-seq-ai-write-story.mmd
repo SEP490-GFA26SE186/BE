@@ -1,5 +1,4 @@
 ---
-title: "Sequence Diagram - Write a Story with AI"
 config:
   theme: neutral
   themeVariables:
@@ -78,7 +77,7 @@ sequenceDiagram
     ST->>CL: consumeCredit(userId, aiRequestId)
     CL->>DB: INSERT wallet_ledger (credit_consume), COMMIT
     opt story.useAiImage
-      P->>P: queueStoryImages(storyId) (see 3.3b)
+      P->>P: queueStoryImages(storyId) (see 3.5)
     end
   else AI error / content blocked / retries exhausted
     P->>ST: finalizeFailure(failed or blocked)

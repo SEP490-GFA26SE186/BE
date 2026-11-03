@@ -1,5 +1,4 @@
 ---
-title: "State Diagram - AI Request"
 config:
   theme: neutral
   themeVariables:
@@ -25,8 +24,3 @@ stateDiagram-v2
   SUCCEEDED --> [*]
   FAILED --> [*]
   BLOCKED --> [*]
-
-  note right of PROCESSING
-    Stays PROCESSING when:
-    - Temporary AI error: job retried
-  end note
