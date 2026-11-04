@@ -5,5 +5,6 @@ stateDiagram-v2
   Appealed --> Revoked : Admin approves appeal
   Appealed --> Active : Admin rejects appeal
   Active --> Expired : strike_valid_days passed
+  Appealed --> Expired : strike_valid_days passed [appeal still pending]
   Revoked --> [*]
   Expired --> [*]
