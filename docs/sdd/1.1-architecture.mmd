@@ -11,6 +11,7 @@ flowchart LR
   DB[(PostgreSQL)]
   subgraph AISvc [Python AI service - FastAPI, stateless]
     STORY[/v1/story/generate/]
+    ANALYZE[/v1/story/analyze/]
     TTS[/v1/tts/synthesize/]
     IMG[/v1/images/portrait, scene/]
   end
@@ -30,7 +31,9 @@ flowchart LR
   WK -->|internal token| STORY
   WK --> TTS
   WK --> IMG
+  API -->|internal HTTP, sync| ANALYZE
   STORY --> LLM
+  ANALYZE --> LLM
   TTS --> VN
   IMG --> CF
   TTS --> CLD
