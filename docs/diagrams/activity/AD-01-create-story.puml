@@ -2,6 +2,7 @@
 title AD-01: Create a Personalised Story with AI
 skinparam defaultFontName Arial
 skinparam shadowing false
+skinparam conditionStyle InsideDiamond
 skinparam ArrowColor #000000
 skinparam ActivityBackgroundColor #FFFFFF
 skinparam ActivityBorderColor #000000

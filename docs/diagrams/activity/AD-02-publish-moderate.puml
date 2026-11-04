@@ -2,6 +2,7 @@
 title AD-02: Publish and Moderate a Story\n(Seller is a Parent account)
 skinparam defaultFontName Arial
 skinparam shadowing false
+skinparam conditionStyle InsideDiamond
 skinparam ArrowColor #000000
 skinparam ActivityBackgroundColor #FFFFFF
 skinparam ActivityBorderColor #000000

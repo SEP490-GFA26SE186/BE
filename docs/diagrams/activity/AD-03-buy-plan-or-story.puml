@@ -2,6 +2,7 @@
 title AD-03: Buy a Plan or a Story, Seller Payout\n(Buyer and Seller are Parent accounts)
 skinparam defaultFontName Arial
 skinparam shadowing false
+skinparam conditionStyle InsideDiamond
 skinparam ArrowColor #000000
 skinparam ActivityBackgroundColor #FFFFFF
 skinparam ActivityBorderColor #000000

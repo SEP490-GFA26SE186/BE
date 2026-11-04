@@ -2,6 +2,7 @@
 title AD-06: After-sale - Refund
 skinparam defaultFontName Arial
 skinparam shadowing false
+skinparam conditionStyle InsideDiamond
 skinparam ArrowColor #000000
 skinparam ActivityBackgroundColor #FFFFFF
 skinparam ActivityBorderColor #000000

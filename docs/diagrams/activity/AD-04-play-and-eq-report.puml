@@ -2,6 +2,7 @@
 title AD-04: Child Plays a Story, Parent Reads the EQ Report
 skinparam defaultFontName Arial
 skinparam shadowing false
+skinparam conditionStyle InsideDiamond
 skinparam ArrowColor #000000
 skinparam ActivityBackgroundColor #FFFFFF
 skinparam ActivityBorderColor #000000

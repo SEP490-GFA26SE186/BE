@@ -6,7 +6,7 @@ flowchart TB
   subgraph L_B["Buyer"]
     direction TB
     start((" "))
-    d_type{{"Buy a plan or a story?"}}
+    d_type{"Buy a plan<br/>or a story?"}
     a_plan("Choose a plan on Plans & Credit (or from the paywall in AD-01)")
     a_browse("Browse marketplace (competency, age, price, sort)")
     a_buyone("Buy one published story (AD-02)")
@@ -20,15 +20,15 @@ flowchart TB
     direction TB
     s_plan("Create order, snapshot plan price")
     s_story("Create order, snapshot price and 80% seller share")
-    d_free{{"Price = 0?"}}
-    d_link{{"payOS link created?"}}
+    d_free{"Price = 0?"}
+    d_link{"payOS link<br/>created?"}
     s_failed("Order failed, try again later")
     s_pending("Order stays pending: cancelled if the buyer cancels, expired after 15 min, nothing delivered")
-    d_valid{{"Paid, signature and amount valid?"}}
+    d_valid{"Paid, signature and<br/>amount valid?"}
     s_paid("Order paid (conditional update, no double delivery)")
     s_period("Close the active plan period, start the new period and grant this month's credits")
-    d_item{{"Item type?"}}
-    d_owns{{"Buyer already owns this story?"}}
+    d_item{"Item type?"}
+    d_owns{"Buyer already owns<br/>this story?"}
     s_dup("Deliver nothing; if paid, open a refund request automatically (AD-06)")
     fork@{ shape: fork }
     s_entitle("Grant entitlement, purchase / free-claim count + 1")
@@ -50,7 +50,7 @@ flowchart TB
   end
   subgraph L_A["Admin"]
     direction TB
-    d_pay{{"Pay the seller?"}}
+    d_pay{"Pay the seller?"}
     a_transfer("Transfer by bank app, mark paid with transaction ref")
     a_reject("Reject with reason")
   end

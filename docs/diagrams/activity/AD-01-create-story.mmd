@@ -6,10 +6,10 @@ flowchart TB
   subgraph L_P["Parent"]
     direction TB
     start((" "))
-    d_exist{{"Child profile and characters exist?"}}
+    d_exist{"Child profile and<br/>characters exist?"}
     a_create("Create child profile and family characters")
     a_choose("Choose an entry")
-    d_entry{{"Entry?"}}
+    d_entry{"Entry?"}
     a_hand("Choose #quot;write it myself#quot;")
     a_model("Choose a model story (topic), characters and length")
     a_family("Tell the family story, choose characters and length")
@@ -18,11 +18,11 @@ flowchart TB
     a_writefor("Click #quot;Write for me#quot;")
     a_buy("Buy or upgrade a plan (AD-03)")
     a_err("See error message, retry later")
-    d_draw{{"Draw AI illustrations?"}}
+    d_draw{"Draw AI<br/>illustrations?"}
     a_edit("Edit page text (AI checkpoints read-only), pick cover scene, click #quot;Finish review#quot;")
     a_retry("Retry failed clips")
     a_shelf("Add the story to a child's bookshelf (child reads it in AD-04)")
-    d_pub{{"Publish for sale?"}}
+    d_pub{"Publish for sale?"}
     a_submit("Submit the story for sale (AD-02)")
     end2@{ shape: fr-circ }
   end
@@ -30,20 +30,20 @@ flowchart TB
     direction TB
     s_tokens("Replace real names with {NVx} tokens, check blocked keywords and daily limit (30)")
     s_draft("Create draft story and page layout (short 6p, medium 8p, long 10p, custom 4-20p), fill scored slots with published template versions")
-    d_hand{{"Handwritten story?"}}
-    d_credit{{"Enough credit?<br/>short 1 / medium 2 / long 3"}}
+    d_hand{"Handwritten<br/>story?"}
+    d_credit{"Enough credit?<br/>(short 1 / medium 2<br/>/ long 3)"}
     s_grant("Start new plan period, grant credits")
     s_hold("Hold credit, status = generating, enqueue story_text job")
-    d_gen{{"Story generated?"}}
+    d_gen{"Story generated?"}
     s_release("Release credit, status = draft")
     s_save("Save pages and checkpoints (locked), consume credit, status = ready")
     s_holdimg("Hold 1 credit per missing portrait and per scene (max 4 scenes)")
     s_consume("Consume credit (release on failure)")
-    d_complete{{"Pages and checkpoints complete, no blocked keywords?"}}
+    d_complete{"Pages & checkpoints<br/>complete, no<br/>blocked keywords?"}
     s_reviewed("Set reviewed_at")
-    d_tts{{"Narration on? (use_tts)"}}
+    d_tts{"Narration on?<br/>(use_tts)"}
     s_queue("Queue narration clips")
-    d_failed{{"Some clips failed?"}}
+    d_failed{"Some clips<br/>failed?"}
     s_ready("Story is ready for child")
   end
   subgraph L_A["AI Service"]

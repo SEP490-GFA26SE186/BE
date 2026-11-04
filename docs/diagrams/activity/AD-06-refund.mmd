@@ -10,14 +10,14 @@ flowchart TB
   subgraph L_S["System"]
     direction TB
     start((" "))
-    d_open{{"How is the refund opened?"}}
+    d_open{"How is the refund<br/>opened?"}
     s_dup("Duplicate purchase detected: open refund request automatically")
     s_pending("Refund request = pending (seller earning not released meanwhile)")
-    d_type{{"Item type?"}}
+    d_type{"Item type?"}
     s_rejected("Refund rejected, access kept, write audit log")
-    d_granted{{"This item granted access? (not a duplicate purchase)"}}
+    d_granted{"Item granted access?<br/>(not a duplicate<br/>purchase)"}
     s_planref("Expire remaining credit, cancel subscription, fall back to Free plan")
-    d_withdrew{{"Seller already withdrew this earning?"}}
+    d_withdrew{"Seller already withdrew<br/>this earning?"}
     s_money("Money back only: the earlier purchase keeps access and seller earning")
     s_422("422: refund stays pending, admin settles with the seller manually")
     s_revoke("Revoke entitlement, remove from bookshelves, reverse seller earning (earning_reversal)")
@@ -26,7 +26,7 @@ flowchart TB
   end
   subgraph L_A["Admin"]
     direction TB
-    d_approve{{"Approve refund?"}}
+    d_approve{"Approve refund?"}
     a_transfer("Transfer money back manually, enter bank transaction ref")
     a_reject("Reject with note")
   end

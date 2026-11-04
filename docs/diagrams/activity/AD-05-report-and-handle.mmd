@@ -10,13 +10,13 @@ flowchart TB
   subgraph L_S["System"]
     direction TB
     start((" "))
-    d_trig{{"How does the review start?"}}
+    d_trig{"How does the<br/>review start?"}
     s_audit("Weekly cron: random audit (skip listings approved in last 30 days)")
-    d_three{{">= 3 distinct reporters in 24 h?"}}
+    d_three{">= 3 distinct<br/>reporters in 24 h?"}
     s_auto("Auto-suspend listing, open follow-up review")
     s_keep("Keep: listing stays / returns to published (audit never suspends it), open reports dismissed")
     s_take("Take down: listing archived, reports resolved, issue strike (90 days)")
-    d_strikes{{"Active strikes >= 3?"}}
+    d_strikes{"Active strikes<br/>>= 3?"}
     s_suspseller("Seller suspended, all listings hidden")
     s_expire("Strike expires after 90 days")
     s_revoke("Revoke strike; if below limit, seller approved again")
@@ -26,21 +26,21 @@ flowchart TB
   end
   subgraph L_E["Seller"]
     direction TB
-    d_appeal{{"Appeal the strike?"}}
+    d_appeal{"Appeal the<br/>strike?"}
     a_appeal("Appeal once with a reason")
   end
   subgraph L_A["Admin"]
     direction TB
-    d_approve{{"Approve appeal? (not the issuer of the strike)"}}
+    d_approve{"Approve appeal?<br/>(not the issuer<br/>of the strike)"}
     a_rejnote("Reject with note")
   end
   subgraph L_P["Specialist"]
     direction TB
-    d_valid{{"Report looks valid?"}}
+    d_valid{"Report looks<br/>valid?"}
     s_suspend("Suspend listing manually (reason), open follow-up review")
     s_dismiss("Dismiss the report")
     a_claim("Claim the review, view all pages")
-    d_viol{{"Violation?"}}
+    d_viol{"Violation?"}
   end
 
   start --> d_trig
