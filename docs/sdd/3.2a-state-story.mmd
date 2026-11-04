@@ -13,10 +13,12 @@ stateDiagram-v2
   state "READY" as READY
 
   [*] --> DRAFT : Parent creates story skeleton
+  [*] --> READY : Seller submits story for sale [published copy created]
   DRAFT --> GENERATING : Write with AI [length not custom, credit held]
   READY --> GENERATING : Rewrite with AI [no child has read it]
   GENERATING --> READY : AI result saved [credit consumed]
-  GENERATING --> DRAFT : AI failed / blocked [credit released]
+  GENERATING --> READY : AI failed / blocked [every page still filled, credit released]
+  GENERATING --> DRAFT : AI failed / blocked [a page is empty, credit released]
   DRAFT --> READY : Parent fills every page
   READY --> DRAFT : Page cleared
   DRAFT --> [*] : Delete story
