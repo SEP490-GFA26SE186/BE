@@ -1,73 +1,122 @@
 ---
 title: "AD-01: Create a Personalised Story with AI"
 ---
-%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 50}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#555555"}}}%%
-flowchart LR
-  subgraph PAR["PARENT"]
-    PA(("Parent")):::actor
-    P00{"Child profile +<br/>characters exist?"}
-    P0["Create child profile<br/>+ family characters"]
-    P1{"Choose entry"}
-    P2["Tell the family story"]
-    P3["Confirm summary + 1-2 sub-skills<br/>(or story only, no scoring)"]
-    P4["Click 'Write for me'"]
-    P5["Choose / upgrade plan<br/>(AD-03)"]
-    P6["Optional: AI illustrations<br/>1 credit per portrait / scene, max 4 scenes"]
-    P7["Edit page text (AI checkpoints locked),<br/>pick cover, click 'Finish review'"]
-    P9["Retry narration"]
-    P8["Publish for sale"]
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#333333"}}%%
+flowchart TB
+  subgraph L_P["Parent"]
+    direction TB
+    start((" "))
+    d_exist{{"Child profile and characters exist?"}}
+    a_create("Create child profile and family characters")
+    a_choose("Choose an entry")
+    d_entry{{"Entry?"}}
+    a_hand("Choose #quot;write it myself#quot;")
+    a_model("Choose a model story (topic), characters and length")
+    a_family("Tell the family story, choose characters and length")
+    a_confirm("Confirm summary and sub-skills (change skills or #quot;story only, no scoring#quot;)")
+    a_writeown("Write pages and checkpoints (no AI, not scored)")
+    a_writefor("Click #quot;Write for me#quot;")
+    a_buy("Buy or upgrade a plan (AD-03)")
+    a_err("See error message, retry later")
+    d_draw{{"Draw AI illustrations?"}}
+    a_edit("Edit page text (AI checkpoints read-only), pick cover scene, click #quot;Finish review#quot;")
+    a_retry("Retry failed clips")
+    a_shelf("Add the story to a child's bookshelf (child reads it in AD-04)")
+    d_pub{{"Publish for sale?"}}
+    a_submit("Submit the story for sale (AD-02)")
+    end2@{ shape: fr-circ }
   end
-  subgraph SYS["SYSTEM (Backend API)"]
-    B1["Replace real names with {NVx},<br/>check blocked keywords, 30/day"]
-    B2["Create draft story + layout:<br/>short 6p/3 scored, medium 8/3, long 10/4<br/>+ reflection; fill slots with templates"]
-    BH["Create custom story<br/>4-20 pages, max 6 checkpoints,<br/>no AI, not scored"]
-    B3{"Enough credit?<br/>short 1, medium 2, long 3"}
-    B4["Hold credit,<br/>status = generating"]
-    B5["Release credit,<br/>status = draft"]
-    B6["Start new plan period,<br/>grant credits"]
-    B7{"Pages + checkpoints complete,<br/>no blocked keywords?"}
-    B8["Set reviewed_at"]
-    BT{"Narration on?<br/>(use_tts)"}
-    BQ["Queue narration clips"]
-    B9{"All clips ready?"}
-    B10["Add to child's bookshelf"]
+  subgraph L_S["System"]
+    direction TB
+    s_tokens("Replace real names with {NVx} tokens, check blocked keywords and daily limit (30)")
+    s_draft("Create draft story and page layout (short 6p, medium 8p, long 10p, custom 4-20p), fill scored slots with published template versions")
+    d_hand{{"Handwritten story?"}}
+    d_credit{{"Enough credit?<br/>short 1 / medium 2 / long 3"}}
+    s_grant("Start new plan period, grant credits")
+    s_hold("Hold credit, status = generating, enqueue story_text job")
+    d_gen{{"Story generated?"}}
+    s_release("Release credit, status = draft")
+    s_save("Save pages and checkpoints (locked), consume credit, status = ready")
+    s_holdimg("Hold 1 credit per missing portrait and per scene (max 4 scenes)")
+    s_consume("Consume credit (release on failure)")
+    d_complete{{"Pages and checkpoints complete, no blocked keywords?"}}
+    s_reviewed("Set reviewed_at")
+    d_tts{{"Narration on? (use_tts)"}}
+    s_queue("Queue narration clips")
+    d_failed{{"Some clips failed?"}}
+    s_ready("Story is ready for child")
   end
-  subgraph AI["AI WORKER + AI SERVICE"]
-    I1["Analyze family story<br/>0 credit, synchronous"]
-    I2{"Story generated?"}
-    I3["Save pages + checkpoints from templates,<br/>consume credit, status = ready"]
-    I4["TTS narration per segment<br/>(0 credit)"]
+  subgraph L_A["AI Service"]
+    direction TB
+    ai_analyze("Analyze the story (synchronous, 0 credit): hard moment or seed event + 1-2 sub-skills")
+    ai_write("Write the whole story from template slots (sees {NVx} tokens only)")
+    ai_draw("Draw portraits, then scenes (appearance only, no real names)")
+    ai_tts("Text-to-speech for each segment (0 credit)")
+    ai_tts2("Text-to-speech for failed segments")
   end
-  subgraph PAY["payOS"]
-    Y1["VietQR payment<br/>+ signed webhook"]
-  end
-  subgraph KID["CHILD"]
-    KA(("Child")):::actor
-    K1["Read in Kid Mode<br/>(AD-04)"]:::ext
+  subgraph L_Q["payOS"]
+    direction TB
+    pay("VietQR payment + signed webhook")
   end
 
-  PA --> P00
-  P00 -- "No" --> P0 --> P1
-  P00 -- "Yes" --> P1
-  P1 -- "Model story" --> B2
-  P1 -- "Family story" --> P2 --> B1 --> I1 --> P3 --> B2
-  P1 -- "Handwritten" --> BH --> P7
-  B2 --> P4 --> B3
-  B3 -- "No: paywall" --> P5 --> Y1 --> B6 --> B3
-  B3 -- "Yes" --> B4 --> I2
-  I2 -- "Failed" --> B5 --> P4
-  I2 -- "OK" --> I3 --> P6 --> P7
-  P7 --> B7
-  B7 -- "No: list of gaps" --> P7
-  B7 -- "Yes" --> B8 --> BT
-  BT -- "Yes" --> BQ --> I4 --> B9
-  BT -- "No: text only" --> B10
-  B9 -- "No: some clips failed" --> P9 --> I4
-  B9 -- "Yes" --> B10 --> K1
-  KA --> K1
-  B10 -.-> P8
-  P8 -.-> F2(["AD-02: Publish & moderate"]):::ext
+  start --> d_exist
+  d_exist -- "no" --> a_create
+  d_exist -- "yes" --> a_choose
+  a_create --> a_choose
+  a_choose --> d_entry
+  d_entry -- "Handwritten" --> a_hand
+  d_entry -- "Model story" --> a_model
+  d_entry -- "Family story" --> a_family
+  a_family --> s_tokens
+  s_tokens --> ai_analyze
+  ai_analyze --> a_confirm
+  a_confirm --> s_draft
+  a_model --> s_draft
+  a_hand --> s_draft
+  s_draft --> d_hand
+  d_hand -- "yes" --> a_writeown
+  d_hand -- "no" --> a_writefor
+  a_writefor --> d_credit
+  d_credit -- "no: paywall" --> a_buy
+  a_buy --> pay
+  pay --> s_grant
+  s_grant --> d_credit
+  d_credit -- "yes" --> s_hold
+  s_hold --> ai_write
+  ai_write --> d_gen
+  d_gen -- "no" --> s_release
+  d_gen -- "yes" --> s_save
+  s_release --> a_err
+  a_err --> end2
+  s_save --> d_draw
+  d_draw -- "yes" --> s_holdimg
+  d_draw -- "no" --> a_edit
+  s_holdimg --> ai_draw
+  ai_draw --> s_consume
+  s_consume --> a_edit
+  a_writeown --> a_edit
+  a_edit --> d_complete
+  d_complete -- "no: list of gaps" --> a_edit
+  d_complete -- "yes" --> s_reviewed
+  s_reviewed --> d_tts
+  d_tts -- "yes" --> s_queue
+  d_tts -- "no: text only" --> s_ready
+  s_queue --> ai_tts
+  ai_tts --> d_failed
+  d_failed -- "yes" --> a_retry
+  a_retry --> ai_tts2
+  ai_tts2 --> d_failed
+  d_failed -- "no" --> s_ready
+  s_ready --> a_shelf
+  a_shelf --> d_pub
+  d_pub -- "yes" --> a_submit
+  a_submit --> end2
+  d_pub -- "no" --> end2
 
-  classDef default fill:#EEEEEE,stroke:#999999,color:#111111
-  classDef actor fill:#FFE0A3,stroke:#333333,stroke-width:2px,color:#111111
-  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111
+  classDef default fill:#FFFFFF,stroke:#000000,color:#111111
+  classDef solid fill:#000000,stroke:#000000
+  class start solid
+  style L_P fill:#FFFFFF,stroke:#000000
+  style L_S fill:#FFFFFF,stroke:#000000
+  style L_A fill:#FFFFFF,stroke:#000000
+  style L_Q fill:#FFFFFF,stroke:#000000
