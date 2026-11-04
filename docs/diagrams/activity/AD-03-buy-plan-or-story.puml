@@ -35,7 +35,7 @@ endif
 if (Price = 0?) then (no)
   if (payOS link created?) then (no)
     :Order failed, try again later;
-    stop
+    end
   else (yes)
   endif
   |Buyer|
@@ -45,7 +45,7 @@ if (Price = 0?) then (no)
   |System|
   if (Paid, signature and amount valid?) then (no)
     :Order stays pending: cancelled if the buyer\ncancels, expired after 15 min, nothing delivered;
-    stop
+    end
   else (yes)
   endif
 else (yes)
@@ -56,39 +56,39 @@ if (Item type?) then (plan)
   :Close the active plan period,\nstart the new period and grant\nthis month's credits;
   |Buyer|
   :Credits ready for "Write for me" (AD-01);
-  stop
 else (story)
+  |System|
+  if (Buyer already owns this story?) then (yes)
+    :Deliver nothing; if paid, open a refund\nrequest automatically (AD-06);
+  else (no)
+    fork
+      :Grant entitlement,\npurchase / free-claim count + 1;
+      |Buyer|
+      :Add the story to a child's bookshelf\n(child reads it in AD-04);
+      :Rate the story after a child finished it;
+      end
+    fork again
+      |System|
+      :Paid order only: record seller\nearning as pending (80%);
+      :Cron: move earning to available after hold days\n(skipped while a refund is pending);
+      |Seller|
+      :Request withdrawal\n(bank set > 24 h ago, >= 50,000 VND);
+      |System|
+      :Hold the amount (available to locked);
+      |Admin|
+      if (Pay the seller?) then (yes)
+        :Transfer by bank app,\nmark paid with transaction ref;
+        |System|
+        :Withdrawal paid (withdrawal_paid);
+      else (no)
+        |Admin|
+        :Reject with reason;
+        |System|
+        :Return amount to available\n(withdrawal_release);
+      endif
+    end merge
+  endif
 endif
 |System|
-if (Buyer already owns this story?) then (yes)
-  :Deliver nothing; if paid, open a refund\nrequest automatically (AD-06);
-  stop
-else (no)
-endif
-fork
-  :Grant entitlement,\npurchase / free-claim count + 1;
-  |Buyer|
-  :Add the story to a child's bookshelf\n(child reads it in AD-04);
-  :Rate the story after a child finished it;
-fork again
-  |System|
-  :Paid order only: record seller\nearning as pending (80%);
-  :Cron: move to available after hold days\n(skipped while a refund is pending);
-  |Seller|
-  :Request withdrawal\n(bank set > 24 h ago, >= 50,000 VND);
-  |System|
-  :Hold the amount (available to locked);
-  |Admin|
-  if (Pay the seller?) then (yes)
-    :Transfer by bank app,\nmark paid with transaction ref;
-    |System|
-    :Withdrawal paid (withdrawal_paid);
-  else (no)
-    |Admin|
-    :Reject with reason;
-    |System|
-    :Return amount to available\n(withdrawal_release);
-  endif
-end fork
 stop
 @enduml

@@ -60,7 +60,7 @@ if (Handwritten story?) then (no)
     :Release credit, status = draft;
     |Parent|
     :See error message, retry later;
-    stop
+    end
   else (yes)
     |System|
     :Save pages and checkpoints (locked),\nconsume credit, status = ready;
