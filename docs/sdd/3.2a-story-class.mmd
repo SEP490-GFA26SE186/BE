@@ -1,0 +1,145 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class StoriesRoutes {
+    <<router>>
+    +POST /stories/analyze [auth, authorize parent]
+    +POST /stories [auth]
+    +GET /stories [auth]
+    +GET|PUT|DELETE /stories/:id [auth]
+    +PUT /stories/:id/characters [auth]
+    +POST /stories/:id/pages [auth]
+    +PUT|DELETE /stories/:id/pages/:pageId [auth]
+    +POST /stories/:id/checkpoints [auth]
+    +PUT|DELETE /stories/:id/checkpoints/:cpId [auth]
+  }
+  class StoriesController {
+    <<controller>>
+    +analyzeStory(req, res) void
+    +createStory(req, res) void
+    +getStories(req, res) void
+    +getStoryById(req, res) void
+    +updateStory(req, res) void
+    +bindCharacters(req, res) void
+    +deleteStory(req, res) void
+    +createPage(req, res) void
+    +updatePage(req, res) void
+    +deletePage(req, res) void
+    +createCheckpoint(req, res) void
+    +updateCheckpoint(req, res) void
+    +deleteCheckpoint(req, res) void
+  }
+  class StoriesAnalysisService {
+    <<service>>
+    +analyzeStory(user, body) Object
+  }
+  class StoriesService {
+    <<service>>
+    +createStory(user, data) Object
+    +getStories(user, query) Object
+    +getStoryById(user, storyId) Object
+    +updateStory(user, storyId, body) Object
+    +bindCharacters(user, storyId, characters) Object
+    +deleteStory(user, storyId) void
+    +resolveStoryCharacters(db, parentId, input) Object
+    +tokenizeOrReject(text, nameContext, path) String
+    +assertNoBlockedKeywords(db, storyId, paths) void
+  }
+  class StoriesEditorService {
+    <<service>>
+    +addPage(user, storyId, body) Object
+    +updatePage(user, storyId, pageId, body) Object
+    +deletePage(user, storyId, pageId) Object
+    +addCheckpoint(user, storyId, body) Object
+    +updateCheckpoint(user, storyId, checkpointId, body) Object
+    +deleteCheckpoint(user, storyId, checkpointId) Object
+  }
+  class StoryRules {
+    <<utility>>
+    +loadStorySettings(db) Object
+    +buildSkeleton(length, layouts, storyCharacters, plan) Object
+    +planSlots(slots, subSkills, hasSecondary) Object
+    +planFamilySlots(slots, subSkills) Object
+    +tokenizeNames(text, nameMap) String
+    +signAnalysisToken(payload, secret) String
+    +verifyAnalysisToken(token, secret) Object
+    +assertCustomLayout(layout, limits) void
+    +storyStatusFromPages(pages) StoryStatus
+  }
+  class AiClient {
+    <<client>>
+    +callAi(jobName, payload) Object
+  }
+  class AiService {
+    <<external>>
+    +POST /v1/story/analyze
+  }
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -UUID topicId
+    -StoryEntry entry
+    -StoryLength length
+    -StoryStatus status
+    -String title
+    -String situation
+    -String momentSummary
+    -String seedEvent
+    -boolean useAiImage
+    -boolean useTts
+    -DateTime deletedAt
+  }
+  class StoryPage {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -int pageOrder
+    -String contentText
+    -ContentOrigin origin
+  }
+  class StoryCheckpoint {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -UUID afterPageId
+    -CheckpointType type
+    -String targetToken
+    -String question
+    -String hint
+    -UUID subSkillId
+    -ContentOrigin origin
+  }
+  class CheckpointOption {
+    <<entity>>
+    -UUID id
+    -UUID checkpointId
+    -int optionOrder
+    -String text
+    -boolean isCorrect
+    -String feedback
+  }
+  class StoryCharacter {
+    <<entity>>
+    -UUID storyId
+    -String token
+    -UUID characterId
+    -String aliasName
+    -boolean isMain
+  }
+
+  StoriesRoutes ..> StoriesController : delegates
+  StoriesController ..> StoriesAnalysisService : analyze family story
+  StoriesController ..> StoriesService : create / update story
+  StoriesController ..> StoriesEditorService : edit pages / checkpoints
+  StoriesAnalysisService ..> StoryRules : tokenizes names / signs token
+  StoriesAnalysisService ..> AiClient : calls synchronously
+  AiClient ..> AiService : HTTP request
+  StoriesService ..> StoryRules : verifies token / builds skeleton
+  StoriesService ..> Story : creates skeleton
+  StoriesEditorService ..> StoryPage : edits
+  StoriesEditorService ..> StoryCheckpoint : edits
+  Story "1" *-- "1..*" StoryPage : pages
+  Story "1" *-- "0..*" StoryCheckpoint : checkpoints
+  StoryCheckpoint "1" *-- "0..*" CheckpointOption : options
+  Story "1" *-- "1..*" StoryCharacter : characters

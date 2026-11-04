@@ -1,0 +1,6 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+stateDiagram-v2
+  direction LR
+  [*] --> draft : Template created / new draft saved
+  draft --> published : Specialist publishes (all fields complete)
+  published --> [*] : Superseded by a newer version (kept for history)

@@ -1,0 +1,158 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class PublishingRoutes {
+    <<router>>
+    +GET|PUT /sellers/me [parent]
+    +POST /sellers/apply [parent]
+    +GET /listings/mine [parent]
+    +POST /listings [parent]
+    +POST /listings/:listingId/versions [parent]
+    +GET /moderation/sellers [mod]
+    +POST /moderation/sellers/:userId/decision [mod]
+    +GET /moderation/submissions [mod]
+    +POST /moderation/submissions/:reviewId/claim [mod]
+    +GET /moderation/submissions/:reviewId [mod]
+    +POST /moderation/submissions/:reviewId/pages/:pageId/view [mod]
+    +POST /moderation/submissions/:reviewId/decision [mod]
+  }
+  class PublishingController {
+    <<controller>>
+    +getMySeller(req, res) void
+    +applySeller(req, res) void
+    +updateMySeller(req, res) void
+    +listSellerApplications(req, res) void
+    +decideSeller(req, res) void
+    +getMyListings(req, res) void
+    +createListing(req, res) void
+    +createListingVersion(req, res) void
+    +getQueue(req, res) void
+    +claimReview(req, res) void
+    +getReview(req, res) void
+    +viewPage(req, res) void
+    +decide(req, res) void
+  }
+  class PublishingService {
+    <<service>>
+    +getMySeller(user) Object
+    +applySeller(user, body) Object
+    +updateMySeller(user, body) Object
+    +listSellerApplications(query) Object
+    +decideSeller(moderator, userId, body) Object
+    +getMyListings(user) Object
+    +createListing(user, body, narrationOptions, options) Object
+    +createListingVersion(user, listingId, body, narrationOptions) Object
+    +currentVersion(db, listingId) Listing
+    +getQueue(moderator) Object
+    +claimReview(moderator, reviewId) Object
+    +getReview(moderator, reviewId) Object
+    +viewPage(moderator, reviewId, pageId, body) Object
+    +decide(moderator, reviewId, body) Object
+    -promoteVersion(tx, listing) void
+  }
+  class PublishRules {
+    <<utility>>
+    +validPriceVnd(v) boolean
+    +identifyingNames(names) Object
+    +aliasErrors(storyCharacters, aliases, forbiddenNames) Object
+    +leftoverNameErrors(story, forbiddenNames, title) Object
+    +findReviewGaps(pages, checkpoints) Object
+    +reviewProgress(pageIds, viewedIds) Object
+    +claimedByOther(review, moderatorId, now) boolean
+  }
+  class StoriesNarrationService {
+    <<service>>
+    +prepareNarration(tx, storyId) Object
+    +dispatchNarration(jobs) boolean
+  }
+  class MonitoringService {
+    <<service>>
+    +issueStrikeTx(tx, issuerId, data) Object
+    +closeOpenReports(tx, moderatorId, listingId, decision) void
+  }
+  class SellerProfile {
+    <<entity>>
+    -UUID userId
+    -String displayName
+    -String bio
+    -String expertise
+    -SellerStatus status
+    -UUID reviewedBy
+    -DateTime reviewedAt
+  }
+  class Listing {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -UUID publishedStoryId
+    -UUID previousListingId
+    -String title
+    -String description
+    -String coverImageKey
+    -BigInt priceVnd
+    -ListingStatus status
+    -boolean hasAiContent
+    -int purchaseCount
+    -int freeClaimCount
+    -Decimal ratingAvg
+    -int ratingCount
+    -DateTime submittedAt
+    -DateTime publishedAt
+  }
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryKind kind
+    -UUID sourceStoryId
+    -boolean useTts
+    -DateTime reviewedAt
+  }
+  class ModerationReview {
+    <<entity>>
+    -UUID id
+    -UUID listingId
+    -ModerationReviewType reviewType
+    -UUID moderatorId
+    -DateTime claimedAt
+    -DateTime claimExpiresAt
+    -ModerationDecision decision
+    -String comment
+    -DateTime decidedAt
+  }
+  class ReviewPageView {
+    <<entity>>
+    -UUID reviewId
+    -UUID pageId
+    -DateTime viewedAt
+    -String comment
+  }
+  class CreatorStrike {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -StrikeSource source
+    -UUID sourceId
+    -String reason
+    -UUID issuedBy
+    -DateTime expiresAt
+    -DateTime revokedAt
+  }
+
+  PublishingRoutes ..> PublishingController : delegates
+  PublishingController ..> PublishingService : uses
+  PublishingService ..> PublishRules : price / name checks / review progress
+  PublishingService ..> SellerProfile : applies / decides
+  PublishingService ..> Story : copies as published version
+  PublishingService ..> Listing : creates / versions / updates status
+  PublishingService ..> ModerationReview : creates / claims / decides
+  PublishingService ..> ReviewPageView : records page viewed
+  PublishingService ..> StoriesNarrationService : narrates copied story
+  PublishingService ..> MonitoringService : issues strike / closes reports
+  MonitoringService ..> CreatorStrike : creates
+  SellerProfile "1" --> "0..*" Listing : sells
+  Listing "1" --> "1" Story : publishedStory
+  Listing "0..1" --> "0..*" Listing : previousListing
+  Listing "1" --> "0..*" ModerationReview : reviews
+  ModerationReview "1" *-- "0..*" ReviewPageView : pageViews
+  SellerProfile "1" --> "0..*" CreatorStrike : strikes

@@ -139,4 +139,38 @@ export async function checkoutListing(user, listingId) {
   });
 }
 
-export default { listListings, getListing, listOwned, checkoutListing };
+/**
+ * GET /market/sellers/:sellerId — ho so cong khai nguoi ban (phieu dang ky: "public seller profile showing
+ * total sales and average rating") + cac truyen dang ban. Chi nguoi ban dang hoat dong (approved).
+ */
+export async function getSellerProfile(user, sellerId) {
+  const seller = await prisma.sellerProfile.findFirst({
+    where: { userId: sellerId, status: 'approved' },
+    select: { userId: true, displayName: true, bio: true, expertise: true, totalSales: true, ratingAvg: true, createdAt: true },
+  });
+  if (!seller) throw ApiError.notFound('Không tìm thấy người bán.');
+  const rows = await prisma.listing.findMany({
+    where: { sellerId, ...SELLABLE },
+    orderBy: SORTS.best_selling,
+    take: 60,
+    include: LISTING_INCLUDE,
+  });
+  const owned = await ownedListingIds(user?.id, rows.map((r) => r.id));
+  const ratingCount = rows.reduce((n, r) => n + r.ratingCount, 0);
+  return {
+    seller: {
+      id: seller.userId,
+      displayName: seller.displayName,
+      bio: seller.bio,
+      expertise: seller.expertise,
+      totalSales: seller.totalSales,
+      ratingAvg: seller.ratingAvg == null ? null : Number(seller.ratingAvg),
+      ratingCount,
+      listingCount: rows.length,
+      sellingSince: seller.createdAt,
+    },
+    items: rows.map((r) => formatCard(r, owned.has(r.id))),
+  };
+}
+
+export default { listListings, getListing, listOwned, checkoutListing, getSellerProfile };

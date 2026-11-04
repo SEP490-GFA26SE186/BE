@@ -24,7 +24,6 @@ RUN npm ci
 # `prisma generate` doc prisma.config.ts, trong do co env("DATABASE_URL").
 # Generate KHONG ket noi DB that, nhung bien phai ton tai -> dat gia tri gia.
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
-ENV DIRECT_URL="postgresql://build:build@localhost:5432/build"
 COPY prisma.config.ts ./
 COPY prisma ./prisma
 RUN npx prisma generate

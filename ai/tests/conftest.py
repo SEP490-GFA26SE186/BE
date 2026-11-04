@@ -18,7 +18,7 @@ for _name in (
     os.environ.pop(_name, None)
 
 # Even a stray un-overridden get_settings() must never read ai/.env (it holds the real key).
-from app.config import Settings  # noqa: E402
+from app.config import Settings
 
 Settings.model_config["env_file"] = None
 

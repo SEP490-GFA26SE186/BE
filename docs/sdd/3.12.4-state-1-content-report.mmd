@@ -1,0 +1,7 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+stateDiagram-v2
+  [*] --> open : Parent reports listing / review
+  open --> resolved : Follow-up review taken down / review hidden
+  open --> dismissed : Specialist dismisses / follow-up review kept
+  resolved --> [*]
+  dismissed --> [*]

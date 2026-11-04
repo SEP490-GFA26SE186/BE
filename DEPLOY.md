@@ -5,13 +5,18 @@ Bố trí:
 | Địa chỉ | Chạy ở đâu | HTTPS |
 |---|---|---|
 | `https://storyweaver.id.vn` | **Cloudflare Pages** (Web, repo `Web`) | Cloudflare |
-| `https://api.storyweaver.id.vn` | **Máy Google Cloud** `e2-standard-2` (2 vCPU, 8 GB): Caddy → api, worker, ai (Claude CLI + VieNeu), Postgres, Redis | Caddy (tự xin Let's Encrypt) |
+| `https://api.storyweaver.id.vn` | **Máy Google Cloud** `e2-standard-2` (2 vCPU, 8 GB): **Cloudflare Tunnel** (`cloudflared`) → api, worker, ai (Claude CLI + VieNeu), Postgres, Redis | Cloudflare |
+
+Máy chủ **không mở cổng 80/443**: `cloudflared` chủ động kết nối ra Cloudflare, request vào `api.storyweaver.id.vn`
+đi theo đường đó. IP máy được ẩn, có lớp chống DDoS của Cloudflare. Mọi tác vụ AI dài chạy qua hàng đợi, request
+đồng bộ dài nhất (phân tích lời kể) có timeout 90 giây — dưới giới hạn 100 giây của proxy Cloudflare.
+Caddy (`deploy/Caddyfile`) chỉ còn là phương án dự phòng, xem mục 2b.
 
 Dịch vụ ngoài giữ nguyên: Cloudinary (ảnh, audio), Cloudflare Workers AI (tranh), payOS, Brevo (email),
 gói Claude Pro/Max (`CLAUDE_CODE_OAUTH_TOKEN`).
 
-File liên quan trong repo: `docker-compose.prod.yml` (Postgres, Caddy, `NODE_ENV=production`, api không mở
-cổng ra ngoài) và `deploy/Caddyfile`.
+File liên quan trong repo: `docker-compose.prod.yml` (Postgres, `cloudflared`, `NODE_ENV=production`, api không mở
+cổng ra ngoài; Caddy dự phòng trong profile `caddy`) và `deploy/Caddyfile`.
 
 > Thứ tự nên làm: 1 → 2 → 3 (máy + DNS) → 4 → 5 (BE chạy) → 6 (Web) → 7 (payOS).
 > **Không dán key / mật khẩu vào chat, không commit `.env`.**
@@ -30,9 +35,8 @@ Trong console (tài khoản trial $300 / 90 ngày):
    - **OS and storage → Change** (giao diện cũ: Boot disk): **Ubuntu 24.04 LTS** (x86/64), **Balanced persistent disk, 40 GB**
      (lỡ tạo 10 GB: Compute Engine → Storage → Disks → ổ của máy → Edit → Size 40 → Save, rồi trên máy chạy
      `sudo growpart /dev/sda 1 && sudo resize2fs /dev/sda1`)
-   - **Networking → Firewall**: tích **Allow HTTP traffic** và **Allow HTTPS traffic**
-     (lỡ bỏ qua: VM instances → bấm tên máy → Edit → Networking → tích 2 ô → Save; hoặc VPC network →
-     Firewall → Create firewall rule: All instances, nguồn `0.0.0.0/0`, TCP `80,443`)
+   - **Networking → Firewall**: **không** tích Allow HTTP / HTTPS traffic — Cloudflare Tunnel không cần cổng vào.
+     Chỉ giữ SSH (22, mặc định có sẵn).
    - Create.
 3. **IP tĩnh** (mặc định IP đổi mỗi lần tắt/bật máy): VPC network → IP addresses → hàng IP ngoài của máy
    `storyweaver` → **⋮ → Promote to static IP address** (đặt tên `storyweaver-ip`). Ghi lại IP này (gọi là `<IP>`).
@@ -52,13 +56,44 @@ Chi phí ước tính `e2-standard-2` ở Singapore ~$60–70/tháng → $300 đ
 2. Đăng nhập **Mắt Bão** (trang quản lý khách hàng) → Quản lý tên miền → `storyweaver.id.vn` →
    **Đổi DNS / Nameserver** → chọn dùng nameserver riêng, điền 2 nameserver của Cloudflare → lưu.
 3. Đợi Cloudflare báo **Active** (vài phút tới vài giờ; Cloudflare gửi email khi xong).
-4. Trong Cloudflare → DNS → Records → **Add record**:
-   - Type `A`, Name `api`, IPv4 `<IP>`, **Proxy status: tắt (đám mây xám, "DNS only")**.
+4. **Không** tự tạo bản ghi `api` — tunnel ở mục 2a tự tạo.
 
-   Phải để xám: qua proxy Cloudflare request bị cắt sau 100 giây (phân tích lời kể chạy tới 90 giây), và
-   Caddy cần nhận thẳng kết nối để xin chứng chỉ.
+## 2a. Cloudflare Tunnel cho `api.storyweaver.id.vn`
 
-Kiểm tra (trên máy bạn): `nslookup api.storyweaver.id.vn` phải ra `<IP>`.
+Giao diện Cloudflare đổi thường xuyên (10/2026: menu Zero Trust không còn nhóm "Networks"). Không thấy mục nào thì
+bấm **`Ctrl + K`** trong dashboard và gõ tên (`Tunnels`, `Bot fight`).
+
+1. Mở trang **Tunnels** (`Ctrl + K` → `Tunnels`; hoặc dashboard Zero Trust bản cũ **one.dash.cloudflare.com** →
+   Networks → Tunnels). Lần đầu có thể phải chọn tên team, gói **Free**.
+2. **Create a tunnel** → loại **Cloudflared** → Tunnel name `storyweaver-api` (gõ vào, chữ xám chỉ là gợi ý).
+3. *Setup Environment*: chọn **Docker** (không chọn Windows, không tải `.msi`). **Copy riêng phần token** (chuỗi
+   `eyJ...` sau `--token`) — đây là `TUNNEL_TOKEN` cho `.env` ở mục 4, **không dán vào chat, không commit**. Không chạy
+   lệnh `docker run` Cloudflare gợi ý: `docker-compose.prod.yml` đã có service `cloudflared`.
+4. Nút **Continue** chỉ bấm được khi connector đã kết nối: để nguyên tab này, làm mục 3 → 5 (BE chạy cả
+   `cloudflared`), tới khi *Connection status* thành Connected và version **không** báo "Unsupported" (báo
+   Unsupported = ảnh `cloudflared` cũ: nâng tag trong `docker-compose.prod.yml`, xem
+   `docker run --rm cloudflare/cloudflared:latest --version`).
+5. Tunnel `storyweaver-api` → tab **Routes** → **Add route** → **Published application**:
+   - Subdomain `api`, Domain `storyweaver.id.vn`, Path để trống
+   - Service URL **`http://api:3000`** — phải có `http://` (không phải `https://`), dùng tên service trong compose,
+     không phải `localhost`
+   - Save. Cloudflare tự tạo CNAME `api` → `<id>.cfargotunnel.com`. Báo trùng: DNS → Records xoá bản ghi `api` cũ trước.
+6. **Webhook payOS không được bị chặn**: domain → **Security → Settings** → nhóm *Bot traffic* → **Bot fight mode: Off**
+   (mặc định đã tắt). Nghi bị chặn: **Security → Analytics → Events** lọc path `/api/v1/payments/payos/webhook`; cần thì
+   tạo rule *Skip* ở **Security → Security rules**.
+
+Kiểm tra: tunnel hiện **Healthy** trong trang Tunnels; trên laptop `nslookup api.storyweaver.id.vn 1.1.1.1` ra IP
+Cloudflare (`104.x` / `172.67.x` / `2606:4700:...`), không còn IP máy.
+
+## 2b. Dự phòng: quay lại Caddy
+
+Chỉ dùng khi tunnel hỏng mà cần API chạy gấp:
+
+1. Cloudflare → DNS: xoá CNAME `api` của tunnel, thêm A `api` → `<IP>`, **DNS only (đám mây xám)** — Caddy cần
+   nhận thẳng kết nối để xin chứng chỉ Let's Encrypt.
+2. GCP: VM instances → `storyweaver` → **Edit** → Networking → tích **Allow HTTP traffic** + **Allow HTTPS traffic** →
+   Save (GCP tự tạo lại rule `default-allow-http(s)`).
+3. Trên máy: `docker compose stop cloudflared && docker compose --profile caddy up -d caddy`.
 
 ## 3. Máy chủ: cài Docker, swap
 
@@ -80,11 +115,10 @@ free -h
 
 ## 4. Lấy code + tạo `.env`
 
-Repo BE là private: tạo **Personal access token** trên GitHub (Settings → Developer settings → Fine-grained
-tokens, quyền Contents: Read-only cho repo BE) để clone; khi `git` hỏi mật khẩu thì dán token.
+Repo BE public nên clone thẳng, không cần token. Vì public: **không bao giờ commit `.env`** (đã có trong `.gitignore`).
 
 ```bash
-git clone -b feature/ai-core https://github.com/SEP490-GFA26SE186/BE.git storyweaver
+git clone -b main https://github.com/SEP490-GFA26SE186/BE.git storyweaver
 cd storyweaver
 ```
 
@@ -105,7 +139,9 @@ Token Claude: trên **laptop** (có trình duyệt, đã `claude login` bằng t
 COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 NODE_ENV=production
 
-# ---- Domain ----
+# ---- Domain + Cloudflare Tunnel (muc 2a) ----
+TUNNEL_TOKEN=...
+# SITE_DOMAIN chi dung cho Caddy du phong (muc 2b) nhung compose van doi phai co.
 SITE_DOMAIN=api.storyweaver.id.vn
 APP_URL=https://api.storyweaver.id.vn
 CORS_ORIGIN=https://storyweaver.id.vn
@@ -173,7 +209,7 @@ docker compose exec -e NODE_ENV=development api node prisma/seed_demo.js
 
 - Lần đầu container `ai` **tải model VieNeu ~580 MB** (giữ trong volume, không tải lại). Theo dõi:
   `docker compose logs -f ai` tới khi thấy `vieneu loaded`.
-- Caddy tự xin chứng chỉ khi có request đầu tiên. Kiểm tra (trên máy bạn):
+- `docker compose logs cloudflared` phải có `Registered tunnel connection` (thường 4 dòng). Kiểm tra (trên máy bạn):
   ```bash
   curl https://api.storyweaver.id.vn/api/v1/health
   ```
@@ -184,21 +220,36 @@ docker compose exec -e NODE_ENV=development api node prisma/seed_demo.js
 
 ## 6. Web lên Cloudflare Pages
 
-1. Cloudflare → **Workers & Pages → Create → Pages → Connect to Git** → chọn repo **Web**.
-2. Cấu hình build:
-   - Production branch: `feature/integration` (hoặc nhánh nhóm chốt)
-   - Framework preset: **React (Vite)** — Build command `npm run build`, Output directory `dist`
-   - Environment variables:
-     - `VITE_API_URL` = `https://api.storyweaver.id.vn/api/v1`
-     - `NODE_VERSION` = `22`
-3. Save and Deploy → được địa chỉ `xxx.pages.dev`.
-4. Project Pages → **Custom domains → Set up a custom domain** → `storyweaver.id.vn` (Cloudflare tự tạo bản
-   ghi DNS + chứng chỉ). Thêm `www.storyweaver.id.vn` nếu muốn.
+Đang dùng **Wrangler** (tải bản build từ laptop): repo Web nằm trong organization GitHub, nối Pages với GitHub cần
+owner của org duyệt GitHub App Cloudflare.
+
+Trên laptop (Git Bash):
+
+```bash
+cd <thu-muc>/Web
+git checkout main && git pull
+npm ci
+VITE_API_URL="https://api.storyweaver.id.vn/api/v1" npm run build
+ls dist/_redirects                 # phai co
+npx wrangler login                 # mo trinh duyet, bam Allow
+npx wrangler pages deploy dist --project-name storyweaver --branch main
+```
+
+Lần đầu Wrangler hỏi tạo project `storyweaver` → Yes, production branch `main`. Xong được địa chỉ
+`xxx.storyweaver.pages.dev`.
+
+Gắn domain: Workers & Pages → `storyweaver` → **Custom domains → Set up a custom domain** → `storyweaver.id.vn` →
+Activate (Cloudflare tự tạo bản ghi DNS + chứng chỉ). Thêm `www.storyweaver.id.vn` nếu muốn. Không tự tạo bản ghi
+cho tên miền chính trong DNS.
 
 Repo Web có `public/_redirects` (`/* /index.html 200`) để mở thẳng link như `/parent/billing/result` không bị
-404. `VITE_API_URL` được gắn lúc build: đổi giá trị thì phải **Retry deployment**.
+404. `VITE_API_URL` được gắn lúc build: quên đặt → Web gọi nhầm `storyweaver.id.vn/api/v1`.
 
-Mỗi lần push lên nhánh production, Pages tự build lại.
+**Muốn Pages tự build khi push** (thay Wrangler): owner org `SEP490-GFA26SE186` cài GitHub App "Cloudflare Workers
+and Pages" cho repo Web, rồi Cloudflare → Workers & Pages → Create → Pages → Connect to Git; build `npm run build`,
+output `dist`, biến `VITE_API_URL` = `https://api.storyweaver.id.vn/api/v1`, `NODE_VERSION` = `22`.
+
+Cập nhật về sau: [DEPLOY-UPDATE.md](DEPLOY-UPDATE.md) mục 4.1.
 
 ## 7. payOS
 
@@ -214,6 +265,8 @@ Lưu, rồi thử mua một gói rẻ nhất để kiểm tra luồng trả về
 
 ## Việc thường ngày
 
+Đầy đủ hơn (cập nhật từng phần, đổi `.env`, rollback, sự cố): [DEPLOY-UPDATE.md](DEPLOY-UPDATE.md).
+
 ```bash
 cd ~/storyweaver
 
@@ -223,7 +276,7 @@ docker compose up -d --build
 docker compose exec api npx prisma migrate deploy   # khi co migration moi
 
 # Xem log
-docker compose logs -f --tail 100 api worker ai caddy
+docker compose logs -f --tail 100 api worker ai cloudflared
 
 # Backup DB (nen chay truoc moi lan cap nhat)
 docker compose exec -T postgres pg_dump -U storyweaver storyweaver | gzip > ~/backup-$(date +%F).sql.gz
@@ -240,7 +293,8 @@ gunzip -c ~/backup-YYYY-MM-DD.sql.gz | docker compose exec -T postgres psql -U s
 
 | Hiện tượng | Xử lý |
 |---|---|
-| `curl https://api...` lỗi chứng chỉ / không kết nối | `docker compose logs caddy`. Thường do bản ghi `api` chưa trỏ đúng `<IP>`, đang bật proxy cam, hoặc máy chưa mở HTTP/HTTPS (VM → Edit → Firewall) |
+| `curl https://api...` lỗi 1033 / 502 / không kết nối | `docker compose logs cloudflared`. 1033: tunnel chưa chạy hoặc `TUNNEL_TOKEN` sai. 502: Public hostname phải trỏ `http://api:3000` (không phải `localhost`) và `api` đang healthy. Trùng bản ghi: xoá A `api` cũ trong DNS |
+| Thanh toán xong mà đơn không chuyển "đã trả" | Webhook payOS bị Cloudflare chặn: tắt Bot Fight Mode / thêm rule Skip cho `/api/v1/payments/payos/webhook` (mục 2a.4); `docker compose logs api` xem có request webhook không |
 | Web báo lỗi mạng / CORS | `CORS_ORIGIN` trong `.env` phải đúng `https://storyweaver.id.vn` (không có `/` cuối); sửa xong `docker compose up -d api`. Kiểm `VITE_API_URL` trên Pages |
 | Tạo truyện lỗi `PROVIDER_ERROR` từ Claude | `CLAUDE_CODE_OAUTH_TOKEN` sai / hết hạn: chạy lại `claude setup-token` trên laptop, sửa `.env`, `docker compose up -d ai` |
 | Không ra tranh | Kiểm `CLOUDFLARE_*`, `IMAGE_*` trong `.env`; `docker compose logs ai` |

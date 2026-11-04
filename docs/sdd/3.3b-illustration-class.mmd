@@ -1,0 +1,118 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class ImageRoutes {
+    <<router>>
+    +POST /stories/:id/images
+    +POST /stories/:id/scenes/:sceneId/image
+    +PUT /stories/:id/cover [parent]
+    +POST /characters/:id/portrait [auth]
+  }
+  class StoriesController {
+    <<controller>>
+    +drawImages(req, res) void
+    +redrawScene(req, res) void
+    +setCover(req, res) void
+  }
+  class CharactersController {
+    <<controller>>
+    +generatePortrait(req, res) void
+  }
+  class StoriesImagesService {
+    <<service>>
+    +startPortrait(user, characterId) Object
+    +drawStoryImages(user, storyId) Object
+    +redrawScene(user, storyId, sceneId) Object
+    +queueStoryImages(storyId, userId, sceneIds) Object
+    +resumeAfterPortrait(characterId) void
+  }
+  class StoriesImagesStore {
+    <<store>>
+    +loadImageCosts(db) Object
+    +loadPortraitInput(db, aiRequestId) Object
+    +loadSceneInput(db, aiRequestId) Object
+    +persistImageResult(db, aiRequestId, response) AiRequest
+    +finalizeImageFailure(db, aiRequestId, status, code, message) AiRequest
+  }
+  class CreditLedger {
+    <<store>>
+    +holdCredit(tx, userId, amount, aiRequestId) void
+    +consumeCredit(tx, userId, aiRequestId) void
+    +releaseCredit(tx, userId, amount, aiRequestId) void
+  }
+  class AiQueue {
+    <<queue>>
+    +enqueueAiJob(jobName, data, jobId) Object
+  }
+  class AiProcessor {
+    <<worker>>
+    +processAiJob(job) void
+  }
+  class AiClient {
+    <<client>>
+    +callAi(jobName, payload) Object
+  }
+  class AiService {
+    <<external>>
+    +POST /v1/images/portrait
+    +POST /v1/images/scene
+  }
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryKind kind
+    -StoryStatus status
+    -boolean useAiImage
+    -UUID coverSceneId
+  }
+  class StoryScene {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -int sceneOrder
+    -String description
+    -String imageKey
+    -GenerationStatus imageStatus
+  }
+  class Character {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -String name
+    -String appearance
+    -String portraitImageKey
+    -GenerationStatus portraitStatus
+  }
+  class AiRequest {
+    <<entity>>
+    -UUID id
+    -UUID userId
+    -AiRequestType requestType
+    -UUID storyId
+    -UUID sceneId
+    -UUID characterId
+    -AiRequestStatus status
+    -int creditsCharged
+    -String idempotencyKey
+    -String errorMessage
+    -DateTime finishedAt
+  }
+
+  ImageRoutes ..> StoriesController : delegates
+  ImageRoutes ..> CharactersController : delegates
+  StoriesController ..> StoriesImagesService : draw / redraw scenes
+  CharactersController ..> StoriesImagesService : startPortrait
+  StoriesImagesService ..> AiRequest : creates (queued)
+  StoriesImagesService ..> CreditLedger : holds credit
+  StoriesImagesService ..> AiQueue : enqueues portrait / scene job
+  AiQueue ..> AiProcessor : delivers job
+  AiProcessor ..> StoriesImagesStore : load input / persist / finalize
+  AiProcessor ..> AiClient : calls
+  AiClient ..> AiService : HTTP request
+  StoriesImagesStore ..> CreditLedger : consumes / releases credit
+  StoriesImagesStore ..> Character : writes portrait
+  StoriesImagesStore ..> StoryScene : writes scene image
+  Story "1" *-- "1..*" StoryScene : scenes
+  Character "0..1" --> "0..*" AiRequest : character_portrait
+  StoryScene "0..1" --> "0..*" AiRequest : scene_image

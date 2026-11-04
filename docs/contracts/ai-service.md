@@ -23,7 +23,7 @@ Client ──> api (Express)          KHÔNG gọi service ai trực tiếp
              │  header X-Internal-Token
              ↓
            ai (FastAPI)  ──> provider (Claude cho chữ, Gemini còn trong code / mock; ảnh: mock tới M4b; TTS: VieNeu-TTS / mock)
-             │             └──> Cloudinary / Supabase Storage (ảnh / audio — service upload, trả key)
+             │             └──> Cloudinary (ảnh / audio — service upload, trả key)
              ↓
            worker ghi kết quả vào DB (persistPlan.js) + chốt / hoàn credit
 ```

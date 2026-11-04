@@ -1,0 +1,19 @@
+---
+config:
+  theme: neutral
+  themeVariables:
+    background: '#ffffff'
+    noteBkgColor: '#ffffff'
+    noteBorderColor: '#999999'
+    noteTextColor: '#000000'
+---
+stateDiagram-v2
+  state "ACTIVE" as ACTIVE
+  state "CANCELLED" as CANCELLED
+  state "EXPIRED" as EXPIRED
+
+  [*] --> ACTIVE : Register (FREE plan) / plan order paid [first-month credit granted]
+  ACTIVE --> CANCELLED : Buy a different plan (new subscription starts now) / plan refund approved (credit expired, back to FREE)
+  ACTIVE --> EXPIRED : Period ended (paid plan expires, FREE renews as a new FREE subscription)
+  CANCELLED --> [*]
+  EXPIRED --> [*]

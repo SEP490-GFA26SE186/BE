@@ -1,0 +1,74 @@
+@startuml AD-05-report-and-handle
+title AD-05: Report and Handle a Published Story\n(Buyer and Seller are Parent accounts)
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ArrowColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam SwimlaneBorderColor #000000
+skinparam SwimlaneTitleFontStyle bold
+
+|Buyer|
+|System|
+|Specialist|
+|Seller|
+|Admin|
+
+|Buyer|
+start
+split
+  |Buyer|
+  :Report a published listing\n(category, optional page);
+  |System|
+  if (>= 3 distinct reporters\nin 24 h?) then (yes)
+    :Auto-suspend listing,\nopen follow-up review;
+  else (no)
+    |Specialist|
+    if (Report looks valid?) then (no)
+      :Dismiss the report;
+      stop
+    else (yes)
+      :Suspend listing manually (reason),\nopen follow-up review;
+    endif
+  endif
+split again
+  |System|
+  :Weekly cron: random audit\n(skip listings approved in last 30 days);
+end split
+|Specialist|
+:Claim the review, view all pages;
+if (Violation?) then (no)
+  |System|
+  :Keep: listing stays / returns to published\n(audit never suspends it), open reports dismissed;
+  stop
+else (yes)
+  |System|
+  :Take down: listing archived,\nreports resolved, issue strike (90 days);
+endif
+if (Active strikes >= 3?) then (yes)
+  :Seller suspended,\nall listings hidden;
+else (no)
+endif
+|Seller|
+if (Appeal the strike?) then (no)
+  |System|
+  :Strike expires after 90 days;
+  stop
+else (yes)
+  |Seller|
+  :Appeal once with a reason;
+endif
+|Admin|
+if (Approve appeal?\n(not the issuer of the strike)) then (yes)
+  |System|
+  :Revoke strike; if below limit,\nseller approved again;
+else (no)
+  |Admin|
+  :Reject with note;
+  |System|
+  :Strike stays active;
+endif
+stop
+@enduml

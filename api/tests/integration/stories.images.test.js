@@ -133,6 +133,25 @@ test('truyen bat tranh: ve chan dung con thieu, canh CHO; chan dung xong -> canh
   assert.ok(s1.imageUrl === null || typeof s1.imageUrl === 'string');
 });
 
+test('het credit sau chan dung: canh dang cho ve `none` (khong ket "dang ve"), bao thieu credit', { skip }, async () => {
+  const f = await family(2 * costs.character_portrait); // vua du 2 chan dung, khong con cho canh
+  const { story, scenes } = await storyWithScenes(f);
+  const { calls, enqueue } = recorder();
+  const r = await queueStoryImages(story.id, { userId: f.user.id, enqueue });
+  assert.deepEqual([r.portraits, r.waiting], [2, 2]);
+  assert.deepEqual((await prisma.storyScene.findMany({ where: { id: { in: scenes } } })).map((s) => s.imageStatus), ['queued', 'queued']);
+
+  const portraitReqs = await prisma.aiRequest.findMany({ where: { userId: f.user.id, requestType: 'character_portrait' } });
+  for (const pr of portraitReqs) await ok(pr.id, { portrait_keys: [`p/${pr.characterId}.jpg`], usage: {} });
+  const again = await queueStoryImages(story.id, { userId: f.user.id, enqueue });
+  assert.equal(again.insufficientCredit, true);
+  assert.equal(again.skippedNoCredit, 2);
+  assert.equal(calls.filter((c) => c[0] === 'scene_image').length, 0);
+  const after = await prisma.storyScene.findMany({ where: { id: { in: scenes } } });
+  assert.deepEqual(after.map((s) => s.imageStatus), ['none', 'none'], 'canh khong con ket o queued');
+  assert.equal(await balanceOf(f.user.id), 0);
+});
+
 test('ve lai mot canh: tru credit lan nua; dang ve -> 409; khong du credit -> 402; tranh tat thi bat len', { skip }, async () => {
   const f = await family(2);
   const { story, scenes } = await storyWithScenes(f);

@@ -17,7 +17,7 @@ import pytest
 # Optional extra `.[claude-code]` (dev only): without it these tests are skipped, not failed.
 pytest.importorskip("claude_agent_sdk")
 
-from claude_agent_sdk import (  # noqa: E402
+from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     CLINotFoundError,
@@ -27,12 +27,12 @@ from claude_agent_sdk import (  # noqa: E402
     TextBlock,
 )
 
-from app.config import Settings  # noqa: E402
-from app.errors import AiError, ErrorCode  # noqa: E402
-from app.providers.llm.base import StoryLLMCall, Turn  # noqa: E402
-from app.providers.llm.claude_code import ClaudeCodeLLMProvider  # noqa: E402
-from app.schemas.llm import LlmStoryOutput  # noqa: E402
-from tests.fixtures.frames import make_frame  # noqa: E402
+from app.config import Settings
+from app.errors import AiError, ErrorCode
+from app.providers.llm.base import StoryLLMCall, Turn
+from app.providers.llm.claude_code import ClaudeCodeLLMProvider
+from app.schemas.llm import LlmStoryOutput
+from tests.fixtures.frames import make_frame
 
 MODEL = "sonnet"
 PROMPT_TEXT = "PROMPT-SECRET-noi-dung-truyen"

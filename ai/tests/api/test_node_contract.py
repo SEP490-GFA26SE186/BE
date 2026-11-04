@@ -115,7 +115,7 @@ def test_force_inside_nested_object_is_invalid_input(client) -> None:
 
 # ---- Task 11: guides and topic age / sub-skills (task-10 contract), all optional ----
 
-from tests.fixtures.frames import SUB_SKILLS, make_guide  # noqa: E402
+from tests.fixtures.frames import SUB_SKILLS, make_guide
 
 
 def _guided_payload() -> dict:

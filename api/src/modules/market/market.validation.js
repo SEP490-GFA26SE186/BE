@@ -20,6 +20,7 @@ const list = z.object({
   }),
 });
 const one = z.object({ params: z.object({ listingId: z.string().uuid('listingId không hợp lệ') }) });
+const seller = z.object({ params: z.object({ sellerId: z.string().uuid('sellerId không hợp lệ') }) });
 const checkout = z.object({ body: z.object({ listingId: z.string({ required_error: 'Thiếu listingId' }).uuid('listingId không hợp lệ') }) });
 
-export default { list, one, checkout };
+export default { list, one, checkout, seller };

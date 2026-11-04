@@ -1,0 +1,94 @@
+@startuml AD-03-buy-plan-or-story
+title AD-03: Buy a Plan or a Story, Seller Payout\n(Buyer and Seller are Parent accounts)
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ArrowColor #000000
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam ActivityBorderColor #000000
+skinparam ActivityDiamondBackgroundColor #FFFFFF
+skinparam ActivityDiamondBorderColor #000000
+skinparam SwimlaneBorderColor #000000
+skinparam SwimlaneTitleFontStyle bold
+skinparam NoteBackgroundColor #FFFFFF
+skinparam NoteBorderColor #555555
+
+|Buyer|
+|System|
+|payOS|
+|Seller|
+|Admin|
+
+|Buyer|
+start
+if (Buy a plan or a story?) then (plan)
+  :Choose a plan on Plans & Credit\n(or from the paywall in AD-01);
+  |System|
+  :Create order, snapshot plan price;
+else (story)
+  |Buyer|
+  :Browse marketplace\n(competency, age, price, sort);
+  :Buy one published story (AD-02);
+  |System|
+  :Create order, snapshot price\nand 80% seller share;
+endif
+|System|
+if (Price = 0?) then (no)
+  if (payOS link created?) then (no)
+    :Order failed, try again later;
+    stop
+  else (yes)
+  endif
+  |Buyer|
+  :Pay by VietQR (link valid 15 min);
+  |payOS|
+  :Send signed webhook\n(or return page asks payOS);
+  |System|
+  if (Paid, signature and amount valid?) then (no)
+    :Order stays pending: cancelled if the buyer\ncancels, expired after 15 min, nothing delivered;
+    stop
+  else (yes)
+  endif
+else (yes)
+endif
+|System|
+:Order paid (conditional update, no double delivery);
+if (Item type?) then (plan)
+  :Close the active plan period,\nstart the new period and grant\nthis month's credits;
+  |Buyer|
+  :Credits ready for "Write for me" (AD-01);
+  stop
+else (story)
+endif
+|System|
+if (Buyer already owns this story?) then (yes)
+  :Deliver nothing; if paid, open a refund\nrequest automatically (AD-06);
+  stop
+else (no)
+endif
+fork
+  :Grant entitlement,\npurchase / free-claim count + 1;
+  |Buyer|
+  :Add the story to a child's bookshelf\n(child reads it in AD-04);
+  :Rate the story after a child finished it;
+fork again
+  |System|
+  :Paid order only: record seller\nearning as pending (80%);
+  :Cron: move to available after hold days\n(skipped while a refund is pending);
+  |Seller|
+  :Request withdrawal\n(bank set > 24 h ago, >= 50,000 VND);
+  |System|
+  :Hold the amount (available to locked);
+  |Admin|
+  if (Pay the seller?) then (yes)
+    :Transfer by bank app,\nmark paid with transaction ref;
+    |System|
+    :Withdrawal paid (withdrawal_paid);
+  else (no)
+    |Admin|
+    :Reject with reason;
+    |System|
+    :Return amount to available\n(withdrawal_release);
+  endif
+end fork
+stop
+@enduml

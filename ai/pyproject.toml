@@ -8,9 +8,8 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
-    # httpx dung cho CA HAI viec: goi provider va upload Supabase Storage qua
-    # REST API. Khong dung SDK supabase-py vi service nay chi can Storage —
-    # keo ca SDK vao la keo theo cả auth/realtime/postgrest khong dung tới.
+    # httpx dung cho CA HAI viec: goi provider va upload Cloudinary qua REST API
+    # (khong dung SDK cloudinary: chi can upload + tai ve co ky).
     "httpx>=0.27",
     "google-genai>=2.25.0",
     # LLM_PROVIDER=claude (Anthropic API); also used for its transform_schema helper.

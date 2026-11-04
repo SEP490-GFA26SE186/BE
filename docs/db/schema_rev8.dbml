@@ -185,7 +185,7 @@ Enum request_status {
 
 Enum withdrawal_status {
   requested
-  processing [note: 'Admin da duyet, lenh chi ho payOS dang chay (2026-10-18)']
+  processing
   paid
   rejected
   cancelled
@@ -836,7 +836,7 @@ Table seller_profiles {
   reviewed_by uuid
   reviewed_at timestamptz
   bank_name varchar(100)
-  bank_bin varchar(20) [note: 'ma BIN ngan hang (VietQR) — chi ho payOS dung BIN (2026-10-18)']
+  bank_bin varchar(20) [note: 'ma BIN ngan hang (VietQR) — Admin dung de tao ma QR chuyen khoan']
   bank_account_number varchar(255) [note: 'ma hoa khi luu']
   bank_account_holder varchar(150)
   bank_updated_at timestamptz [note: 'chan rut tien 24 gio sau khi doi']
@@ -849,7 +849,7 @@ Table listings {
   id uuid [pk, default: `gen_random_uuid()`]
   seller_id uuid [not null]
   published_story_id uuid [unique, not null, note: 'stories.kind = published']
-  previous_listing_id uuid [note: 'phien ban truoc']
+  previous_listing_id uuid [note: 'phien ban truoc: duyet ban moi -> quyen doc / danh gia / bo dem / gia sach chuyen sang, ban truoc archived']
   title varchar(200) [not null]
   description text
   cover_image_key varchar(300)
@@ -948,6 +948,7 @@ Table subscriptions {
   Partial index: (next_credit_grant_at) WHERE status = active — cron cap credit
   Cron hang ngay: toi next_credit_grant_at -> credit_expire phan con lai, credit_grant thang moi.
   Nang goi giua ky: ky moi bat dau ngay, cap du credit goi moi, credit con lai giu mot lan.
+  Gia han (mua lai dung goi tra phi dang dung): period_end += duration_months, khong tao ky moi (2026-10-25).
   Goi Mien phi cung la mot dong subscriptions.
   '''
 }
@@ -1080,7 +1081,7 @@ Table withdrawal_requests {
   status withdrawal_status [not null, default: 'requested']
   handled_by uuid [note: 'admin']
   handled_at timestamptz
-  bank_transaction_ref varchar(100) [note: 'id lenh chi ho payOS (payouts)']
+  bank_transaction_ref varchar(100) [note: 'ma giao dich ngan hang Admin nhap khi danh dau da chuyen (tuy chon)']
   reject_reason text
   created_at timestamptz [not null, default: `now()`]
 

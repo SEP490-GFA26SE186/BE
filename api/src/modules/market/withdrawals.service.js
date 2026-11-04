@@ -1,11 +1,11 @@
-// Rut doanh thu nguoi ban (rev8 luong 6) qua chi ho payOS.
-// requested (giu tien: available -> locked) -> Admin duyet -> processing (lenh chi ho payOS) ->
-// giao dich SUCCEEDED: paid (locked giam) | that bai: rejected (locked -> available). Nguoi ban huy khi con requested.
+// Rut doanh thu nguoi ban (rev8 luong 6), Admin chuyen khoan tay (khong dung chi ho payOS tu 2026-10-24).
+// requested (giu tien: available -> locked) -> Admin tu chuyen khoan bang app ngan hang roi bam "Da chuyen":
+// paid (locked giam) | Admin tu choi: rejected (locked -> available). Nguoi ban huy khi con requested.
+// `processing` con trong enum (chi ho payOS cu) nhung khong con sinh ra.
 import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import ApiError from '../../utils/ApiError.js';
 import { maskAccount, open, seal } from '../../utils/secretBox.js';
-import { payosPayout } from '../../clients/payos.js';
 import { moveEarning } from '../wallets/earningLedger.js';
 import { loadMarketSettings } from '../billing/billing.store.js';
 
@@ -117,7 +117,7 @@ const openSafe = (sealed) => {
   }
 };
 
-/** Tra lai tien da giu (huy / tu choi / chi ho that bai). */
+/** Tra lai tien da giu (huy / tu choi). */
 async function release(tx, w, status, { by = null, reason = null, now = new Date() } = {}) {
   const { count } = await tx.withdrawalRequest.updateMany({
     where: { id: w.id, status: { in: ['requested', 'processing'] } },
@@ -145,98 +145,55 @@ export async function cancelWithdrawal(user, id) {
 // Admin
 // ---------------------------------------------------------------------------
 
+/**
+ * Danh sach theo trang thai. Yeu cau dang cho kem so tai khoan DAY DU (giai ma) de Admin chuyen khoan;
+ * cac trang thai khac chi so che.
+ */
 export async function listWithdrawals({ status = 'requested' } = {}) {
   const rows = await prisma.withdrawalRequest.findMany({
     where: { status },
     orderBy: { createdAt: 'asc' },
     include: { seller: { select: { displayName: true, user: { select: { email: true } } } } },
   });
-  return rows.map((w) => ({ ...formatWithdrawal(w), seller: { userId: w.sellerId, displayName: w.seller.displayName, email: w.seller.user.email } }));
+  return rows.map((w) => {
+    const item = { ...formatWithdrawal(w), bankTransactionRef: w.bankTransactionRef, seller: { userId: w.sellerId, displayName: w.seller.displayName, email: w.seller.user.email } };
+    if (w.status === 'requested') {
+      item.bank = { ...item.bank, bankBin: w.bankSnapshot?.bankBin, accountNumber: openSafe(w.bankSnapshot?.accountSealed) ?? item.bank.accountNumber };
+    }
+    return item;
+  });
 }
 
 /**
- * Admin duyet -> tao lenh chi ho payOS (idempotency key = id yeu cau: bam duyet lai khong chi trung).
- * payOS tu choi ngay (sai tai khoan, het so du...) -> giu `requested` va bao loi de Admin xu ly.
+ * Admin da chuyen khoan tay -> paid: tru tien da giu (locked). `bankTransactionRef` = ma giao dich ngan hang (tuy chon)
+ * de doi soat. Chi tu `requested` (hoac `processing` con sot tu chi ho cu): bam lai -> 409, khong tru hai lan.
  */
-export async function approveWithdrawal(admin, id, { now = new Date() } = {}) {
+export async function markWithdrawalPaid(admin, id, { bankTransactionRef } = {}, { now = new Date() } = {}) {
   const w = await prisma.withdrawalRequest.findUnique({ where: { id } });
   if (!w) throw ApiError.notFound('Không tìm thấy yêu cầu rút tiền.');
-  if (w.status !== 'requested') throw conflict('Yêu cầu không còn ở trạng thái chờ duyệt.');
-  const bank = w.bankSnapshot;
-  let payout;
-  try {
-    payout = await payosPayout().payouts.create(
-      {
-        referenceId: w.id,
-        amount: Number(w.amountVnd),
-        description: 'StoryWeaver rut tien',
-        toBin: bank.bankBin,
-        toAccountNumber: open(bank.accountSealed),
-        category: ['withdrawal'],
-      },
-      `withdrawal-${w.id}`,
-    );
-  } catch (error) {
-    console.error('[payout] tao lenh chi ho loi', w.id, error?.message);
-    throw new ApiError(StatusCodes.BAD_GATEWAY, `payOS chưa nhận lệnh chi: ${error?.message ?? 'lỗi không rõ'}`);
-  }
-  await prisma.withdrawalRequest.updateMany({
-    where: { id, status: 'requested' },
-    data: { status: 'processing', handledBy: admin.id, handledAt: now, bankTransactionRef: payout.id },
-  });
-  return syncWithdrawal(id, { now });
+  const paid = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.withdrawalRequest.updateMany({
+      where: { id, status: { in: ['requested', 'processing'] } },
+      data: { status: 'paid', handledBy: admin.id, handledAt: now, bankTransactionRef: bankTransactionRef?.trim() || null },
+    });
+    if (count !== 1) return false;
+    await moveEarning(tx, {
+      userId: w.sellerId, entryType: 'withdrawal_paid', amount: -w.amountVnd,
+      delta: { earningLockedVnd: -w.amountVnd }, key: `withdraw_paid:${w.id}`, refType: 'withdrawal', refId: w.id,
+    });
+    return true;
+  }, TX);
+  if (!paid) throw conflict('Yêu cầu không còn ở trạng thái chờ chuyển khoản.');
+  return { withdrawal: formatWithdrawal(await prisma.withdrawalRequest.findUnique({ where: { id } })) };
 }
 
 /** Admin tu choi (bat buoc ly do) -> tra tien da giu. */
 export async function rejectWithdrawal(admin, id, { reason }, { now = new Date() } = {}) {
   const w = await prisma.withdrawalRequest.findUnique({ where: { id } });
   if (!w) throw ApiError.notFound('Không tìm thấy yêu cầu rút tiền.');
-  if (w.status !== 'requested') throw conflict('Chỉ từ chối được yêu cầu đang chờ duyệt.');
+  if (!['requested', 'processing'].includes(w.status)) throw conflict('Chỉ từ chối được yêu cầu đang chờ chuyển khoản.');
   await prisma.$transaction((tx) => release(tx, w, 'rejected', { by: admin.id, reason: reason.trim(), now }), TX);
   return { withdrawal: formatWithdrawal(await prisma.withdrawalRequest.findUnique({ where: { id } })) };
 }
 
-/**
- * Hoi payOS trang thai lenh chi ho cua yeu cau `processing`: moi giao dich SUCCEEDED -> paid (tru tien da giu);
- * that bai -> rejected + tra tien. Goi tu Admin (xem chi tiet) va cron worker.
- */
-export async function syncWithdrawal(id, { now = new Date() } = {}) {
-  const w = await prisma.withdrawalRequest.findUnique({ where: { id } });
-  if (w?.status === 'processing' && w.bankTransactionRef) {
-    let payout = null;
-    try {
-      payout = await payosPayout().payouts.get(w.bankTransactionRef);
-    } catch (error) {
-      console.error('[payout] khong lay duoc trang thai', id, error?.message);
-    }
-    // Kieu trong SDK @payos/node 2.0.5 (khac trang docs): giao dich SUCCEEDED | FAILED | CANCELLED |
-    // REVERSED | ...; lenh COMPLETED | FAILED | REJECTED | CANCELLED | PROCESSING | ...
-    const states = (payout?.transactions ?? []).map((t) => t.state);
-    const failed =
-      states.some((s) => ['FAILED', 'CANCELLED', 'REVERSED'].includes(s)) ||
-      ['FAILED', 'REJECTED', 'CANCELLED'].includes(payout?.approvalState);
-    const succeeded = states.length > 0 && states.every((s) => s === 'SUCCEEDED');
-    if (succeeded && !failed) {
-      await prisma.$transaction(async (tx) => {
-        const { count } = await tx.withdrawalRequest.updateMany({ where: { id, status: 'processing' }, data: { status: 'paid' } });
-        if (count !== 1) return;
-        await moveEarning(tx, {
-          userId: w.sellerId, entryType: 'withdrawal_paid', amount: -w.amountVnd,
-          delta: { earningLockedVnd: -w.amountVnd }, key: `withdraw_paid:${w.id}`, refType: 'withdrawal', refId: w.id,
-        });
-      }, TX);
-    } else if (failed) {
-      await prisma.$transaction((tx) => release(tx, w, 'rejected', { reason: 'Chi hộ payOS thất bại — tiền đã được trả lại.', now }), TX);
-    }
-  }
-  return { withdrawal: formatWithdrawal(await prisma.withdrawalRequest.findUnique({ where: { id } })) };
-}
-
-/** Cron: dong bo moi yeu cau dang chi ho. */
-export async function syncProcessingWithdrawals() {
-  const rows = await prisma.withdrawalRequest.findMany({ where: { status: 'processing' }, select: { id: true }, take: 100 });
-  for (const r of rows) await syncWithdrawal(r.id);
-  return rows.length;
-}
-
-export default { updateBank, getEarnings, requestWithdrawal, cancelWithdrawal, listWithdrawals, approveWithdrawal, rejectWithdrawal, syncWithdrawal };
+export default { updateBank, getEarnings, requestWithdrawal, cancelWithdrawal, listWithdrawals, markWithdrawalPaid, rejectWithdrawal };

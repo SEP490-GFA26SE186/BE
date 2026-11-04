@@ -32,7 +32,7 @@ def test_ai_block_only_passes_variables_settings_reads() -> None:
 
 
 def test_ai_block_has_no_db_redis_or_jwt() -> None:
-    assert _ai_env() & {"DATABASE_URL", "DIRECT_URL", "REDIS_URL", "JWT_SECRET"} == set()
+    assert _ai_env() & {"DATABASE_URL", "POSTGRES_PASSWORD", "REDIS_URL", "JWT_SECRET"} == set()
 
 
 def test_ai_block_selects_text_and_tts_providers() -> None:

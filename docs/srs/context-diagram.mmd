@@ -1,0 +1,64 @@
+---
+title: Context Diagram - StoryWeaver AI
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 22, "rankSpacing": 70}, "themeVariables": {"fontFamily": "Arial", "fontSize": "15px", "lineColor": "#555555"}}}%%
+flowchart LR
+  Specialist["Specialist"]
+  Parent["Parent"]
+  Admin["Admin"]
+  Seller["Seller<br/>(Parent)"]
+  Child["Child"]
+  AIServices["AI services<br/>(Claude, Cloudflare Workers AI)"]:::ext
+  payOS["payOS"]:::ext
+  Email["Email service<br/>(Brevo)"]:::ext
+  Cloudinary["Cloudinary<br/>(media storage)"]:::ext
+  SYS(("<b>StoryWeaver AI</b><br/>Interactive storytelling platform")):::system
+  Specialist -->|"Strike, audit & AI-block decisions"| SYS
+  Specialist -->|"Seller application & submission decisions"| SYS
+  Specialist -->|"Report settings, keywords & UI audio"| SYS
+  Specialist -->|"Sub-skills, topics, templates & checkpoint flags"| SYS
+  SYS -->|"Submission queue"| Specialist
+  SYS -->|"Random audits"| Specialist
+  SYS -->|"Content reports & auto-suspensions"| Specialist
+  SYS -->|"AI usage alerts"| Specialist
+  Admin -->|"Plans & platform settings"| SYS
+  Admin -->|"Refund & withdrawal decisions"| SYS
+  Admin -->|"Account management"| SYS
+  Admin -->|"Appeal decisions"| SYS
+  SYS -->|"Revenue & reconciliation reports"| Admin
+  SYS -->|"Audit logs"| Admin
+  SYS -->|"Pending refunds & withdrawals"| Admin
+  SYS -->|"Pending appeals"| Admin
+  Child -->|"Page requests"| SYS
+  Child -->|"Checkpoint answers (emotion / option)"| SYS
+  Child -->|"Answer time & replays"| SYS
+  SYS -->|"Story page & illustration"| Child
+  SYS -->|"Audio narration & cues"| Child
+  SYS -->|"Checkpoint feedback & hints"| Child
+  SYS -->|"Story readiness (text, narration, illustrations)"| Parent
+  SYS -->|"Marketplace listings"| Parent
+  SYS -->|"Credit balance & transaction history"| Parent
+  SYS -->|"EQ journey report"| Parent
+  SYS -->|"Payment result"| Parent
+  Parent -->|"Reviews, content reports & refund requests"| SYS
+  Parent -->|"Plan subscription & story purchase"| SYS
+  Parent -->|"Story request (topic, length, situation), edits & review"| SYS
+  Parent -->|"Child profile, characters & bookshelf"| SYS
+  Parent -->|"Login & kid-mode exit PIN"| SYS
+  Seller -->|"Seller application & bank account"| SYS
+  Seller -->|"Listing submission (story, price)"| SYS
+  Seller -->|"Withdrawal request"| SYS
+  Seller -->|"Strike appeals"| SYS
+  SYS -->|"Submission result & feedback"| Seller
+  SYS -->|"Strike notices"| Seller
+  SYS -->|"Earnings & withdrawal status"| Seller
+  SYS -->|"Story & image prompts"| AIServices
+  AIServices -->|"Story text, analysis & illustrations"| SYS
+  SYS -->|"Payment request"| payOS
+  payOS -->|"Checkout link & payment status (webhook)"| SYS
+  SYS -->|"Verification & password-reset codes"| Email
+  SYS -->|"Images & narration audio (upload)"| Cloudinary
+  Cloudinary -->|"Asset keys & signed media URLs"| SYS
+  classDef default fill:#FFFFFF,stroke:#333333,color:#111111
+  classDef system fill:#DAE8FC,stroke:#6C8EBF,color:#111111
+  classDef ext fill:#FFFFFF,stroke:#555555,stroke-dasharray:5 4,color:#111111

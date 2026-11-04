@@ -79,7 +79,7 @@ def main() -> None:
 
     health = httpx.get(f"{args.url}/health", timeout=10).json()
     print("service:", health["tts_provider"], health.get("tts_default_voice"), health["storage_backend"])
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
     headers = {"X-Internal-Token": internal_token()}
     rows = []
     started = time.monotonic()

@@ -103,6 +103,39 @@ export async function queueNarration(tx, storyId, voice) {
   return jobs;
 }
 
+/**
+ * Phien ban moi cua ban dang ban dung lai audio cua ban truoc (`fromStoryId`): doan nao cung van tay (giong + chu
+ * da thay ten chung giong het) thi chep clip `ready` + key, chi doan da sua moi phai doc lai. Goi TRUOC
+ * queueNarration, trong cung transaction. File audio dung chung giua hai ban — khong co cho nao xoa file.
+ * @returns {Promise<number>} so doan dung lai
+ */
+export async function reuseNarration(tx, storyId, fromStoryId, voice) {
+  const ready = await tx.narrationClip.findMany({
+    where: { storyId: fromStoryId, status: 'ready', audioKey: { not: null } },
+    select: { fingerprint: true, audioKey: true, durationSeconds: true },
+  });
+  if (!ready.length) return 0;
+  const byFingerprint = new Map(ready.map((c) => [c.fingerprint, c]));
+  const story = await tx.story.findUniqueOrThrow({ where: { id: storyId }, include: NARRATION_STORY_INCLUDE });
+  const reused = [];
+  for (const seg of narrationSegments(story)) {
+    const fingerprint = fingerprintOf(seg.text, voice);
+    const from = byFingerprint.get(fingerprint);
+    if (from) reused.push({ seg, fingerprint, from });
+  }
+  if (!reused.length) return 0;
+  await tx.narrationClip.createMany({
+    data: reused.map(({ seg, fingerprint, from }) => ({
+      storyId, segment: seg.segment, fingerprint, status: 'ready', audioKey: from.audioKey, durationSeconds: from.durationSeconds,
+    })),
+  });
+  for (const { seg, from } of reused) {
+    const { model, column } = SEGMENT_TARGETS[seg.kind];
+    await tx[model].update({ where: { id: seg.targetId }, data: { [column]: from.audioKey, ...(seg.kind === 'page' && { audioStatus: 'ready' }) } });
+  }
+  return reused.length;
+}
+
 /** Job bat dau (hoac thu lai) mot luot. false = clip da sang luot khac / da xong -> bo qua job. */
 export async function markClipGenerating(db, { clipId, round, attempt }) {
   const { count } = await db.narrationClip.updateMany({

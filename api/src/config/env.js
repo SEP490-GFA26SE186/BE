@@ -11,7 +11,8 @@ const env = {
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    // Nhieu origin cach nhau bang dau phay (vd. Web + Expo web: http://localhost:3001,http://localhost:8081)
+    origin: (process.env.CORS_ORIGIN || 'http://localhost:3001').split(',').map((o) => o.trim()).filter(Boolean),
   },
   appUrl: process.env.APP_URL || 'http://localhost:3000',
   redis: {
@@ -46,11 +47,6 @@ const env = {
     clientId: process.env.PAYOS_CLIENT_ID,
     apiKey: process.env.PAYOS_API_KEY,
     checksumKey: process.env.PAYOS_CHECKSUM_KEY,
-    payout: {
-      clientId: process.env.PAYOS_PAYOUT_CLIENT_ID || undefined,
-      apiKey: process.env.PAYOS_PAYOUT_API_KEY || undefined,
-      checksumKey: process.env.PAYOS_PAYOUT_CHECKSUM_KEY || undefined,
-    },
   },
   // Trang Web ma payOS tra nguoi dung ve sau khi thanh toan / huy (returnUrl, cancelUrl).
   webUrl: (process.env.WEB_URL || 'http://localhost:5173').replace(/\/+$/, ''),

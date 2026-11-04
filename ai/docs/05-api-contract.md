@@ -154,9 +154,8 @@ Ví dụ: `docs/samples/tts_synthesize_request.json`, `docs/samples/tts_synthesi
 Service **upload ảnh / audio lên Storage rồi trả key, không trả bytes** (BullMQ giữ return value
 của job trong Redis; base64 vài MB mỗi ảnh sẽ làm phình Redis). Chọn backend theo credential:
 `CloudinaryStorage` khi đủ `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET`,
-không thì `SupabaseStorage` khi có `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`, không thì `LocalStorage`
-(cảnh báo trong log). `/health` báo `storage_backend` (`cloudinary` / `supabase` / `local`). Key trả
-về giống nhau ở cả ba backend.
+không thì `LocalStorage` (cảnh báo trong log). `/health` báo `storage_backend` (`cloudinary` / `local`).
+Key trả về giống nhau ở cả hai backend.
 
 `storage_prefix` là chuỗi **opaque** do Node đặt: service `rstrip('/')` rồi nối tên file, không
 parse ngữ nghĩa. Nhưng nó **được kiểm** vì thành đường dẫn file (với `LocalStorage` là filesystem

@@ -1,0 +1,10 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+stateDiagram-v2
+  [*] --> Active : Strike issued (report, rejection, takedown)
+  Active --> Appealed : Seller appeals
+  Appealed --> Revoked : Admin approves appeal
+  Appealed --> Active : Admin rejects appeal
+  Active --> Expired : strike_valid_days passed
+  Appealed --> Expired : strike_valid_days passed [appeal still pending]
+  Revoked --> [*]
+  Expired --> [*]

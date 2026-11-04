@@ -1,0 +1,135 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class BillingRoutes {
+    <<router>>
+    +GET /plans
+    +GET /plans/:id
+    +GET /subscriptions/me [auth]
+    +GET /subscriptions/me/credit-history [auth]
+    +POST /payments/plans/checkout [parent]
+    +GET /payments/orders/:orderId [auth]
+    +POST /payments/payos/webhook
+  }
+  class PlansController {
+    <<controller>>
+    +getPlans(req, res) void
+    +getPlanById(req, res) void
+    +getMySubscription(req, res) void
+    +getCreditHistory(req, res) void
+  }
+  class BillingController {
+    <<controller>>
+    +checkoutPlan(req, res) void
+    +getOrder(req, res) void
+    +payosWebhook(req, res) void
+  }
+  class PlansService {
+    <<service>>
+    +getPlans() Object
+    +getPlanById(id) Plan
+    +getMySubscription(userId) Object
+    +getCreditHistory(userId, pagination) Object
+  }
+  class BillingService {
+    <<service>>
+    +listPlans() Object
+    +checkoutPlan(user, planId) Object
+    +checkoutOrder(user, checkout) Object
+    +getOrder(user, orderId) Object
+    +handleWebhook(body) Object
+    +ensureFreePlan(userId) Subscription
+    -syncWithPayos(order, now) void
+  }
+  class BillingStore {
+    <<store>>
+    +ensureFreeSubscription(tx, parentId, now) Subscription
+    +fulfillOrder(tx, orderId, options) boolean
+    +closeOrder(tx, orderId, status) boolean
+    +runBillingCycle(prisma, now) Object
+    -startPeriod(tx, input) Subscription
+  }
+  class CreditLedger {
+    <<store>>
+    +grantCredit(tx, userId, amount, key, refId) void
+    +expireCredit(tx, userId, key, refId) void
+  }
+  class BillingWorker {
+    <<worker>>
+    +billingTick() void
+  }
+  class PayOSClient {
+    <<client>>
+    +payosCollect() PayOS
+    +paymentRequests.create(data) Object
+    +paymentRequests.get(orderCode) Object
+    +webhooks.verify(body) Object
+  }
+  class PayOS {
+    <<external>>
+    +payment link / VietQR
+    +webhook callback
+  }
+  class Plan {
+    <<entity>>
+    -UUID id
+    -String code
+    -String name
+    -int durationMonths
+    -BigInt priceVnd
+    -int creditsPerMonth
+    -int maxChildren
+    -int maxCharacters
+    -boolean canSell
+    -boolean isActive
+  }
+  class Subscription {
+    <<entity>>
+    -UUID id
+    -UUID parentId
+    -UUID planId
+    -UUID orderItemId
+    -DateTime periodStart
+    -DateTime periodEnd
+    -DateTime nextCreditGrantAt
+    -SubscriptionStatus status
+  }
+  class Order {
+    <<entity>>
+    -UUID id
+    -UUID buyerId
+    -BigInt subtotalVnd
+    -BigInt totalVnd
+    -OrderStatus status
+    -BigInt payosOrderCode
+    -String payosPaymentLinkId
+    -String payosTransactionId
+    -DateTime paidAt
+    -DateTime expiresAt
+  }
+  class OrderItem {
+    <<entity>>
+    -UUID id
+    -UUID orderId
+    -OrderItemType itemType
+    -UUID planId
+    -UUID listingId
+    -BigInt unitPriceVnd
+  }
+
+  BillingRoutes ..> PlansController : delegates
+  BillingRoutes ..> BillingController : delegates
+  PlansController ..> PlansService : uses
+  BillingController ..> BillingService : uses
+  PlansService ..> Subscription : reads active subscription
+  BillingService ..> Order : creates / syncs status
+  BillingService ..> PayOSClient : link / status / verify webhook
+  PayOSClient ..> PayOS : HTTPS
+  BillingService ..> BillingStore : fulfill / close order
+  BillingStore ..> Subscription : starts / extends / expires period
+  BillingStore ..> CreditLedger : grants / expires monthly credit
+  BillingWorker ..> BillingStore : runBillingCycle every 15 min
+  Order "1" *-- "1..*" OrderItem : items
+  Plan "0..1" --> "0..*" OrderItem : plan item
+  Plan "1" --> "0..*" Subscription : plan
+  OrderItem "0..1" --> "0..*" Subscription : paid by

@@ -1,0 +1,99 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class StoriesRoutes {
+    <<router>>
+    +GET /stories/ai-pricing [auth]
+    +POST /stories/:id/generate [auth]
+    +GET /stories/:id/generation [auth]
+  }
+  class StoriesController {
+    <<controller>>
+    +getAiPricing(req, res) void
+    +generateStory(req, res) void
+    +getGeneration(req, res) void
+  }
+  class StoriesGenerationService {
+    <<service>>
+    +startGeneration(user, storyId) Object
+    +getGeneration(user, storyId) Object
+    +getAiPricing() Object
+  }
+  class StoriesGenerationStore {
+    <<store>>
+    +markProcessing(db, aiRequestId, attempt) boolean
+    +loadGenerationInput(db, aiRequestId) Object
+    +persistAiResult(db, aiRequestId, response) boolean
+    +finalizeFailure(db, aiRequestId, status, code, message) boolean
+  }
+  class CreditLedger {
+    <<store>>
+    +holdCredit(tx, userId, amount, aiRequestId) void
+    +consumeCredit(tx, userId, aiRequestId) void
+    +releaseCredit(tx, userId, amount, aiRequestId) void
+  }
+  class AiQueue {
+    <<queue>>
+    +enqueueAiJob(jobName, data, jobId) Object
+  }
+  class AiProcessor {
+    <<worker>>
+    +processAiJob(job) void
+  }
+  class AiClient {
+    <<client>>
+    +callAi(jobName, payload) Object
+  }
+  class AiService {
+    <<external>>
+    +POST /v1/story/generate
+  }
+  class Story {
+    <<entity>>
+    -UUID id
+    -UUID ownerId
+    -StoryLength length
+    -StoryStatus status
+    -String situation
+    -boolean useAiImage
+    -DateTime reviewedAt
+  }
+  class StoryPage {
+    <<entity>>
+    -UUID id
+    -UUID storyId
+    -int pageOrder
+    -String contentText
+    -String aiOriginalText
+    -ContentOrigin origin
+  }
+  class AiRequest {
+    <<entity>>
+    -UUID id
+    -UUID userId
+    -UUID storyId
+    -AiRequestType requestType
+    -AiRequestStatus status
+    -int creditsCharged
+    -int attempts
+    -String idempotencyKey
+    -String errorMessage
+    -DateTime createdAt
+    -DateTime finishedAt
+  }
+
+  StoriesRoutes ..> StoriesController : delegates
+  StoriesController ..> StoriesGenerationService : uses
+  StoriesGenerationService ..> Story : sets generating
+  StoriesGenerationService ..> AiRequest : creates (queued)
+  StoriesGenerationService ..> CreditLedger : holds credit
+  StoriesGenerationService ..> AiQueue : enqueues story_text job
+  AiQueue ..> AiProcessor : delivers job
+  AiProcessor ..> StoriesGenerationStore : load input / persist / finalize
+  AiProcessor ..> AiClient : calls
+  AiClient ..> AiService : HTTP request
+  StoriesGenerationStore ..> CreditLedger : consumes / releases credit
+  StoriesGenerationStore ..> AiRequest : updates status
+  StoriesGenerationStore ..> StoryPage : writes AI text and checkpoints
+  Story "1" *-- "1..*" StoryPage : pages
+  Story "0..1" --> "0..*" AiRequest : requests

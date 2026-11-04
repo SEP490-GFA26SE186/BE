@@ -73,14 +73,11 @@ class Settings(BaseSettings):
     image_scene_height: int = Field(default=768, ge=256, le=1920)
 
     # Storage backend by credentials (app/storage/__init__.py): Cloudinary if all three
-    # CLOUDINARY_* are set, else Supabase, else LocalStorage.
+    # CLOUDINARY_* are set, else LocalStorage.
     cloudinary_cloud_name: str | None = None
     cloudinary_api_key: str | None = None
     cloudinary_api_secret: SecretStr | None = None
     cloudinary_folder: str = "storyweaver"
-    supabase_url: str | None = None
-    supabase_service_key: SecretStr | None = None
-    supabase_bucket: str = "story-assets"
 
     price_text_input_per_mtok_micros: int = 0
     price_text_output_per_mtok_micros: int = 0

@@ -1,0 +1,9 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+stateDiagram-v2
+  [*] --> requested : Seller requests (amount held)
+  requested --> paid : Admin transfers manually, marks paid
+  requested --> rejected : Admin rejects with reason (amount released)
+  requested --> cancelled : Seller cancels (amount released)
+  paid --> [*]
+  rejected --> [*]
+  cancelled --> [*]

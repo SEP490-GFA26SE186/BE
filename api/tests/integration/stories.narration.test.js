@@ -172,3 +172,25 @@ test('tat giong doc: hoan tat khong tao clip, san sang ngay', { skip }, async ()
   assert.equal(await prisma.narrationClip.count({ where: { storyId: story.id } }), 0);
   assert.deepEqual(detail.readiness, { ready: true, reason: null });
 });
+
+test('phien ban moi dung lai audio ban truoc: doan chu giong het chep clip ready + key, chi doc lai doan da sua', { skip }, async () => {
+  const from = await setup();
+  const q = recorder();
+  await editor.reviewStory(from.user, from.story.id, { enqueue: q.enqueue });
+  for (const job of q.batches[0]) await finishClip(job);
+
+  const to = await setup(); // cung ten nhan vat -> cung chu sau khi thay ten
+  const pages = [...to.story.pages].sort((a, b) => a.pageOrder - b.pageOrder);
+  await prisma.storyPage.update({ where: { id: pages[2].id }, data: { contentText: 'Trang này đã sửa.' } });
+
+  const voice = await store.loadVoice(prisma);
+  const jobs = await prisma.$transaction(async (tx) => {
+    assert.equal(await store.reuseNarration(tx, to.story.id, from.story.id, voice), 3);
+    return narration.prepareNarration(tx, to.story.id);
+  });
+  assert.equal(jobs.length, 1, 'chi doan da sua phai doc lai');
+  const rows = await prisma.storyPage.findMany({ where: { storyId: to.story.id }, orderBy: { pageOrder: 'asc' } });
+  const fromKeys = new Set((await prisma.storyPage.findMany({ where: { storyId: from.story.id } })).map((p) => p.audioKey));
+  assert.ok(rows.filter((_, i) => i !== 2).every((p) => p.audioStatus === 'ready' && fromKeys.has(p.audioKey)));
+  assert.equal(rows[2].audioKey, null);
+});

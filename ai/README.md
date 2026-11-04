@@ -60,7 +60,7 @@ curl -s localhost:8000/v1/tts/synthesize -H "X-Internal-Token: $TOKEN"   -H 'Con
 
 Đủ 3 biến `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` thì dùng Cloudinary (file upload dạng
 `authenticated`, không có link công khai; thư mục gốc `CLOUDINARY_FOLDER`, mặc định `storyweaver`). Không có thì
-`SUPABASE_URL` + `SUPABASE_SERVICE_KEY` để dùng Supabase Storage. Không có cả hai thì dùng `LocalStorage`: file ghi vào
+dùng `LocalStorage`: file ghi vào
 `/tmp/storyweaver-storage` (mất khi container bị xoá). `/health` báo `storage_backend`.
 
 Cloudinary gọi thẳng REST API bằng httpx (không cài SDK), ký request đúng cách SDK chính thức làm (`private_download_url`
@@ -222,7 +222,7 @@ Riêng `claude_code` (theo khuôn `d:/crawler_flatform`, `core/adapters/claude_s
 `respx` chỉ chặn được nếu `google-genai` thật sự đi qua `httpx` — chưa xác minh, nên không thiết kế
 dựa vào giả định đó. `GeminiLLMProvider(client=None)` tự dựng client thật; test tiêm một client giả
 có cùng bề mặt `AsyncClient.models.generate_content`, trả `types.GenerateContentResponse` thật của SDK.
-`respx` vẫn nằm trong dev-dependencies vì `SupabaseStorage` gọi HTTP thô bằng `httpx` (và M4b sẽ thêm
+`respx` vẫn nằm trong dev-dependencies vì `CloudinaryStorage` gọi HTTP thô bằng `httpx` (và M4b sẽ thêm
 ComfyUI, HF Inference).
 
 ## Thêm một loại nội dung mới

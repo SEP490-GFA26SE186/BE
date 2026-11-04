@@ -60,7 +60,7 @@ async function grantDemoCredits(prisma, userId) {
         amount: BigInt(DEMO_CREDITS), balanceAfter: BigInt(balanceAfter), idempotencyKey: key,
       },
     });
-  }, { timeout: 20000 }); // Supabase o xa: mac dinh 5 s cua Prisma khong du
+  }, { timeout: 20000 }); // du phong DB cham: mac dinh 5 s cua Prisma co the khong du
 }
 
 async function ensureChildAndCharacters(prisma, parentId) {

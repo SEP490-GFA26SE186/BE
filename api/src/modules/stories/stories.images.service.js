@@ -99,6 +99,21 @@ async function startScene(db, enqueue, { userId, storyId, sceneId, cost }) {
 const isInsufficient = (e) => e?.statusCode === StatusCodes.PAYMENT_REQUIRED;
 
 /**
+ * Het credit: canh dang `queued` ma khong co lenh ve nao dang chay (chi dang cho chan dung) ve `none`,
+ * khong thi editor hien "dang ve" mai. Phu huynh nap them roi bam "Ve tranh" de ve tiep.
+ */
+async function releaseWaitingScenes(db, storyId) {
+  const drawing = (await db.aiRequest.findMany({
+    where: { storyId, requestType: AI_JOB.SCENE_IMAGE, status: { in: ACTIVE } },
+    select: { sceneId: true },
+  })).map((r) => r.sceneId);
+  await db.storyScene.updateMany({
+    where: { storyId, imageStatus: 'queued', ...(drawing.length && { id: { notIn: drawing } }) },
+    data: { imageStatus: 'none' },
+  });
+}
+
+/**
  * Xep hang anh cho mot truyen. Mac dinh: chan dung con thieu + canh chua co anh (`none`/`failed`) hoac
  * dang cho chan dung. `sceneIds`: chi ve lai cac canh nay (ke ca da co anh).
  * Tra { portraits, scenes, waiting, insufficientCredit }.
@@ -126,6 +141,7 @@ export async function queueStoryImages(storyId, { userId, sceneIds = null, db = 
     } catch (e) {
       if (isInsufficient(e)) {
         result.insufficientCredit = true;
+        await releaseWaitingScenes(db, storyId);
         return result;
       }
       if (e?.statusCode === StatusCodes.CONFLICT) c.portraitStatus = 'queued';
@@ -145,7 +161,7 @@ export async function queueStoryImages(storyId, { userId, sceneIds = null, db = 
   if (!targets.length) return result;
 
   const { [AI_JOB.SCENE_IMAGE]: cost } = await loadImageCosts(db);
-  for (const scene of targets) {
+  for (const [i, scene] of targets.entries()) {
     if (waitForPortrait) {
       await db.storyScene.update({ where: { id: scene.id }, data: { imageStatus: 'queued' } });
       result.waiting += 1;
@@ -157,6 +173,8 @@ export async function queueStoryImages(storyId, { userId, sceneIds = null, db = 
     } catch (e) {
       if (!isInsufficient(e)) throw e;
       result.insufficientCredit = true;
+      result.skippedNoCredit = targets.length - i;
+      await releaseWaitingScenes(db, storyId);
       break;
     }
   }

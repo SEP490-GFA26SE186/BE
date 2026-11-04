@@ -2,7 +2,7 @@
 //
 // KHONG DON DU LIEU sau khi chay: `wallet_ledger` append-only (trigger chan UPDATE/DELETE) va
 // `users` bi FK Restrict tu nhieu bang, nen xoa sach khong kha thi. DB test vi vay tich luy du lieu
-// qua moi lan chay -> dung mot project Supabase RIENG cho test, khong dung DB chung cua nhom.
+// qua moi lan chay -> dung mot database RIENG cho test, khong dung DB dev.
 // Moi lan tao phu huynh dung email/username ngau nhien nen cac lan chay khong dung nhau.
 
 import crypto from 'node:crypto';

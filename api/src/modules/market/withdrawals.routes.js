@@ -33,7 +33,7 @@ sellerMoneyRouter.post(
 );
 sellerMoneyRouter.delete('/me/withdrawals/:id', ...seller, validate(id), ok((req) => svc.cancelWithdrawal(req.user, req.params.id)));
 
-// Admin: duyet rut tien -> chi ho payOS. Gan vao /admin TRUOC router platform cu (duong dan khong trung).
+// Admin: chuyen khoan tay roi danh dau da chuyen / tu choi. Gan vao /admin TRUOC router platform cu (duong dan khong trung).
 export const adminWithdrawalsRouter = Router();
 const admin = [auth, authorize('admin')];
 adminWithdrawalsRouter.get(
@@ -42,11 +42,15 @@ adminWithdrawalsRouter.get(
   validate(z.object({ query: z.object({ status: z.enum(['requested', 'processing', 'paid', 'rejected', 'cancelled']).default('requested') }) })),
   ok(async (req) => ({ withdrawals: await svc.listWithdrawals(req.query) })),
 );
-adminWithdrawalsRouter.post('/withdrawals/:id/approve', ...admin, validate(id), ok((req) => svc.approveWithdrawal(req.user, req.params.id)));
+adminWithdrawalsRouter.post(
+  '/withdrawals/:id/mark-paid',
+  ...admin,
+  validate(z.object({ params: z.object({ id: z.string().uuid() }), body: z.object({ bankTransactionRef: z.string().trim().max(100).optional() }).optional() })),
+  ok((req) => svc.markWithdrawalPaid(req.user, req.params.id, req.body)),
+);
 adminWithdrawalsRouter.post(
   '/withdrawals/:id/reject',
   ...admin,
   validate(z.object({ params: z.object({ id: z.string().uuid() }), body: z.object({ reason: z.string().trim().min(3, 'Ghi lý do từ chối').max(500) }) })),
   ok((req) => svc.rejectWithdrawal(req.user, req.params.id, req.body)),
 );
-adminWithdrawalsRouter.post('/withdrawals/:id/sync', ...admin, validate(id), ok((req) => svc.syncWithdrawal(req.params.id)));

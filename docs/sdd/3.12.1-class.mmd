@@ -1,0 +1,92 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class MonitoringRoutes {
+    <<controller>>
+    +POST /market/listings/:listingId/reports
+    +GET /moderation/reports
+    +POST /moderation/reports/:reportId/dismiss
+    +POST /moderation/listings/:listingId/suspend
+    +POST /moderation/strikes
+    +POST /sellers/me/strikes/:strikeId/appeal
+    +POST /admin/appeals/:appealId/decision
+    +POST /moderation/audits/run
+    +POST /moderation/ai-flags/:userId/block
+  }
+  class MonitoringService {
+    <<service>>
+    +createReport(user, listingId, body) ReportResult
+    +dismissReport(moderator, reportId) void
+    +suspendListing(moderator, listingId, reason) Listing
+    +issueStrike(moderator, body) StrikeResult
+    +issueStrikeTx(tx, issuerId, strike) StrikeResult
+    +appealStrike(user, strikeId, reason) StrikeAppeal
+    +decideAppeal(admin, appealId, body) AppealResult
+    +scheduleRandomAudits(db, now) AuditResult
+    +setAiBlock(moderator, userId, body) void
+  }
+  class MonitoringRules {
+    <<utility>>
+    +reachesThreshold(reporters, threshold) bool
+    +strikeExpiry(issuedAt, validDays) DateTime
+    +isStrikeActive(strike, now) bool
+    +auditDue(now) bool
+  }
+  class WorkerCron {
+    <<worker>>
+    +scheduleRandomAudits() void
+  }
+  class PrismaClient {
+    <<repository>>
+  }
+  class ContentReport {
+    <<entity>>
+    -UUID id
+    -UUID listingId
+    -UUID reporterId
+    -ReportCategory category
+    -ReportStatus status
+    -DateTime createdAt
+  }
+  class CreatorStrike {
+    <<entity>>
+    -UUID id
+    -UUID sellerId
+    -StrikeSource source
+    -String reason
+    -UUID issuedBy
+    -DateTime expiresAt
+    -DateTime revokedAt
+  }
+  class StrikeAppeal {
+    <<entity>>
+    -UUID id
+    -UUID strikeId
+    -String reason
+    -RequestStatus status
+    -UUID decidedBy
+    -String decisionNote
+  }
+  class ReportStatus {
+    <<enumeration>>
+    open
+    resolved
+    dismissed
+  }
+  class StrikeSource {
+    <<enumeration>>
+    report
+    rejection
+    takedown
+  }
+
+  MonitoringRoutes --> MonitoringService : uses
+  WorkerCron ..> MonitoringService : weekly audits
+  MonitoringService ..> MonitoringRules : rules
+  MonitoringService ..> PrismaClient : persists
+  PrismaClient ..> ContentReport
+  PrismaClient ..> CreatorStrike
+  PrismaClient ..> StrikeAppeal
+  CreatorStrike "1" --> "0..1" StrikeAppeal : appealed by
+  ContentReport --> ReportStatus
+  CreatorStrike --> StrikeSource

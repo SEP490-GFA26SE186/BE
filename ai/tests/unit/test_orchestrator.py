@@ -398,7 +398,7 @@ async def test_retry_after_empty_truncated_text_has_no_empty_model_turn(frame, s
 async def test_accepted_attempt_without_output_fails_closed(
     frame, settings, monkeypatch
 ) -> None:
-    import app.core.story as story
+    from app.core import story
 
     # Simulate the impossible: an attempt with no issues and no parsed output.
     monkeypatch.setattr(story, "_check", lambda req, res, n: story._Attempt(res.text, None, []))

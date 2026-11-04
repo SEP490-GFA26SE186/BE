@@ -45,7 +45,11 @@ def get_storage_dep(settings: SettingsDep) -> Storage:
 
 def build_image_provider(settings: Settings) -> ImageProvider:
     """Workers AI provider for the two configured profiles (validated in Settings)."""
-    from app.providers.image.cloudflare import CloudflareImageProvider, CloudflareWorkersAI, load_profiles
+    from app.providers.image.cloudflare import (
+        CloudflareImageProvider,
+        CloudflareWorkersAI,
+        load_profiles,
+    )
 
     profiles = load_profiles()
     client = CloudflareWorkersAI(

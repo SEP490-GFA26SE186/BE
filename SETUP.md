@@ -46,9 +46,9 @@ cp .env.example .env
 Sửa `BE/.env` (file này **không commit**):
 
 ```ini
-# Gộp 4 file compose: base + hot reload + Postgres local + AI chạy ngoài Docker.
+# Gộp 3 file compose: base (có sẵn Postgres) + hot reload + AI chạy ngoài Docker.
 # Windows dùng dấu ;   — Linux/macOS dùng dấu :
-COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.localdb.yml;docker-compose.hostai.yml
+COMPOSE_FILE=docker-compose.yml;docker-compose.dev.yml;docker-compose.hostai.yml
 
 # Container `ai` trong Docker vẫn chạy (worker phụ thuộc nó) nhưng không ai gọi: để mock cho nhẹ.
 LLM_PROVIDER=mock
@@ -63,8 +63,8 @@ CLOUDINARY_API_SECRET=...
 CLOUDINARY_FOLDER=storyweaver
 ```
 
-`DATABASE_URL` / `DIRECT_URL` trong `.env` có thể giữ link Supabase: file `docker-compose.localdb.yml`
-**ghi đè** chúng sang Postgres local cho cả api lẫn worker.
+api + worker tự nối vào container `postgres`. `DATABASE_URL` trong `.env` chỉ dùng cho lệnh chạy
+ngoài Docker (Prisma Studio, `npx prisma ...`), trỏ vào `localhost:5432`.
 
 ```bash
 docker compose up -d --build
@@ -231,9 +231,7 @@ Code `ai/` đổi thì cũng phải khởi động lại uvicorn (lệnh trên k
 
 ## Quy tắc an toàn
 
-- **Không chạy migration / seed vào Supabase dùng chung.** Lệnh chạy ngoài Docker phải ghi đè **cả hai**
-  biến: `DATABASE_URL=<url local> DIRECT_URL=<url local> npx prisma migrate deploy` — chỉ ghi đè một biến
-  thì Prisma vẫn đi qua `DIRECT_URL` của Supabase.
+- **Không chạy migration / seed thẳng vào DB production.** Cập nhật prod theo DEPLOY-UPDATE.md.
 - Không log / không gửi tên thật, nội dung lời kể, khoá API. Tên thật được đổi thành `{NV1}`, `{NV2}`…
   trước khi tới AI.
 - `claude_code` dùng gói cá nhân — chỉ cho dev và demo đồ án.

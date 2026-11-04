@@ -14,7 +14,7 @@ const swaggerSpec = {
     version: '1.0.0',
     description: `
 **StoryWeaver AI** - Nền tảng sáng tác truyện tương tác cá nhân hóa và giáo dục trí tuệ cảm xúc (EQ) cho trẻ em.
-API Backend cung cấp đầy đủ các chức năng quản lý tài khoản phụ huynh, bảo mật chế độ trẻ em (Kid Mode PIN & Session), xác thực email, và tích hợp cơ sở dữ liệu Supabase.
+API Backend cung cấp đầy đủ các chức năng quản lý tài khoản phụ huynh, bảo mật chế độ trẻ em (Kid Mode PIN & Session), xác thực email, và lưu dữ liệu trên PostgreSQL.
 
 ### Bảng Phân Quyền Truy Cập (Role-Based Access Control - RBAC)
 Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện truy cập:
@@ -41,7 +41,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     { name: 'Auth', description: 'Đăng ký, Đăng nhập, Quản lý Token và Thông tin cá nhân' },
     { name: 'Publishing', description: 'Người bán và đăng bán truyện (bản sao gỡ cá nhân hoá)' },
     { name: 'Market', description: 'Chợ truyện: xem, mua (payOS), truyện đã mua' },
-    { name: 'Admin Withdrawals', description: 'Duyệt rút tiền người bán qua chi hộ payOS' },
+    { name: 'Admin Withdrawals', description: 'Rút tiền người bán: Admin chuyển khoản tay rồi đánh dấu đã chuyển / từ chối' },
     { name: 'Payments', description: 'Mua gói qua payOS: tạo link, trạng thái đơn, webhook' },
     { name: 'Kid Mode', description: 'Quản lý mã PIN và phiên đọc Chế độ Trẻ em' },
     { name: 'Email Verification', description: 'Gửi và xác thực địa chỉ email qua Brevo' },
@@ -173,7 +173,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
           name: { type: 'string', example: 'Bé Miu' },
           role: { type: 'string', enum: ['self', 'sibling', 'parent', 'relative', 'pet', 'toy'], example: 'self' },
           appearance: { type: 'string', example: 'Bé gái 5 tuổi tóc búi hai bên, đeo nơ hồng, mắt to tròn tinh nghịch' },
-          portraitImageKey: { type: 'string', nullable: true, example: 'https://storage.supabase.co/.../miu_portrait.png' },
+          portraitImageKey: { type: 'string', nullable: true, example: 'characters/portraits/3f2a-1.png' },
           genPrompt: { type: 'string', nullable: true, example: 'Portrait of Bé Miu...' },
           genSeed: { type: 'string', nullable: true, example: '123456789' },
           portraitStatus: { type: 'string', enum: ['none', 'queued', 'generating', 'ready', 'failed'], example: 'none' },
@@ -647,7 +647,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Parent] Chuyển sang Chế độ Trẻ em (Kid Mode)',
         description: '**Quyền truy cập:** `parent` | `admin`.\nKích hoạt Chế độ Trẻ em cho một bé cụ thể, sinh ra token phiên làm việc `kid_session` giới hạn quyền.',
         security: [{ BearerAuth: [] }],
-        description: 'Bắt buộc phụ huynh phải có mã PIN. Cấp token phiên `kid_session` có phạm vi đọc truyện của riêng bé.',
         requestBody: {
           required: true,
           content: {
@@ -704,7 +703,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Kid Session | Parent] Thoát Chế độ Trẻ em về Chế độ Phụ huynh',
         description: '**Quyền truy cập:** Phiên đọc bé (`kid_session`) hoặc Phụ huynh.\nThoát khỏi Chế độ Trẻ em về Chế độ Phụ huynh bằng cách xác thực mã PIN thoát (4-6 chữ số).',
         security: [],
-        description: 'Nhập đúng mã PIN để đóng phiên đọc của bé và khôi phục quyền phụ huynh.',
         requestBody: {
           required: true,
           content: {
@@ -833,7 +831,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Parent] Tạo hồ sơ bé mới',
         description: '**Quyền truy cập:** `parent` | `admin`.\nTạo hồ sơ bé mới (tự động kiểm tra hạn ngạch gói cước, miễn phí tối đa 2 bé).',
         security: [{ BearerAuth: [] }],
-        description: 'Tạo hồ sơ cho bé. Kiểm tra giới hạn số lượng bé theo gói cước (mặc định miễn phí 2 bé).',
         requestBody: {
           required: true,
           content: {
@@ -984,7 +981,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Parent] Xóa hồ sơ bé (Soft delete)',
         description: '**Quyền truy cập:** `parent` | `admin` (Chính chủ sở hữu hồ sơ bé).\nXóa mềm hồ sơ bé và tự động thu hồi mọi phiên đọc truyện đang hoạt động.',
         security: [{ BearerAuth: [] }],
-        description: 'Xóa mềm hồ sơ bé và đồng thời thu hồi mọi token phiên Kid Session đang hoạt động của bé.',
         parameters: [
           {
             name: 'id',
@@ -1008,7 +1004,6 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
         summary: '[Kid Session | Parent] Xem thống kê thời lượng sử dụng màn hình của bé',
         description: '**Quyền truy cập:** `parent` hoặc phiên `kid_session`.\nXem thống kê thời lượng sử dụng màn hình trong ngày của bé, số phút còn lại và cảnh báo giờ đi ngủ.',
         security: [{ BearerAuth: [] }],
-        description: 'Truy vấn tổng thời lượng bé đã dùng trong ngày, so sánh với giới hạn quy định, tính toán thời gian còn lại.',
         parameters: [
           {
             name: 'id',
@@ -1609,9 +1604,10 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     },
 
     // ---- PUBLISHING + MODERATION (rev8 luong 3) ----
-    '/sellers/me': { get: { tags: ['Publishing'], summary: '[Parent] Hồ sơ người bán của tôi', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ seller | null, planCanSell }' } } } },
+    '/sellers/me': { get: { tags: ['Publishing'], summary: '[Parent] Hồ sơ người bán của tôi', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ seller | null, planCanSell }' } } }, put: { tags: ['Publishing'], summary: '[Seller] Sửa hồ sơ bán (biệt danh, giới thiệu, kinh nghiệm)', description: 'Khi hồ sơ đang chờ duyệt hoặc đã duyệt; bị từ chối thì nộp lại qua /sellers/apply.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { displayName: { type: 'string' }, bio: { type: 'string' }, expertise: { type: 'string' } } } } } }, responses: { 200: { description: '{ seller }' } } } },
     '/sellers/apply': { post: { tags: ['Publishing'], summary: '[Parent] Nộp hồ sơ người bán', description: 'Cần gói can_sell. Bị từ chối thì nộp lại được.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['displayName'], properties: { displayName: { type: 'string' }, bio: { type: 'string' }, expertise: { type: 'string' } } } } } }, responses: { 200: { description: '{ seller }' } } } },
     '/listings/mine': { get: { tags: ['Publishing'], summary: '[Parent] Truyện tôi đăng bán', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ listings: [{ id, title, status, priceVnd (0 = miễn phí), cover: StoryCover, lastDecision }] }' } } } },
+    '/listings/{listingId}/versions': { post: { tags: ['Publishing'], summary: '[Seller] Đăng phiên bản mới của truyện đang bán', description: 'Bản đang bán vẫn bán trong lúc chờ duyệt. Duyệt xong: quyền đọc, đánh giá, bộ đếm, giá sách chuyển sang bản mới; bản cũ archived. storyId mặc định là truyện riêng gốc. Mỗi lúc một phiên bản chờ duyệt (409).', security: [{ BearerAuth: [] }], parameters: [{ name: 'listingId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['title', 'priceVnd', 'aliases'], properties: { storyId: { type: 'string', format: 'uuid' }, title: { type: 'string' }, description: { type: 'string' }, priceVnd: { type: 'integer' }, aliases: { type: 'array', items: { type: 'object' } } } } } } }, responses: { 201: { description: '{ listing } (previousListingId = listing đang bán)' } } } },
     '/listings': { post: { tags: ['Publishing'], summary: '[Seller] Đăng bán một truyện riêng đã hoàn tất', description: 'Tạo bản sao published đã gỡ cá nhân hoá: tên chung cho từng token (aliases), bỏ situation và audio, use_tts=false. 422 khi còn tên thật (kể cả trong tên mới) hoặc bí danh trùng / là tên thật.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['storyId', 'title', 'priceVnd', 'aliases'], properties: { storyId: { type: 'string', format: 'uuid' }, title: { type: 'string' }, description: { type: 'string' }, priceVnd: { type: 'integer', example: 29000, description: 'Giá người bán tự đặt (VND): 0 = miễn phí (đơn 0đ), hoặc 5.000–500.000 và là bội số 1.000. Sai → 400.' }, aliases: { type: 'array', items: { type: 'object', properties: { token: { type: 'string', example: '{NV1}' }, aliasName: { type: 'string' } } } } } } } } }, responses: { 200: { description: '{ listing } — kèm `cover` (StoryCover; ảnh lấy từ listings.cover_image_key, không có thì bìa của bản đang bán)' } } } },
     '/moderation/sellers': { get: { tags: ['Moderation'], summary: '[Specialist] Hồ sơ người bán theo trạng thái (?status=pending)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ sellers }' } } } },
     '/moderation/sellers/{userId}/decision': { post: { tags: ['Moderation'], summary: '[Specialist] Duyệt / từ chối hồ sơ người bán', security: [{ BearerAuth: [] }], parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['approve'], properties: { approve: { type: 'boolean' } } } } } }, responses: { 200: { description: '{ seller }' } } } },
@@ -1624,16 +1620,16 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     // ---- MARKET + RUT TIEN (rev8 luong 4, 6) ----
     '/market/listings': { get: { tags: ['Market'], summary: 'Truyện đang bán (chỉ published)', security: [{ BearerAuth: [] }], parameters: [{ name: 'search', in: 'query', schema: { type: 'string' } }, { name: 'competency', in: 'query', schema: { type: 'string' } }, { name: 'age', in: 'query', schema: { type: 'string' } }, { name: 'priceMin', in: 'query', schema: { type: 'integer', minimum: 0 }, description: 'Giá tối thiểu (VND, gồm cả mức này)' }, { name: 'priceMax', in: 'query', schema: { type: 'integer', minimum: 0 }, description: 'Giá tối đa (VND); priceMax=0 → chỉ truyện miễn phí' }, { name: 'narration', in: 'query', schema: { type: 'string', enum: ['all', 'with', 'without'] } }, { name: 'sort', in: 'query', schema: { type: 'string', enum: ['best_selling', 'newest', 'rating', 'price_asc'] } }, { name: 'page', in: 'query', schema: { type: 'string' } }, { name: 'limit', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: '{ items: [{ id, title, topic, cover: StoryCover, totalPages, priceVnd, seller, purchaseCount, owned }], pagination }' } } } },
     '/market/listings/{listingId}': { get: { tags: ['Market'], summary: 'Chi tiết truyện đang bán + trang đầu xem trước (tên chung)', security: [{ BearerAuth: [] }], parameters: [{ name: 'listingId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ listing } — kèm `cover` (StoryCover; ảnh lấy từ listings.cover_image_key, không có thì bìa của bản đang bán)' } } } },
+    '/market/sellers/{sellerId}': { get: { tags: ['Market'], summary: '[Auth] Hồ sơ công khai người bán + truyện đang bán', description: 'Tổng lượt bán, điểm đánh giá trung bình, số truyện. Chỉ người bán đang hoạt động (approved).', security: [{ BearerAuth: [] }], parameters: [{ name: 'sellerId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ seller, items }' } } } },
     '/market/owned': { get: { tags: ['Market'], summary: '[Parent] Truyện đã mua / nhận (entitlement)', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ items }' } } } },
     '/market/checkout': { post: { tags: ['Market'], summary: '[Parent] Mua / nhận truyện', description: 'Giá + tỉ lệ người bán (80%) chốt vào order_item. 0đ → nhận ngay. Có giá → link payOS, trả về /parent/marketplace/result?orderId=…; trạng thái qua GET /payments/orders/{orderId}. Mua truyện của mình → 422; đã có → 409.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['listingId'], properties: { listingId: { type: 'string', format: 'uuid' } } } } } }, responses: { 200: { description: '{ order, checkoutUrl }' } } } },
     '/sellers/me/earnings': { get: { tags: ['Publishing'], summary: '[Seller] Doanh thu: chờ (giữ 3 ngày) / rút được / đang rút, tài khoản nhận, lịch sử', security: [{ BearerAuth: [] }], responses: { 200: { description: '{ balance, bank, withdrawals, ledger, minWithdrawalVnd }' } } } },
     '/sellers/me/bank': { put: { tags: ['Publishing'], summary: '[Seller] Tài khoản nhận tiền', description: 'Số tài khoản mã hoá AES-256-GCM khi lưu, chỉ trả số che. Đổi tài khoản → chặn rút 24 giờ.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['bankBin', 'bankName', 'accountNumber', 'accountHolder'], properties: { bankBin: { type: 'string', example: '970416' }, bankName: { type: 'string' }, accountNumber: { type: 'string' }, accountHolder: { type: 'string' } } } } } }, responses: { 200: { description: '{ bank }' } } } },
     '/sellers/me/withdrawals': { post: { tags: ['Publishing'], summary: '[Seller] Yêu cầu rút tiền', description: 'Tối thiểu market.min_withdrawal_vnd; giữ tiền (available → locked); mỗi lúc một yêu cầu chưa xong.', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['amountVnd'], properties: { amountVnd: { type: 'integer' } } } } } }, responses: { 200: { description: '{ withdrawal }' } } } },
     '/sellers/me/withdrawals/{id}': { delete: { tags: ['Publishing'], summary: '[Seller] Huỷ yêu cầu rút (khi Admin chưa duyệt)', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ withdrawal }' } } } },
-    '/admin/withdrawals': { get: { tags: ['Admin Withdrawals'], summary: '[Admin] Yêu cầu rút tiền theo trạng thái', security: [{ BearerAuth: [] }], parameters: [{ name: 'status', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: '{ withdrawals }' } } } },
-    '/admin/withdrawals/{id}/approve': { post: { tags: ['Admin Withdrawals'], summary: '[Admin] Duyệt → tạo lệnh chi hộ payOS', description: 'Idempotency key = id yêu cầu. Trạng thái → processing; hoàn tất khi mọi giao dịch SUCCEEDED (cron / sync).', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ withdrawal }' } } } },
+    '/admin/withdrawals': { get: { tags: ['Admin Withdrawals'], summary: '[Admin] Yêu cầu rút tiền theo trạng thái', description: 'Trạng thái requested trả số tài khoản đầy đủ (giải mã) + bankBin để Admin chuyển khoản; trạng thái khác chỉ số che.', security: [{ BearerAuth: [] }], parameters: [{ name: 'status', in: 'query', schema: { type: 'string' } }], responses: { 200: { description: '{ withdrawals }' } } } },
+    '/admin/withdrawals/{id}/mark-paid': { post: { tags: ['Admin Withdrawals'], summary: '[Admin] Đã chuyển khoản tay → paid', description: 'Admin tự chuyển khoản bằng app ngân hàng rồi gọi API này: trừ tiền đang giữ. Gọi lại → 409 (không trừ hai lần).', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { bankTransactionRef: { type: 'string', maxLength: 100, description: 'Mã giao dịch ngân hàng (tuỳ chọn, để đối soát)' } } } } } }, responses: { 200: { description: '{ withdrawal }' } } } },
     '/admin/withdrawals/{id}/reject': { post: { tags: ['Admin Withdrawals'], summary: '[Admin] Từ chối (bắt buộc lý do) → trả tiền', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['reason'], properties: { reason: { type: 'string' } } } } } }, responses: { 200: { description: '{ withdrawal }' } } } },
-    '/admin/withdrawals/{id}/sync': { post: { tags: ['Admin Withdrawals'], summary: '[Admin] Hỏi lại payOS trạng thái lệnh chi hộ', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ withdrawal }' } } } },
 
     // ---- PAYMENTS (payOS, rev8) ----
     '/payments/plans/checkout': {
@@ -1694,6 +1690,7 @@ Mỗi API endpoint đều được chú thích rõ vai trò và điều kiện t
     },
     '/kid/sessions/{sessionId}/complete': { post: { tags: ['Kid Mode'], summary: '[Kid Session] Đọc xong (idempotent)', security: [{ BearerAuth: [] }], parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }], responses: { 200: { description: '{ session }' } } } },
 
+    '/subscriptions/me/credit-history': { get: { tags: ['Plans'], summary: '[Auth] Lịch sử credit cộng / trừ (sổ cái)', description: 'Mới nhất trước. Bỏ dòng credit_consume (0 credit). context: { kind: ai, requestType, storyTitle, characterName } | { kind: plan, planName }.', security: [{ BearerAuth: [] }], parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 50 } }], responses: { 200: { description: '{ entries, pagination }' } } } },
     '/subscriptions/me': {
       get: {
         tags: ['Plans & Subscriptions'],

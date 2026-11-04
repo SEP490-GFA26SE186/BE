@@ -1,20 +1,18 @@
 from app.config import Settings
 from app.storage import get_storage
+from app.storage.cloudinary import CloudinaryStorage
 from app.storage.local import LocalStorage
-from app.storage.supabase import SupabaseStorage
 
 
-def test_get_storage_unwraps_supabase_secret() -> None:
+def test_get_storage_unwraps_cloudinary_secret() -> None:
     s = Settings(
         _env_file=None,
         internal_token="t",
-        supabase_url="https://x.supabase.co",
-        supabase_service_key="real-key-123",
-        supabase_bucket="b",
+        cloudinary_cloud_name="c",
+        cloudinary_api_key="k",
+        cloudinary_api_secret="real-secret-123",
     )
-    storage = get_storage(s)
-    assert isinstance(storage, SupabaseStorage)
-    assert storage._key == "real-key-123"
+    assert isinstance(get_storage(s), CloudinaryStorage)
 
 
 def test_get_storage_falls_back_to_local() -> None:

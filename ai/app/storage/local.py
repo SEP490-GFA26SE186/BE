@@ -4,10 +4,10 @@ from app.errors import AiError
 
 
 class LocalStorage:
-    """Backend du phong khi chua co credential Supabase.
+    """Backend du phong khi chua co credential Cloudinary.
 
     Ton tai de `docker compose up` chay duoc NGAY, truoc khi ai kip dien key
-    Supabase — dev moi clone repo khong bi chan o buoc cau hinh. Ghi vao thu muc
+    Cloudinary — dev moi clone repo khong bi chan o buoc cau hinh. Ghi vao thu muc
     tam trong container; key tra ve giong het backend that nen phia Node khong
     phan biet duoc hai truong hop.
     """

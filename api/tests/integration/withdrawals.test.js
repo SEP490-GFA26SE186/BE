@@ -6,30 +6,11 @@ import { prisma, createParent, createUser, startServer } from './_fixtures.js';
 const skip = !hasTestDb;
 let api;
 let earnings;
-let setPayosPayoutClient;
-
-/** Chi ho gia: tao lenh -> id; trang thai do test dat. */
-function fakePayout() {
-  const state = { created: [], result: new Map() };
-  return {
-    state,
-    payouts: {
-      create: async (req, idem) => {
-        state.created.push({ req, idem });
-        const id = `po_${req.referenceId}`;
-        state.result.set(id, { approvalState: 'PROCESSING', transactions: [{ state: 'PROCESSING' }] });
-        return { id, referenceId: req.referenceId, approvalState: 'PROCESSING' };
-      },
-      get: async (id) => ({ id, ...state.result.get(id) }),
-    },
-  };
-}
 
 before(async () => {
   if (skip) return;
   api = await startServer();
   earnings = await import('../../src/modules/wallets/earningLedger.js');
-  ({ setPayosPayoutClient } = await import('../../src/clients/payos.js'));
   const { platformSettingsData } = await import('../../prisma/seed_platform_settings.js');
   const mod = await prisma.user.findFirst({ where: { role: 'specialist' } });
   for (const { key, value } of platformSettingsData.filter((s) => s.key.startsWith('market.'))) {
@@ -94,44 +75,34 @@ test('rut tien: toi thieu / vuot so du -> 422; giu tien; chi mot yeu cau mo; huy
   assert.deepEqual([w.earningAvailableVnd, w.earningLockedVnd], [100000n, 0n]);
 });
 
-test('Admin duyet -> chi ho payOS dung tai khoan / so tien -> SUCCEEDED -> paid, tru tien da giu', { skip }, async () => {
-  const payout = fakePayout();
-  setPayosPayoutClient(payout);
+test('Admin chuyen khoan tay: thay so tai khoan day du -> danh dau da chuyen -> paid, tru tien da giu', { skip }, async () => {
   const s = await readySeller(150000);
   const admin = await createUser({ role: 'admin' });
   const { withdrawal } = (await call(s.token, 'POST', '/sellers/me/withdrawals', { amountVnd: 150000 })).body.data;
+  assert.equal(withdrawal.bank.accountNumber, '******6789', 'nguoi ban chi thay so che');
+
   const list = await call(admin.token, 'GET', '/admin/withdrawals');
-  assert.ok(list.body.data.withdrawals.some((x) => x.id === withdrawal.id));
+  const row = list.body.data.withdrawals.find((x) => x.id === withdrawal.id);
+  assert.deepEqual([row.bank.bankBin, row.bank.accountNumber, row.bank.accountHolder], ['970416', '0123456789', 'NGUYEN VAN A']);
 
-  const approve = await call(admin.token, 'POST', `/admin/withdrawals/${withdrawal.id}/approve`);
-  assert.equal(approve.status, 200, JSON.stringify(approve.body));
-  assert.equal(approve.body.data.withdrawal.status, 'processing');
-  const { req, idem } = payout.state.created[0];
-  assert.deepEqual([req.amount, req.toBin, req.toAccountNumber, req.referenceId], [150000, '970416', '0123456789', withdrawal.id]);
-  assert.equal(idem, `withdrawal-${withdrawal.id}`);
-  assert.equal((await call(admin.token, 'POST', `/admin/withdrawals/${withdrawal.id}/approve`)).status, 409, 'khong chi trung');
+  const paid = await call(admin.token, 'POST', `/admin/withdrawals/${withdrawal.id}/mark-paid`, { bankTransactionRef: 'FT2610240001' });
+  assert.equal(paid.status, 200, JSON.stringify(paid.body));
+  assert.equal(paid.body.data.withdrawal.status, 'paid');
+  const stored = await prisma.withdrawalRequest.findUnique({ where: { id: withdrawal.id } });
+  assert.deepEqual([stored.bankTransactionRef, stored.handledBy], ['FT2610240001', admin.user.id]);
+  assert.equal((await call(admin.token, 'POST', `/admin/withdrawals/${withdrawal.id}/mark-paid`)).status, 409, 'khong tru hai lan');
 
-  payout.state.result.set(`po_${withdrawal.id}`, { approvalState: 'COMPLETED', transactions: [{ state: 'SUCCEEDED' }] });
-  const synced = await call(admin.token, 'POST', `/admin/withdrawals/${withdrawal.id}/sync`);
-  assert.equal(synced.body.data.withdrawal.status, 'paid');
   const w = await wallet(s.user.id);
   assert.deepEqual([w.earningAvailableVnd, w.earningLockedVnd], [0n, 0n]);
   const types = (await prisma.walletLedger.findMany({ where: { userId: s.user.id, walletType: 'earning' }, orderBy: { id: 'asc' } })).map((r) => r.entryType);
   assert.deepEqual(types, ['earning_pending', 'earning_release', 'withdrawal_hold', 'withdrawal_paid']);
+
+  const done = await call(admin.token, 'GET', '/admin/withdrawals?status=paid');
+  assert.equal(done.body.data.withdrawals.find((x) => x.id === withdrawal.id).bank.accountNumber, '******6789', 'da xong thi chi so che');
 });
 
-test('chi ho that bai -> rejected, tra tien; Admin tu choi bat buoc ly do', { skip }, async () => {
-  const payout = fakePayout();
-  setPayosPayoutClient(payout);
+test('Admin tu choi bat buoc ly do -> tra tien; khong tu choi yeu cau da chuyen; danh dau khong can ma giao dich', { skip }, async () => {
   const admin = await createUser({ role: 'admin' });
-  const a = await readySeller(90000);
-  const wa = (await call(a.token, 'POST', '/sellers/me/withdrawals', { amountVnd: 90000 })).body.data.withdrawal;
-  await call(admin.token, 'POST', `/admin/withdrawals/${wa.id}/approve`);
-  payout.state.result.set(`po_${wa.id}`, { approvalState: 'FAILED', transactions: [{ state: 'FAILED' }] });
-  const failed = await call(admin.token, 'POST', `/admin/withdrawals/${wa.id}/sync`);
-  assert.equal(failed.body.data.withdrawal.status, 'rejected');
-  assert.equal((await wallet(a.user.id)).earningAvailableVnd, 90000n);
-
   const b = await readySeller(70000);
   const wb = (await call(b.token, 'POST', '/sellers/me/withdrawals', { amountVnd: 70000 })).body.data.withdrawal;
   assert.equal((await call(admin.token, 'POST', `/admin/withdrawals/${wb.id}/reject`, {})).status, 400);
@@ -139,6 +110,14 @@ test('chi ho that bai -> rejected, tra tien; Admin tu choi bat buoc ly do', { sk
   assert.equal(rejected.body.data.withdrawal.status, 'rejected');
   assert.equal(rejected.body.data.withdrawal.rejectReason, 'Sai tên chủ tài khoản');
   assert.equal((await wallet(b.user.id)).earningAvailableVnd, 70000n);
+  assert.equal((await call(admin.token, 'POST', `/admin/withdrawals/${wb.id}/mark-paid`)).status, 409);
+
+  const c = await readySeller(60000);
+  const wc = (await call(c.token, 'POST', '/sellers/me/withdrawals', { amountVnd: 60000 })).body.data.withdrawal;
+  const paid = await call(admin.token, 'POST', `/admin/withdrawals/${wc.id}/mark-paid`);
+  assert.equal(paid.body.data.withdrawal.status, 'paid');
+  assert.equal((await call(admin.token, 'POST', `/admin/withdrawals/${wc.id}/reject`, { reason: 'Đổi ý' })).status, 409);
+  assert.equal((await call(c.token, 'DELETE', `/sellers/me/withdrawals/${wc.id}`)).status, 409, 'nguoi ban khong huy duoc khi da chuyen');
 });
 
 test('rut tien song song: hai yeu cau cung luc -> chi mot cai duoc tao (khoa ho so ban)', { skip }, async () => {

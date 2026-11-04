@@ -1,0 +1,105 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class AuthRoutes {
+    <<router>>
+    +POST /auth/register
+    +POST /auth/login
+    +POST /auth/refresh-tokens
+    +POST /auth/logout
+    +GET /auth/me [auth]
+    +POST /auth/forgot-password
+    +POST /auth/reset-password
+    +PUT /auth/change-password [auth]
+    +POST /auth/send-verification-email [auth]
+    +POST /auth/verify-email [auth]
+  }
+  class AuthMiddleware {
+    <<middleware>>
+    +auth(req, res, next) void
+    +authorize(allowedRoles) Function
+  }
+  class AuthController {
+    <<controller>>
+    +register(req, res) void
+    +login(req, res) void
+    +refreshTokens(req, res) void
+    +logout(req, res) void
+    +getMe(req, res) void
+    +forgotPassword(req, res) void
+    +resetPassword(req, res) void
+    +changePassword(req, res) void
+    +sendVerificationEmail(req, res) void
+    +verifyEmail(req, res) void
+  }
+  class AuthService {
+    <<service>>
+    +register(data) Object
+    +login(emailOrUsername, password) Object
+    +refreshTokens(refreshToken) Object
+    +logout(refreshToken) void
+    +getUserProfile(userId) Object
+    +forgotPassword(email) Object
+    +resetPassword(token, newPassword) Object
+    +changePassword(userId, currentPassword, newPassword) Object
+    +sendVerificationEmail(userId) Object
+    +verifyEmail(rawToken, userId) Object
+  }
+  class TokenService {
+    <<service>>
+    +hashToken(token) String
+    +parseDuration(str) number
+    +generateAuthTokens(user) Object
+    +verifyAndRotateRefreshToken(rawRefreshToken) Object
+    +revokeRefreshToken(rawRefreshToken) void
+    +generateEmailVerificationToken(userId, options) String
+    +verifyEmailToken(rawToken, userId) User
+    +generatePasswordResetToken(userId) String
+    +resetPasswordWithToken(rawToken, passwordHash) String
+  }
+  class EmailService {
+    <<service>>
+    +sendEmail(to, toName, subject, text, html) Object
+    +sendVerificationEmail(to, token, username) void
+    +sendPasswordResetEmail(to, token, username) void
+  }
+  class EmailProvider {
+    <<external>>
+    +Brevo API, SMTP as fallback
+  }
+  class User {
+    <<entity>>
+    -UUID id
+    -UserRole role
+    -String username
+    -String email
+    -String passwordHash
+    -String fullName
+    -String phone
+    -DateTime emailVerifiedAt
+    -DateTime lastLoginAt
+    -boolean isActive
+    -DateTime deletedAt
+  }
+  class AuthToken {
+    <<entity>>
+    -UUID id
+    -UUID userId
+    -AuthTokenType type
+    -String tokenHash
+    -UUID replacedById
+    -DateTime expiresAt
+    -DateTime consumedAt
+  }
+
+  AuthRoutes ..> AuthMiddleware : auth / authorize
+  AuthRoutes ..> AuthController : delegates
+  AuthController ..> AuthService : uses
+  AuthService ..> TokenService : issues / revokes tokens
+  AuthService ..> EmailService : sends verify / reset email
+  EmailService ..> EmailProvider : sends email
+  AuthMiddleware ..> User : loads req.user
+  AuthService ..> User : manages users
+  TokenService ..> AuthToken : persists token hash
+  User "1" *-- "0..*" AuthToken : owns
+  AuthToken "0..*" --> "0..1" AuthToken : replacedBy

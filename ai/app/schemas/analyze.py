@@ -35,8 +35,8 @@ class StoryAnalyzeRequest(ForceableRequest):
     age_min: PositiveInt
     age_max: PositiveInt
     catalog: list[CatalogSubSkill] = Field(min_length=1)
-    needs: list[str] = []
-    forced_sub_skills: list[str] = []
+    needs: list[str] = []  # noqa: RUF012 - pydantic copies field defaults
+    forced_sub_skills: list[str] = []  # noqa: RUF012 - pydantic copies field defaults
     limits: AnalyzeLimits
     forbidden_terms: list[str]
     blocked_keywords: list[BlockedKeyword]

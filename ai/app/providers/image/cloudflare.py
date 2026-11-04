@@ -207,7 +207,7 @@ class CloudflareImageProvider:
                 self.portrait_profile, portrait_prompt(req.description),
                 width=PORTRAIT_SIZE, height=PORTRAIT_SIZE, negative=NEGATIVE,
             )
-        except Exception as e:  # noqa: BLE001 - mapped to AiError below
+        except Exception as e:
             raise to_ai_error(e) from e
         return [call.image]
 
@@ -225,7 +225,7 @@ class CloudflareImageProvider:
                 profile, prompt, width=width, height=height, negative=NEGATIVE,
                 references=references[:referenced],
             )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise to_ai_error(e) from e
         return call.image
 

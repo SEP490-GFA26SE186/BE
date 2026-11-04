@@ -1,0 +1,51 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+flowchart LR
+  subgraph Clients
+    WEB[React 19 + Vite web app<br/>Parent / Seller, Kid Mode,<br/>Specialist, Admin portals]
+  end
+  PAGES[Cloudflare Pages<br/>static web hosting]
+  EDGE[Cloudflare Tunnel edge<br/>public API hostname]
+  subgraph Backend [Node.js 22 backend]
+    CFD[cloudflared<br/>tunnel connector]
+    CADDY[Caddy<br/>optional fallback profile]
+    API[REST API<br/>Express 5, Zod, Prisma 6<br/>/api/v1]
+    WK[Worker process<br/>BullMQ AI + narration workers,<br/>billing / earning / audit cron]
+  end
+  REDIS[(Redis<br/>BullMQ queues)]
+  DB[(PostgreSQL)]
+  subgraph AISvc [Python AI service - FastAPI, stateless]
+    STORY[/v1/story/generate/]
+    ANALYZE[/v1/story/analyze/]
+    TTS[/v1/tts/synthesize/]
+    IMG[/v1/images/portrait, scene/]
+  end
+  LLM[Claude<br/>claude_code provider via Claude Agent SDK<br/>alternatives: Anthropic API, Gemini API]
+  VN[VieNeu-TTS<br/>self-hosted]
+  CF[Cloudflare Workers AI<br/>FLUX.2 klein]
+  CLD[(Cloudinary<br/>authenticated assets)]
+  PAY[payOS<br/>VietQR collection]
+  MAIL[Email<br/>Brevo API / SMTP]
+  WEB -->|load web app| PAGES
+  WEB -->|HTTPS JSON, JWT| EDGE
+  EDGE --> CFD
+  CFD --> API
+  CADDY -.->|only if tunnel fails| API
+  WEB -->|signed media URLs| CLD
+  WEB -->|redirect to checkout| PAY
+  API --> DB
+  API -->|enqueue jobs| REDIS
+  REDIS --> WK
+  WK --> DB
+  WK -->|internal token| STORY
+  WK --> TTS
+  WK --> IMG
+  API -->|internal HTTP, sync| ANALYZE
+  STORY --> LLM
+  ANALYZE --> LLM
+  TTS --> VN
+  IMG --> CF
+  TTS --> CLD
+  IMG --> CLD
+  API -->|payment links, status| PAY
+  PAY -->|webhook| EDGE
+  API --> MAIL

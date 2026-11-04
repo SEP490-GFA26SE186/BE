@@ -1,0 +1,108 @@
+%%{init: {"theme": "neutral", "themeVariables": {"fontFamily": "Arial"}}}%%
+classDiagram
+  direction TB
+  class KidAuth {
+    <<security>>
+    +kidAuth(req, res, next) void
+  }
+  class KidController {
+    <<controller>>
+    +getShelf(req, res) void
+    +startSession(req, res) void
+    +getSession(req, res) void
+    +saveProgress(req, res) void
+    +answer(req, res) void
+    +complete(req, res) void
+  }
+  class KidService {
+    <<service>>
+    +getShelf(kid) List~ShelfItem~
+    +startSession(kid, storyId) PlaySessionView
+    +getSession(kid, sessionId) PlaySessionView
+    +saveProgress(kid, sessionId, pageId) PlaySession
+    +answer(kid, sessionId, body) AnswerOutcome
+    +complete(kid, sessionId) PlaySession
+    -assertPlayable(childId, storyId) void
+  }
+  class PlayRules {
+    <<utility>>
+    +readChoice(checkpoint, body) Choice
+    +isCorrect(checkpoint, choice) bool
+    +firstScore(checkpoint, choice) Decimal
+    +answerOutcome(checkpoint, row) AnswerOutcome
+    +kidStoryContent(story) KidStory
+  }
+  class NarrationStore {
+    <<repository>>
+    +loadReadiness(db, storyId) Readiness
+  }
+  class ChildrenController {
+    <<controller>>
+    +getChildEqReport(req, res) void
+    +getChildEqJourney(req, res) void
+  }
+  class ChildrenService {
+    <<service>>
+    +getChildEqReport(parentId, childId) EqReport
+    +getChildEqJourney(parentId, childId) EqJourney
+  }
+  class EqLevels {
+    <<utility>>
+    +buildEqLevels(answers, settings) List~SubSkillLevel~
+    +levelFor(scores, settings) Level
+    +lowestLevel(levels) Level
+  }
+  class Recommend {
+    <<utility>>
+    +recommendTopics(levels, topics, childAge) List~Topic~
+  }
+  class PrismaClient {
+    <<repository>>
+  }
+  class PlaySession {
+    <<entity>>
+    -UUID id
+    -UUID childId
+    -UUID storyId
+    -PlayStatus status
+    -Boolean isFirstPlay
+    -UUID currentPageId
+    -DateTime lastActivityAt
+  }
+  class CheckpointAnswer {
+    <<entity>>
+    -UUID id
+    -UUID sessionId
+    -UUID checkpointId
+    -Int attempts
+    -Decimal score
+    -UUID skillId
+    -UUID subSkillId
+    -UUID templateVersionId
+  }
+  class BookshelfItem {
+    <<entity>>
+    -UUID childId
+    -UUID storyId
+  }
+  class PlayStatus {
+    <<enumeration>>
+    in_progress
+    completed
+    abandoned
+  }
+
+  KidController ..> KidAuth : req.kid
+  KidController --> KidService : uses
+  KidService ..> PlayRules : scoring
+  KidService ..> NarrationStore : ready-for-child gate
+  KidService ..> PrismaClient : persists
+  ChildrenController --> ChildrenService : uses
+  ChildrenService ..> EqLevels : levels
+  ChildrenService ..> Recommend : suggested topics
+  ChildrenService ..> PrismaClient : reads answers
+  PrismaClient ..> PlaySession
+  PrismaClient ..> CheckpointAnswer
+  PrismaClient ..> BookshelfItem
+  PlaySession "1" --> "*" CheckpointAnswer : has
+  PlaySession --> PlayStatus

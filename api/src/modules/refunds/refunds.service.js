@@ -9,6 +9,7 @@ import { expireCredit } from '../wallets/creditLedger.js';
 import { earningKey, moveEarning, releaseKey, reversalKey } from '../wallets/earningLedger.js';
 import { SETTINGS_REGISTRY } from '../admin/lib/settingsRegistry.js';
 import { DAY_MS } from '../admin/lib/finance.js';
+import { currentVersion } from '../publishing/publishing.service.js';
 
 const TX = { timeout: 20000 };
 const vnd = (v) => (v == null ? null : Number(v));
@@ -176,7 +177,8 @@ export async function listRefunds({ status = 'pending' } = {}) {
  */
 async function revokeDelivery(tx, item, buyerId, now) {
   if (item.itemType === 'listing') {
-    const listing = await tx.listing.findUniqueOrThrow({ where: { id: item.listingId } });
+    // Truyen da co phien ban moi: quyen doc, gia sach, bo dem nam o phien ban dang ban hien tai.
+    const listing = await currentVersion(tx, item.listingId);
     const { count } = await tx.entitlement.updateMany({ where: { orderItemId: item.id, revokedAt: null }, data: { revokedAt: now } });
     if (count === 0) return;
     await tx.bookshelfItem.deleteMany({ where: { storyId: listing.publishedStoryId, child: { parentId: buyerId } } });

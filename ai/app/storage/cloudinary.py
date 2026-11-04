@@ -38,7 +38,7 @@ def sign(params: dict[str, str | int], api_secret: str) -> str:
 
 
 class CloudinaryStorage:
-    """Cloudinary over its REST API (no SDK, same reasoning as SupabaseStorage).
+    """Cloudinary over its REST API with httpx (no SDK: one more dependency for two calls).
 
     Assets belong to children (real names, real family events), so they are uploaded with
     `type=authenticated`: the public `res.cloudinary.com/.../upload/...` URL does not serve
@@ -75,9 +75,13 @@ class CloudinaryStorage:
         """Write `data` at `key` (overwrites on job retry) and return `key`."""
         resource_type = _resource_type(content_type)
         public_id, _ = self._public_id(key, resource_type)
+        # Dynamic folder mode: the slashes in public_id do not create Media Library folders, so
+        # asset_folder mirrors them (otherwise every file lands in Home). Fixed mode ignores it.
+        asset_folder = str(PurePosixPath(public_id).parent)
         form = self._signed(
             {
                 "public_id": public_id,
+                **({"asset_folder": asset_folder} if asset_folder != "." else {}),
                 "type": "authenticated",
                 "overwrite": "true",
                 "invalidate": "true",

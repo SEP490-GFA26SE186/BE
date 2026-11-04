@@ -1,9 +1,11 @@
 import bcrypt from 'bcryptjs';
+import { StatusCodes } from 'http-status-codes';
 import { prisma } from '../../config/index.js';
 import { ApiError } from '../../utils/index.js';
 import tokenService from './token.service.js';
 import emailService from '../../services/email.service.js';
 import { ensureFreeSubscription } from '../billing/billing.store.js';
+import * as pinLimiter from './lib/kidPinLimiter.js';
 
 // Thoi gian cho toi thieu giua hai lan gui lai ma xac thuc email (tinh tu ma gan nhat, ke ca ma luc dang ky)
 const VERIFY_EMAIL_RESEND_COOLDOWN_SECONDS = 60;
@@ -366,10 +368,29 @@ const exitKidMode = async ({ pin, kidSessionToken, userId }) => {
     throw ApiError.badRequest('No PIN configured for this account');
   }
 
+  // Chong do PIN: sai lien tiep 5 lan -> khoa 15 phut (lib/kidPinLimiter.js, dem trong bo nho api).
+  const lockedMs = pinLimiter.lockRemainingMs(parentUser.id);
+  if (lockedMs > 0) {
+    const minutes = Math.ceil(lockedMs / 60_000);
+    throw ApiError.tooManyRequests(`Nhập sai mã PIN nhiều lần. Ba mẹ thử lại sau ${minutes} phút nhé.`, [
+      { path: 'pin', message: `Thử lại sau ${minutes} phút`, retryAfterSeconds: Math.ceil(lockedMs / 1000) },
+    ]);
+  }
+
   const isPinMatch = await bcrypt.compare(pin, parentUser.kidExitPinHash);
   if (!isPinMatch) {
-    throw ApiError.unauthorized('Incorrect Kid Exit PIN');
+    const { locked, attemptsLeft } = pinLimiter.recordFailure(parentUser.id);
+    if (locked) {
+      const minutes = pinLimiter.LOCK_MS / 60_000;
+      throw ApiError.tooManyRequests(`Nhập sai mã PIN ${pinLimiter.MAX_ATTEMPTS} lần. Ba mẹ thử lại sau ${minutes} phút nhé.`, [
+        { path: 'pin', message: `Thử lại sau ${minutes} phút`, retryAfterSeconds: pinLimiter.LOCK_MS / 1000 },
+      ]);
+    }
+    throw new ApiError(StatusCodes.UNAUTHORIZED, `Mã PIN chưa đúng. Còn ${attemptsLeft} lần thử.`, [
+      { path: 'pin', message: `Còn ${attemptsLeft} lần thử`, attemptsLeft },
+    ]);
   }
+  pinLimiter.reset(parentUser.id);
 
   // Consume kid session token only after successful PIN verification
   if (tokenIdToConsume) {

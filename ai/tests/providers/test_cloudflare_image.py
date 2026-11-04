@@ -92,10 +92,10 @@ def test_profiles_file_loads_cloudflare_profiles_with_licenses():
 
 # --- CloudflareImageProvider (behind /v1/images/*) ---------------------------------------------
 
-from types import SimpleNamespace  # noqa: E402
+from types import SimpleNamespace
 
-from app.errors import AiError, ErrorCode  # noqa: E402
-from app.providers.image.cloudflare import PORTRAIT_SIZE, CloudflareImageProvider  # noqa: E402
+from app.errors import AiError, ErrorCode
+from app.providers.image.cloudflare import PORTRAIT_SIZE, CloudflareImageProvider
 
 
 def provider_with(handler, scene_refs=4):
