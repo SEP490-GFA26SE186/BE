@@ -12,13 +12,13 @@ skinparam SwimlaneTitleFontStyle bold
 
 |Buyer|
 |System|
-|Specialist|
 |Seller|
 |Admin|
+|Specialist|
 
-|Buyer|
+|System|
 start
-split
+if (How does the review start?) then (parent reports)
   |Buyer|
   :Report a published listing\n(category, optional page);
   |System|
@@ -28,47 +28,46 @@ split
     |Specialist|
     if (Report looks valid?) then (no)
       :Dismiss the report;
-      stop
+      end
     else (yes)
       :Suspend listing manually (reason),\nopen follow-up review;
     endif
   endif
-split again
+else (weekly audit)
   |System|
   :Weekly cron: random audit\n(skip listings approved in last 30 days);
-end split
+endif
 |Specialist|
 :Claim the review, view all pages;
 if (Violation?) then (no)
   |System|
   :Keep: listing stays / returns to published\n(audit never suspends it), open reports dismissed;
-  stop
 else (yes)
   |System|
   :Take down: listing archived,\nreports resolved, issue strike (90 days);
-endif
-if (Active strikes >= 3?) then (yes)
-  :Seller suspended,\nall listings hidden;
-else (no)
-endif
-|Seller|
-if (Appeal the strike?) then (no)
-  |System|
-  :Strike expires after 90 days;
-  stop
-else (yes)
+  if (Active strikes >= 3?) then (yes)
+    :Seller suspended,\nall listings hidden;
+  else (no)
+  endif
   |Seller|
-  :Appeal once with a reason;
+  if (Appeal the strike?) then (no)
+    |System|
+    :Strike expires after 90 days;
+  else (yes)
+    |Seller|
+    :Appeal once with a reason;
+    |Admin|
+    if (Approve appeal?\n(not the issuer of the strike)) then (yes)
+      |System|
+      :Revoke strike; if below limit,\nseller approved again;
+    else (no)
+      |Admin|
+      :Reject with note;
+      |System|
+      :Strike stays active;
+    endif
+  endif
 endif
-|Admin|
-if (Approve appeal?\n(not the issuer of the strike)) then (yes)
-  |System|
-  :Revoke strike; if below limit,\nseller approved again;
-else (no)
-  |Admin|
-  :Reject with note;
-  |System|
-  :Strike stays active;
-endif
+|System|
 stop
 @enduml

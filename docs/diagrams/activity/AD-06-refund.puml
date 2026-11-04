@@ -14,15 +14,15 @@ skinparam SwimlaneTitleFontStyle bold
 |System|
 |Admin|
 
-|Buyer|
+|System|
 start
-split
+if (How is the refund opened?) then (buyer requests)
   |Buyer|
   :Request refund for a paid item\n(within 3 days, once per item);
-split again
+else (duplicate purchase)
   |System|
   :Duplicate purchase detected:\nopen refund request automatically;
-end split
+endif
 |System|
 :Refund request = pending\n(seller earning not released meanwhile);
 |Admin|
@@ -35,7 +35,7 @@ if (Approve refund?) then (yes)
     else (yes)
       if (Seller already withdrew this earning?) then (yes)
         :422: refund stays pending,\nadmin settles with the seller manually;
-        stop
+        end
       else (no)
         :Revoke entitlement, remove from bookshelves,\nreverse seller earning (earning_reversal);
       endif
@@ -50,5 +50,6 @@ else (no)
   |System|
   :Refund rejected, access kept, write audit log;
 endif
+|System|
 stop
 @enduml

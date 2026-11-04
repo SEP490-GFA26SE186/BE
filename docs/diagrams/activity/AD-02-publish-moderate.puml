@@ -20,29 +20,28 @@ skinparam NoteBorderColor #555555
 start
 :Apply as seller\n(Family plan with can_sell);
 |Specialist|
-if (Approve seller profile?) then (no)
+if (Approve seller profile?) then (yes)
+  |Seller|
+  repeat
+    :Submit a reviewed private story:\nprice 0 or 5,000-500,000 VND,\ngeneric name for each character;
+    |System|
+  repeat while (Real names or family details left?) is (yes: 422, fix) not (no)
+  :Create de-personalized copy (no family story),\ncopy ready scene images and cover,\nregenerate narration with generic names,\nlisting = submitted;
+  |Specialist|
+  :Claim review (30 min, narration ready),\nview 100% of pages,\ncheck pedagogy checklist on the web;
+  if (Decision?) then (approved)
+    |System|
+    :listing = published\n(buyers can buy it, AD-03);
+  else (changes requested / rejected)
+    |System|
+    :listing = changes_requested / rejected\n(optional strike on reject, AD-05);
+    |Seller|
+    :Fix the private story and submit again;
+  endif
+else (no)
   |Seller|
   :Profile rejected, may apply again;
-  stop
-else (yes)
 endif
 |Seller|
-repeat
-  :Submit a reviewed private story:\nprice 0 or 5,000-500,000 VND,\ngeneric name for each character;
-  |System|
-repeat while (Real names or family details left?) is (yes: 422, fix) not (no)
-:Create de-personalized copy (no family story),\ncopy ready scene images and cover,\nregenerate narration with generic names,\nlisting = submitted;
-|Specialist|
-:Claim review (30 min, narration ready),\nview 100% of pages,\ncheck pedagogy checklist on the web;
-if (Decision?) then (changes requested / rejected)
-  |System|
-  :listing = changes_requested / rejected\n(optional strike on reject, AD-05);
-  |Seller|
-  :Fix the private story and submit again;
-  stop
-else (approved)
-  |System|
-  :listing = published\n(buyers can buy it, AD-03);
-endif
 stop
 @enduml
