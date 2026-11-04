@@ -1,0 +1,97 @@
+---
+title: "AD-04: Child Plays a Story, Parent Reads the EQ Report"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#333333"}}%%
+flowchart TB
+  subgraph L_P["Parent"]
+    direction TB
+    start((" "))
+    d_pin{{"Kid Exit PIN set?"}}
+    a_setpin("Set PIN (4-6 digits)")
+    a_enter("Choose a child, enter Kid Mode")
+    a_exitpin("Enter Kid Exit PIN")
+    a_eq("Open EQ report of the child")
+    a_talk("Talk with the child using suggested prompts, pick the next model story")
+    n_end@{ shape: fr-circ }
+  end
+  subgraph L_C["Child"]
+    direction TB
+    a_open("Open a story from the bookshelf")
+    a_listen("Listen and look at the page")
+    a_choose("Choose emotion / option (or skip, except reflection)")
+    a_again("Choose again")
+    d_another{{"Read another story?"}}
+  end
+  subgraph L_S["System"]
+    direction TB
+    s_token("Issue kid_session token (24 h, closes the previous one)")
+    d_ready{{"Ready for child? (reviewed, all clips ready if narration on, listing not suspended / taken down)"}}
+    s_notready("422 Story not ready / temporarily taken down")
+    s_session("Resume or create play session (is_first_play on first time)")
+    s_page("Send page: narration + illustration (no correct answers sent)")
+    d_cp{{"Checkpoint after this page?"}}
+    s_first("First choice: snapshot score, sub-skill, template version (no score if skipped / not scored)")
+    d_type{{"Checkpoint type?"}}
+    d_wrong{{"First choice wrong (not skipped)?"}}
+    s_feedback("Play feedback of the chosen option (no right / wrong)")
+    s_accept("Accept the answer (no right / wrong, not scored)")
+    s_hint("Give hint, ask again (second try not scored)")
+    d_still{{"Still wrong?"}}
+    s_tell("Tell the correct answer")
+    merge{" "}
+    d_more{{"More pages?"}}
+    s_complete("Complete play session")
+    d_pin2{{"Correct PIN?"}}
+    s_close("Close kid session, return parent tokens")
+    s_eq("Level per sub-skill from first-play scored answers (last 5, min 3, thresholds 0.5 / 0.8), competency = lowest level, suggested model stories")
+  end
+
+  start --> d_pin
+  d_pin -- "no" --> a_setpin
+  d_pin -- "yes" --> a_enter
+  a_setpin --> a_enter
+  a_enter --> s_token
+  s_token --> a_open
+  a_open --> d_ready
+  d_ready -- "no" --> s_notready
+  d_ready -- "yes" --> s_session
+  s_session --> s_page
+  s_page --> a_listen
+  a_listen --> d_cp
+  d_cp -- "yes" --> a_choose
+  d_cp -- "no" --> merge
+  a_choose --> s_first
+  s_first --> d_type
+  d_type -- "emotion / perspective" --> d_wrong
+  d_type -- "problem_solving" --> s_feedback
+  d_type -- "reflection" --> s_accept
+  d_wrong -- "yes" --> s_hint
+  d_wrong -- "no" --> merge
+  s_hint --> a_again
+  a_again --> d_still
+  d_still -- "yes" --> s_tell
+  d_still -- "no" --> merge
+  s_tell --> merge
+  s_feedback --> merge
+  s_accept --> merge
+  merge --> d_more
+  d_more -- "yes" --> s_page
+  d_more -- "no" --> s_complete
+  s_complete --> d_another
+  s_notready --> d_another
+  d_another -- "yes" --> a_open
+  d_another -- "no" --> a_exitpin
+  a_exitpin --> d_pin2
+  d_pin2 -- "no: attempts left,<br/>5 wrong = locked 15 min" --> a_exitpin
+  d_pin2 -- "yes" --> s_close
+  s_close --> a_eq
+  a_eq --> s_eq
+  s_eq --> a_talk
+  a_talk --> n_end
+
+  classDef default fill:#FFFFFF,stroke:#000000,color:#111111
+  classDef solid fill:#000000,stroke:#000000
+  class start solid
+  style L_P fill:#FFFFFF,stroke:#000000
+  style L_C fill:#FFFFFF,stroke:#000000
+  style L_S fill:#FFFFFF,stroke:#000000

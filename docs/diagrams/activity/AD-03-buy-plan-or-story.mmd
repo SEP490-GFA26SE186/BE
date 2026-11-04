@@ -1,0 +1,108 @@
+---
+title: "AD-03: Buy a Plan or a Story, Seller Payout (Buyer and Seller are Parent accounts)"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#333333"}}%%
+flowchart TB
+  subgraph L_B["Buyer"]
+    direction TB
+    start((" "))
+    d_type{{"Buy a plan or a story?"}}
+    a_plan("Choose a plan on Plans & Credit (or from the paywall in AD-01)")
+    a_browse("Browse marketplace (competency, age, price, sort)")
+    a_buyone("Buy one published story (AD-02)")
+    a_pay("Pay by VietQR (link valid 15 min)")
+    a_credits("Credits ready for #quot;Write for me#quot; (AD-01)")
+    a_shelf("Add the story to a child's bookshelf (child reads it in AD-04)")
+    a_rate("Rate the story after a child finished it")
+    ff@{ shape: cross-circ }
+  end
+  subgraph L_S["System"]
+    direction TB
+    s_plan("Create order, snapshot plan price")
+    s_story("Create order, snapshot price and 80% seller share")
+    d_free{{"Price = 0?"}}
+    d_link{{"payOS link created?"}}
+    s_failed("Order failed, try again later")
+    s_pending("Order stays pending: cancelled if the buyer cancels, expired after 15 min, nothing delivered")
+    d_valid{{"Paid, signature and amount valid?"}}
+    s_paid("Order paid (conditional update, no double delivery)")
+    s_period("Close the active plan period, start the new period and grant this month's credits")
+    d_item{{"Item type?"}}
+    d_owns{{"Buyer already owns this story?"}}
+    s_dup("Deliver nothing; if paid, open a refund request automatically (AD-06)")
+    fork@{ shape: fork }
+    s_entitle("Grant entitlement, purchase / free-claim count + 1")
+    s_earn("Paid order only: record seller earning as pending (80%)")
+    s_cron("Cron: move earning to available after hold days (skipped while a refund is pending)")
+    s_holdamt("Hold the amount (available to locked)")
+    s_wpaid("Withdrawal paid (withdrawal_paid)")
+    s_release("Return amount to available (withdrawal_release)")
+    n_end@{ shape: fr-circ }
+    merge{" "}
+  end
+  subgraph L_Q["payOS"]
+    direction TB
+    web("Send signed webhook (or return page asks payOS)")
+  end
+  subgraph L_E["Seller"]
+    direction TB
+    a_wd("Request withdrawal (bank set > 24 h ago, >= 50,000 VND)")
+  end
+  subgraph L_A["Admin"]
+    direction TB
+    d_pay{{"Pay the seller?"}}
+    a_transfer("Transfer by bank app, mark paid with transaction ref")
+    a_reject("Reject with reason")
+  end
+
+  start --> d_type
+  d_type -- "plan" --> a_plan
+  d_type -- "story" --> a_browse
+  a_browse --> a_buyone
+  a_plan --> s_plan
+  a_buyone --> s_story
+  s_plan --> d_free
+  s_story --> d_free
+  d_free -- "no" --> d_link
+  d_free -- "yes" --> s_paid
+  d_link -- "no" --> s_failed
+  d_link -- "yes" --> a_pay
+  a_pay --> web
+  web --> d_valid
+  d_valid -- "no" --> s_pending
+  d_valid -- "yes" --> s_paid
+  s_paid --> d_item
+  d_item -- "plan" --> s_period
+  s_period --> a_credits
+  d_item -- "story" --> d_owns
+  d_owns -- "yes" --> s_dup
+  d_owns -- "no" --> fork
+  fork --> s_entitle
+  fork --> s_earn
+  s_entitle --> a_shelf
+  a_shelf --> a_rate
+  a_rate --> ff
+  s_earn --> s_cron
+  s_cron --> a_wd
+  a_wd --> s_holdamt
+  s_holdamt --> d_pay
+  d_pay -- "yes" --> a_transfer
+  d_pay -- "no" --> a_reject
+  a_transfer --> s_wpaid
+  a_reject --> s_release
+  s_wpaid --> merge
+  s_release --> merge
+  merge --> n_end
+  s_failed --> n_end
+  s_pending --> n_end
+  s_dup --> n_end
+  a_credits --> n_end
+
+  classDef default fill:#FFFFFF,stroke:#000000,color:#111111
+  classDef solid fill:#000000,stroke:#000000
+  class start,fork solid
+  style L_B fill:#FFFFFF,stroke:#000000
+  style L_S fill:#FFFFFF,stroke:#000000
+  style L_Q fill:#FFFFFF,stroke:#000000
+  style L_E fill:#FFFFFF,stroke:#000000
+  style L_A fill:#FFFFFF,stroke:#000000

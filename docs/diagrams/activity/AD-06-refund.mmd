@@ -1,0 +1,62 @@
+---
+title: "AD-06: After-sale - Refund"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#333333"}}%%
+flowchart TB
+  subgraph L_B["Buyer"]
+    direction TB
+    a_req("Request refund for a paid item (within 3 days, once per item)")
+  end
+  subgraph L_S["System"]
+    direction TB
+    start((" "))
+    d_open{{"How is the refund opened?"}}
+    s_dup("Duplicate purchase detected: open refund request automatically")
+    s_pending("Refund request = pending (seller earning not released meanwhile)")
+    d_type{{"Item type?"}}
+    s_rejected("Refund rejected, access kept, write audit log")
+    d_granted{{"This item granted access? (not a duplicate purchase)"}}
+    s_planref("Expire remaining credit, cancel subscription, fall back to Free plan")
+    d_withdrew{{"Seller already withdrew this earning?"}}
+    s_money("Money back only: the earlier purchase keeps access and seller earning")
+    s_422("422: refund stays pending, admin settles with the seller manually")
+    s_revoke("Revoke entitlement, remove from bookshelves, reverse seller earning (earning_reversal)")
+    s_refunded("Item refunded, write audit log")
+    n_end@{ shape: fr-circ }
+  end
+  subgraph L_A["Admin"]
+    direction TB
+    d_approve{{"Approve refund?"}}
+    a_transfer("Transfer money back manually, enter bank transaction ref")
+    a_reject("Reject with note")
+  end
+
+  start --> d_open
+  d_open -- "buyer requests" --> a_req
+  d_open -- "duplicate purchase" --> s_dup
+  a_req --> s_pending
+  s_dup --> s_pending
+  s_pending --> d_approve
+  d_approve -- "yes" --> a_transfer
+  d_approve -- "no" --> a_reject
+  a_reject --> s_rejected
+  a_transfer --> d_type
+  d_type -- "plan" --> s_planref
+  d_type -- "story" --> d_granted
+  d_granted -- "no" --> s_money
+  d_granted -- "yes" --> d_withdrew
+  d_withdrew -- "yes" --> s_422
+  d_withdrew -- "no" --> s_revoke
+  s_revoke --> s_refunded
+  s_money --> s_refunded
+  s_planref --> s_refunded
+  s_refunded --> n_end
+  s_422 --> n_end
+  s_rejected --> n_end
+
+  classDef default fill:#FFFFFF,stroke:#000000,color:#111111
+  classDef solid fill:#000000,stroke:#000000
+  class start solid
+  style L_B fill:#FFFFFF,stroke:#000000
+  style L_S fill:#FFFFFF,stroke:#000000
+  style L_A fill:#FFFFFF,stroke:#000000

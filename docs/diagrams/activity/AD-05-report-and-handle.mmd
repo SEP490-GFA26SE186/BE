@@ -1,0 +1,84 @@
+---
+title: "AD-05: Report and Handle a Published Story (Buyer and Seller are Parent accounts)"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#333333"}}%%
+flowchart TB
+  subgraph L_B["Buyer"]
+    direction TB
+    a_report("Report a published listing (category, optional page)")
+  end
+  subgraph L_S["System"]
+    direction TB
+    start((" "))
+    d_trig{{"How does the review start?"}}
+    s_audit("Weekly cron: random audit (skip listings approved in last 30 days)")
+    d_three{{">= 3 distinct reporters in 24 h?"}}
+    s_auto("Auto-suspend listing, open follow-up review")
+    s_keep("Keep: listing stays / returns to published (audit never suspends it), open reports dismissed")
+    s_take("Take down: listing archived, reports resolved, issue strike (90 days)")
+    d_strikes{{"Active strikes >= 3?"}}
+    s_suspseller("Seller suspended, all listings hidden")
+    s_expire("Strike expires after 90 days")
+    s_revoke("Revoke strike; if below limit, seller approved again")
+    s_stays("Strike stays active")
+    merge{" "}
+    n_end@{ shape: fr-circ }
+  end
+  subgraph L_E["Seller"]
+    direction TB
+    d_appeal{{"Appeal the strike?"}}
+    a_appeal("Appeal once with a reason")
+  end
+  subgraph L_A["Admin"]
+    direction TB
+    d_approve{{"Approve appeal? (not the issuer of the strike)"}}
+    a_rejnote("Reject with note")
+  end
+  subgraph L_P["Specialist"]
+    direction TB
+    d_valid{{"Report looks valid?"}}
+    s_suspend("Suspend listing manually (reason), open follow-up review")
+    s_dismiss("Dismiss the report")
+    a_claim("Claim the review, view all pages")
+    d_viol{{"Violation?"}}
+  end
+
+  start --> d_trig
+  d_trig -- "parent reports" --> a_report
+  d_trig -- "weekly audit" --> s_audit
+  a_report --> d_three
+  d_three -- "yes" --> s_auto
+  d_three -- "no" --> d_valid
+  d_valid -- "yes" --> s_suspend
+  d_valid -- "no" --> s_dismiss
+  s_audit --> a_claim
+  s_auto --> a_claim
+  s_suspend --> a_claim
+  a_claim --> d_viol
+  d_viol -- "no" --> s_keep
+  d_viol -- "yes" --> s_take
+  s_take --> d_strikes
+  d_strikes -- "yes" --> s_suspseller
+  d_strikes -- "no" --> d_appeal
+  s_suspseller --> d_appeal
+  d_appeal -- "no" --> s_expire
+  d_appeal -- "yes" --> a_appeal
+  a_appeal --> d_approve
+  d_approve -- "yes" --> s_revoke
+  d_approve -- "no" --> a_rejnote
+  a_rejnote --> s_stays
+  s_keep --> merge
+  s_expire --> merge
+  s_revoke --> merge
+  s_stays --> merge
+  s_dismiss --> merge
+  merge --> n_end
+
+  classDef default fill:#FFFFFF,stroke:#000000,color:#111111
+  classDef solid fill:#000000,stroke:#000000
+  class start solid
+  style L_B fill:#FFFFFF,stroke:#000000
+  style L_S fill:#FFFFFF,stroke:#000000
+  style L_E fill:#FFFFFF,stroke:#000000
+  style L_A fill:#FFFFFF,stroke:#000000
+  style L_P fill:#FFFFFF,stroke:#000000

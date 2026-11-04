@@ -1,0 +1,50 @@
+---
+title: "AD-02: Publish and Moderate a Story (Seller is a Parent account)"
+---
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 30, "rankSpacing": 40}, "themeVariables": {"fontFamily": "Arial", "fontSize": "14px", "lineColor": "#333333"}}%%
+flowchart TB
+  subgraph L_E["Seller"]
+    direction TB
+    start((" "))
+    a_apply("Apply as seller (Family plan with can_sell)")
+    a_rej("Profile rejected, may apply again")
+    a_submit("Submit a reviewed private story: price 0 or 5,000-500,000 VND, generic name for each character")
+    a_fix("Fix the private story and submit again")
+    n_end@{ shape: fr-circ }
+  end
+  subgraph L_P["Specialist"]
+    direction TB
+    d_prof{{"Approve seller profile?"}}
+    a_claim("Claim review (30 min, narration ready), view 100% of pages, check pedagogy checklist on the web")
+    d_dec{{"Decision?"}}
+  end
+  subgraph L_S["System"]
+    direction TB
+    d_names{{"Real names or family details left?"}}
+    s_copy("Create de-personalized copy (no family story), copy ready scene images and cover, regenerate narration with generic names, listing = submitted")
+    s_chg("listing = changes_requested / rejected (optional strike on reject, AD-05)")
+    s_pub("listing = published (buyers can buy it, AD-03)")
+  end
+
+  start --> a_apply
+  a_apply --> d_prof
+  d_prof -- "no" --> a_rej
+  d_prof -- "yes" --> a_submit
+  a_rej --> n_end
+  a_submit --> d_names
+  d_names -- "yes: 422, fix" --> a_submit
+  d_names -- "no" --> s_copy
+  s_copy --> a_claim
+  a_claim --> d_dec
+  d_dec -- "approved" --> s_pub
+  d_dec -- "changes requested<br/>/ rejected" --> s_chg
+  s_chg --> a_fix
+  a_fix --> n_end
+  s_pub --> n_end
+
+  classDef default fill:#FFFFFF,stroke:#000000,color:#111111
+  classDef solid fill:#000000,stroke:#000000
+  class start solid
+  style L_E fill:#FFFFFF,stroke:#000000
+  style L_P fill:#FFFFFF,stroke:#000000
+  style L_S fill:#FFFFFF,stroke:#000000
